@@ -1,0 +1,24 @@
+datetime,origin,destination,distance_km,duration_min,temperature,humidity,weather_description,mobility_level
+2026-05-25 23:54:03.692522,Msida,Valletta,5.29,10.37,20.32,88,few clouds,Movilidad normal
+2026-05-25 23:57:09.182203,Msida,Valletta,5.29,10.37,20.32,88,few clouds,Movilidad normal
+2026-05-26 00:01:49.813202,Msida,Valletta,5.29,10.37,20.32,88,few clouds,Movilidad normal
+2026-05-26 00:27:04.421409,Msida,Valletta,5.29,10.37,20.34,88,few clouds,Movilidad normal
+2026-05-26 00:27:04.782407,Msida,Sliema,3.63,6.59,20.34,88,few clouds,Movilidad normal
+2026-05-26 00:27:05.163587,Msida,Birkirkara,2.28,3.32,20.34,88,few clouds,Movilidad normal
+2026-05-26 00:27:05.541644,Msida,St Julian's,4.27,8.91,20.34,88,few clouds,Movilidad normal
+2026-05-26 00:34:59.827252,Msida,Valletta,5.29,10.37,20.32,94,scattered clouds,Movilidad normal
+2026-05-26 00:35:00.243123,Msida,Sliema,3.63,6.59,20.32,94,scattered clouds,Movilidad normal
+2026-05-26 00:35:00.641664,Msida,Birkirkara,2.28,3.32,20.32,94,scattered clouds,Movilidad normal
+2026-05-26 00:35:01.028038,Msida,St Julian's,4.27,8.91,20.32,94,scattered clouds,Movilidad normal
+2026-05-26 00:39:14.675047,Msida,Valletta,5.29,10.37,20.32,94,scattered clouds,Movilidad normal
+2026-05-26 00:39:15.092627,Msida,Sliema,3.63,6.59,20.32,94,scattered clouds,Movilidad normal
+2026-05-26 00:39:15.486750,Msida,Birkirkara,2.28,3.32,20.32,94,scattered clouds,Movilidad normal
+2026-05-26 00:39:15.884295,Msida,St Julian's,4.27,8.91,20.32,94,scattered clouds,Movilidad normal
+2026-05-26 01:11:46.219761,Msida,Valletta,5.29,10.37,19.76,94,few clouds,Movilidad normal
+2026-05-26 01:11:46.646299,Msida,Sliema,3.63,6.59,19.76,94,few clouds,Movilidad normal
+2026-05-26 01:11:47.037930,Msida,Birkirkara,2.28,3.32,19.76,94,few clouds,Movilidad normal
+2026-05-26 01:11:47.399464,Msida,St Julian's,4.27,8.91,19.76,94,few clouds,Movilidad normal
+2026-05-26 01:11:59.453477,Msida,Valletta,5.29,10.37,19.76,94,few clouds,Movilidad normal
+2026-05-26 01:11:59.812786,Msida,Sliema,3.63,6.59,19.76,94,few clouds,Movilidad normal
+2026-05-26 01:12:00.161966,Msida,Birkirkara,2.28,3.32,19.76,94,few clouds,Movilidad normal
+2026-05-26 01:12:00.546183,Msida,St Julian's,4.27,8.91,19.76,94,few clouds,Movilidad normal
