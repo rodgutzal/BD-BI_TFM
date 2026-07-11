@@ -1,0 +1,59 @@
+services:
+
+  timescaledb:
+    image: timescale/timescaledb-ha:pg17
+    container_name: movilidad-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: tfm_password
+      POSTGRES_DB: movilidad_urbana
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/home/postgres/pgdata/data
+      - ./init:/docker-entrypoint-initdb.d
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: movilidad-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@tfm.com
+      PGADMIN_DEFAULT_PASSWORD: tfm_password
+    ports:
+      - "8080:80"
+    depends_on:
+      - timescaledb
+
+  streamlit:
+    image: python:3.11-slim
+    container_name: movilidad-streamlit
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - .:/app                    # monta todo el proyecto en /app
+    ports:
+      - "8501:8501"
+    environment:
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
+    command: >
+      bash -c "pip install streamlit pandas requests python-dotenv --quiet
+               && streamlit run streamlit_app/app.py --server.address=0.0.0.0"
+
+  scheduler:
+    image: python:3.11-slim
+    container_name: movilidad-scheduler
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - .:/app                    # monta todo el proyecto en /app
+    environment:
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
+    command: >
+      bash -c "pip install pandas requests python-dotenv --quiet
+               && python src/scheduler.py"
+    depends_on:
+      - timescaledb
+
+volumes:
+  timescale_data:
