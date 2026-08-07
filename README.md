@@ -55,7 +55,7 @@ OpenRouteService (rutas) y OpenWeatherMap (clima). Columnas:
 
 ### Nota: `psql` viene con pgAdimn( que ya se va a usar igual ):
 #### Windows
-1. Si instalas pgAdmin4 ( el cual se menciona dentro de este documento ), psql no viene incluido directamente, así que mejor instala el cliente oficial de (PostgreSQL)[https://www.postgresql.org/download/windows/].
+1. Si instalas pgAdmin4 ( el cual se menciona dentro de este documento ), psql no viene incluido directamente, así que mejor instala el cliente oficial de [PostgreSQL](https://www.postgresql.org/download/windows/).
 2. Ejecuta el instalador y en la pantalla de selección de componentes, desmarca "PostgreSQL Server" si solo quieres el cliente (puedes dejarlo marcado, no estorba, solo pesa más)
 3. Asegúrate de marcar "Command Line Tools"
 4. Al finalizar, agrega la ruta al PATH si el instalador no lo hizo automáticamente, normalmente:
@@ -218,7 +218,7 @@ python --version
 python3 --version
 ```
 #### Solución 1 — Instalar Python (si no lo tienes)
-1. Instala (python)[https://www.python.org/downloads/windows/]
+1. Instala [python](https://www.python.org/downloads/windows/)
 2. Ejecuta el instalador y antes de darle a Install Now, marca obligatoriamente esta casilla:
 ```
 ☑ Add python.exe to PATH
