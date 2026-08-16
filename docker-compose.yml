@@ -1,3 +1,29 @@
+# docker-compose.yml — BD_BI_TFM2
+#
+# Fusiona el stack de BD_BI_TFM (TimescaleDB + PostGIS + pgAdmin, capa de
+# producción) con el de urban-mobility-analytics1 (collector + dashboard
+# Streamlit, construidos vía Dockerfile en vez de instalar dependencias al
+# vuelo como hacía el docker-compose.yml original de BD_BI_TFM).
+#
+# El antiguo servicio `scheduler` (BD_BI_TFM) desaparece: su función la
+# cumple ahora `collector`, que ya soporta modo continuo (--interval) y
+# escribe a la vez en CSV, SQLite (capa local/analítica) y TimescaleDB
+# (capa de producción) — ver src/collector.py.
+#
+# ENDURECIDO PARA SERVIDOR REAL (ver PRODUCTION.md para el detalle completo
+# de cada decisión):
+#   - collector/dashboard corren como usuario no-root dentro del contenedor
+#   - healthchecks reales + depends_on que espera a "healthy", no solo a
+#     que el contenedor haya arrancado
+#   - límites de CPU/memoria por servicio
+#   - pgAdmin, TimescaleDB y sqlite-web solo escuchan en 127.0.0.1 (no en
+#     la red) — únicamente el dashboard (8501) se expone hacia afuera
+#   - contraseñas separadas por servicio (antes pgAdmin reusaba la de
+#     Postgres), y sqlite-web ahora requiere contraseña (antes no tenía
+#     ninguna)
+#   - rotación de logs (json-file, tope de tamaño) en vez de logs sin límite
+#   - versiones de imagen fijadas en vez de `latest` implícito
+
 services:
 
   timescaledb:
@@ -5,55 +31,208 @@ services:
     container_name: movilidad-db
     restart: unless-stopped
     environment:
-      POSTGRES_PASSWORD: tfm_password
-      POSTGRES_DB: movilidad_urbana
+      POSTGRES_PASSWORD: ${PGPASSWORD:-tfm_password}
+      POSTGRES_DB: ${PGDATABASE:-movilidad_urbana}
     ports:
-      - "5432:5432"
+      # 127.0.0.1: solo alcanzable desde esta máquina (tu cliente de DB
+      # local, pgAdmin en el mismo host), nunca desde la red/internet.
+      #
+      # 5433 en el host (no 5432): en Windows, 5432 suele estar tomado por
+      # un PostgreSQL local instalado nativamente, o por el rango de
+      # puertos que Hyper-V/WSL2 reserva dinámicamente. El puerto interno
+      # de Docker (el que usan collector/dashboard vía PGHOST=timescaledb)
+      # sigue siendo 5432 siempre — este cambio solo afecta cómo te
+      # conectas desde tu propia máquina (ej. DBeaver → localhost:5433).
+      - "127.0.0.1:5433:5432"
     volumes:
       - timescale_data:/home/postgres/pgdata/data
       - ./init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${PGDATABASE:-movilidad_urbana}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - mobility-network
 
   pgadmin:
-    image: dpage/pgadmin4
+    image: dpage/pgadmin4:9.17
     container_name: movilidad-pgadmin
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@tfm.com
-      PGADMIN_DEFAULT_PASSWORD: tfm_password
+      # Contraseña propia de pgAdmin, separada de la de Postgres — si se
+      # compromete el login de pgAdmin, no da acceso directo a la DB.
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-tfm_pgadmin_password}
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     depends_on:
-      - timescaledb
+      timescaledb:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - mobility-network
 
-  streamlit:
-    image: python:3.11-slim
-    container_name: movilidad-streamlit
-    restart: unless-stopped
-    working_dir: /app
+  # Recolector de datos (ORS o TomTom según DATA_SOURCE en .env).
+  # Escribe en ./data (CSV + SQLite) y en TimescaleDB.
+  collector:
+    build: .
+    container_name: movilidad-collector
+    command: python -m src.route_extraction --interval 120
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Dentro de la red de Docker, TimescaleDB se resuelve por el nombre
+      # del servicio, no por localhost (que sí aplica si corres el
+      # collector fuera de Docker, en tu máquina).
+      - PGHOST=timescaledb
+      - PGPORT=5432
     volumes:
-      - .:/app                    # monta todo el proyecto en /app
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      # No hay puerto HTTP que consultar (a diferencia de dashboard), así
+      # que se usa el heartbeat que collector.py escribe tras cada ciclo
+      # exitoso. 300s = 2.5x el --interval por defecto (120s), con margen.
+      test: ["CMD", "python", "-c",
+             "import sys, time; from pathlib import Path; p = Path('/app/logs/heartbeat'); sys.exit(0 if p.exists() and time.time() - p.stat().st_mtime < 300 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - mobility-network
+
+  # Dashboard Streamlit (streamlit_app/app.py: selector Executive /
+  # Operations / Analyst). Lee de ./data/mobility.db (SQLite), no de
+  # TimescaleDB directamente.
+  dashboard:
+    build: .
+    container_name: movilidad-streamlit
+    command: streamlit run streamlit_app/app.py --server.port 8501 --server.address 0.0.0.0
+    env_file:
+      - .env
     ports:
+      # Este SÍ se expone hacia afuera (0.0.0.0 implícito) — es la app en
+      # sí. Si más adelante esto corre en un servidor con acceso desde
+      # internet, poner esto detrás de un reverse proxy con HTTPS en vez
+      # de exponerlo directo (ver PRODUCTION.md).
       - "8501:8501"
     environment:
-      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
-    command: >
-      bash -c "pip install streamlit pandas requests python-dotenv --quiet
-               && streamlit run streamlit_app/app.py --server.address=0.0.0.0"
-
-  scheduler:
-    image: python:3.11-slim
-    container_name: movilidad-scheduler
-    restart: unless-stopped
-    working_dir: /app
+      - PYTHONUNBUFFERED=1
+      - PGHOST=timescaledb
+      - PGPORT=5432
     volumes:
-      - .:/app                    # monta todo el proyecto en /app
-    environment:
-      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
-    command: >
-      bash -c "pip install pandas requests python-dotenv --quiet
-               && python src/scheduler.py"
+      - ./data:/app/data
+      - ./logs:/app/logs
     depends_on:
-      - timescaledb
+      timescaledb:
+        condition: service_healthy
+      collector:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - mobility-network
+
+  # Visualizador SQL para SQLite (data/mobility.db) — el equivalente a
+  # pgAdmin pero para la capa local/analítica. ⚠ A diferencia del tab
+  # "SQL Query" del dashboard (solo lectura, forzado a nivel de motor),
+  # esta herramienta SÍ permite editar/borrar filas desde el navegador —
+  # úsala con cuidado mientras el collector escribe en paralelo. Ahora
+  # requiere contraseña (SQLITE_WEB_PASSWORD) y solo escucha en
+  # 127.0.0.1 — antes no tenía ninguna protección.
+  sqlite-web:
+    # BD_BI_TFM2 fix: el tag versionado (0.7.2) solo existe en GitHub
+    # Container Registry, no en Docker Hub — `coleifer/sqlite-web:0.7.2`
+    # a secas resuelve a docker.io por defecto y falla con "not found".
+    #
+    # BD_BI_TFM2 fix 2: a diferencia de la imagen de Docker Hub
+    # (coleifer/sqlite-web, sin tag), esta imagen de ghcr.io NO lee la
+    # variable SQLITE_DATABASE — espera el archivo como argumento
+    # posicional del comando, y la contraseña necesita el flag
+    # --password explícito (lee el valor real de SQLITE_WEB_PASSWORD).
+    # Sin el `command:` de abajo, el contenedor entra en crash loop con
+    # "Error: missing required path to database file."
+    image: ghcr.io/coleifer/sqlite-web:0.7.2
+    command: mobility.db --password
+    container_name: movilidad-sqlite-web
+    restart: unless-stopped
+    environment:
+      SQLITE_WEB_PASSWORD: ${SQLITE_WEB_PASSWORD:-tfm_sqlite_password}
+    ports:
+      - "127.0.0.1:8082:8080"
+    volumes:
+      - ./data:/data
+    depends_on:
+      - collector
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - mobility-network
 
 volumes:
   timescale_data:
+
+networks:
+  mobility-network:
+    driver: bridge

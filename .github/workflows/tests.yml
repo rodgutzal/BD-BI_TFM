@@ -1,0 +1,119 @@
+name: Tests & Code Quality
+
+# BD_BI_TFM2: dispara en las convenciones de rama de ambos repos
+# originales (BD_BI_TFM usaba `develop`, urban-mobility-analytics1 usaba
+# `main`).
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # BD_BI_TFM2 fix: el setup.py original declaraba
+        # python_requires=">=3.13" pero el CI solo probaba 3.10-3.12 (ninguna
+        # de esas versiones cumplía su propio requisito). Se alinearon
+        # ambos a ">=3.10", que es lo que realmente usa el código (p.ej.
+        # `str | None` en src/config.py, sintaxis de PEP 604).
+        python-version: [ '3.10', '3.11', '3.12' ]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+
+    - name: Verify package structure (guards against the analytics/ collision bug)
+      run: |
+        python -c "
+        from src.analytics import MobilityAnalytics
+        from src.analytics.causal_analysis import CausalAnalysis
+        from src.analytics.time_series_analysis import TimeSeriesAnalytics
+        from src.database import RouteDatabase
+        from src.locations import LOCATIONS, ROUTES
+        from src.collector import DataCollector
+        from src.data_warehouse.bronze_layer import BronzeLayer
+        from src.data_warehouse.silver_layer import SilverLayer
+        from src.data_warehouse.gold_layer import GoldLayer
+        print('✅ Todos los módulos internos importan correctamente')
+        "
+
+    - name: Run unit tests
+      run: |
+        pytest tests/ -v --cov=src --cov-report=xml --cov-report=term
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      continue-on-error: true  # no bloquea el pipeline si no hay CODECOV_TOKEN configurado
+      with:
+        files: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+    - name: Check code quality
+      run: |
+        flake8 src/ tests/ --max-line-length=120 --ignore=E501,W503 || true
+        pylint src/ --disable=all --enable=error,fatal || true
+
+    - name: Data quality checks
+      run: |
+        python -c "
+        import sqlite3
+        from pathlib import Path
+
+        db_path = Path('data/mobility.db')
+        if not db_path.exists():
+            print('⚠️  data/mobility.db no existe en este checkout (esperado en forks limpios)')
+            raise SystemExit(0)
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        for table in ('route_measurements', 'bronze_measurements', 'silver_measurements', 'gold_route_kpis'):
+            try:
+                cursor.execute(f'SELECT COUNT(*) FROM {table}')
+                print(f'✅ {table}: {cursor.fetchone()[0]} filas')
+            except sqlite3.OperationalError:
+                print(f'⚠️  Tabla {table} no existe todavía (se crea la primera vez que corre el collector/pipeline)')
+        conn.close()
+        "
+
+  docker-compose-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Validate docker-compose.yml
+      run: docker compose config --quiet
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install linting tools
+      run: |
+        pip install black isort pylint
+
+    - name: Check code formatting
+      run: |
+        black src/ tests/ --check --line-length=120 || true
+
+    - name: Check import sorting
+      run: |
+        isort src/ tests/ --check-only || true
