@@ -1,14 +1,21 @@
 -- =============================================================
--- init/01_init.sql
+-- init/01_init.sql  (BD_BI_TFM2)
 -- Se ejecuta UNA SOLA VEZ al primer arranque del contenedor.
 -- Docker monta ./init en /docker-entrypoint-initdb.d
+--
+-- Esquema heredado de BD_BI_TFM (capa de producción / BI), extendido con
+-- dos columnas nuevas y compatibles hacia atrás para poder recibir
+-- registros de ambas fuentes de datos (OpenRouteService y TomTom):
+--   - data_source: de qué API vino el registro ('ors' | 'tomtom')
+--   - traffic_delay_min: retraso por tráfico en minutos (sólo TomTom;
+--     NULL para registros de ORS, que no reporta tráfico en tiempo real)
 -- =============================================================
 
 -- 1. Extensiones
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- 2. Tabla principal — columnas exactas de traffic_weather_data.csv
+-- 2. Tabla principal — columnas exactas de traffic_weather_data.csv + extensión BD_BI_TFM2
 CREATE TABLE IF NOT EXISTS traffic_trips (
     datetime              TIMESTAMPTZ   NOT NULL,
     origin                TEXT          NOT NULL,
@@ -18,8 +25,15 @@ CREATE TABLE IF NOT EXISTS traffic_trips (
     temperature           NUMERIC(5,2),
     humidity              INTEGER,
     weather_description   TEXT,
-    mobility_level        TEXT
+    mobility_level        TEXT,
+    data_source            TEXT         DEFAULT 'unknown',
+    traffic_delay_min      NUMERIC(8,2)
 );
+
+-- 2b. Si la tabla ya existía de una instalación previa de BD_BI_TFM (sin
+--     estas dos columnas), se añaden de forma idempotente.
+ALTER TABLE traffic_trips ADD COLUMN IF NOT EXISTS data_source TEXT DEFAULT 'unknown';
+ALTER TABLE traffic_trips ADD COLUMN IF NOT EXISTS traffic_delay_min NUMERIC(8,2);
 
 -- 3. Convertir a hypertable (particionado automático por tiempo)
 SELECT create_hypertable('traffic_trips', by_range('datetime'), if_not_exists => TRUE);
@@ -30,6 +44,9 @@ CREATE INDEX IF NOT EXISTS idx_trips_origin_dest
 
 CREATE INDEX IF NOT EXISTS idx_trips_mobility
     ON traffic_trips (mobility_level, datetime DESC);
+
+CREATE INDEX IF NOT EXISTS idx_trips_source
+    ON traffic_trips (data_source, datetime DESC);
 
 -- 5. Continuous aggregate: viajes agrupados por hora
 CREATE MATERIALIZED VIEW IF NOT EXISTS trips_hourly
@@ -43,6 +60,7 @@ SELECT
     AVG(distance_km)                     AS avg_distance_km,
     AVG(temperature)                     AS avg_temperature,
     AVG(humidity)                        AS avg_humidity,
+    AVG(traffic_delay_min)               AS avg_traffic_delay_min,
     ROUND(
         100.0 * SUM(CASE WHEN mobility_level = 'Alta demora' THEN 1 ELSE 0 END)
         / COUNT(*), 1

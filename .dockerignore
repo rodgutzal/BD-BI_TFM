@@ -1,0 +1,38 @@
+# .dockerignore — BD_BI_TFM2
+
+venv
+.git
+.github
+.gitignore
+.dockerignore
+
+# BD_BI_TFM2 fix: el .dockerignore original de urban-mobility-analytics1
+# NO excluía .env, así que `COPY . .` en el Dockerfile horneaba las claves
+# de API reales dentro de la imagen (mala práctica de seguridad — cualquiera
+# con la imagen podía extraerlas). docker-compose ya inyecta .env en tiempo
+# de ejecución vía `env_file:`, así que no hace falta que viva dentro de la
+# imagen.
+.env
+.env.local
+
+data/mobility.db
+data/raw/*.csv
+data/processed/*.csv
+logs/
+src/models/trained/*.pkl
+models/*.pkl
+
+__pycache__
+*.pyc
+.pytest_cache
+.coverage
+coverage.xml
+htmlcov
+
+.vscode
+.idea
+*.tmp
+
+docs
+tests
+*.md

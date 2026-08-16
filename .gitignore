@@ -1,0 +1,51 @@
+# .gitignore — BD_BI_TFM2
+
+# --- Entornos virtuales ---
+venv/
+env/
+.venv
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.so
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- Datos generados en tiempo de ejecución ---
+# El histórico fusionado (route_weather_data.csv, mobility.db) SÍ va
+# incluido en esta entrega puntual, pero no debe seguir creciendo dentro
+# de git a medida que el collector corre — cada ciclo añade filas nuevas.
+# Los CSV "legacy_*" (snapshot fijo del histórico original de cada repo)
+# si se quieren versionar, no están cubiertos por este patrón.
+data/mobility.db
+data/raw/route_weather_data.csv
+data/processed/*.csv
+
+# --- Logs ---
+logs/*
+!logs/.gitkeep
+
+# --- Modelos entrenados (pesan, se regeneran con train_models.py /
+#     train_ensemble_models.py) ---
+src/models/trained/*.pkl
+models/*.pkl
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+
+# --- Entorno / secretos ---
+# CRÍTICO: nunca subir .env a un repositorio público (contiene claves de
+# API reales). .env.example sí se versiona, como plantilla.
+.env
+.env.local
+
+# --- Sistema operativo ---
+.DS_Store

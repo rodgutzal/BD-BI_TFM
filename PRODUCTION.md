@@ -1,0 +1,145 @@
+# PRODUCTION.md — Endurecimiento para servidor real
+
+BD_BI_TFM2 corre hoy en tu máquina, pero está preparado para moverse a un
+servidor real (red privada o con salida a internet) sin rearquitectura.
+Este documento explica qué se endureció, por qué, y qué falta si más
+adelante decides exponerlo a internet.
+
+## Qué se hizo (alcance "lo esencial")
+
+### 1. Usuarios no-root en los contenedores propios
+
+`collector` y `dashboard` (los dos que construimos con `Dockerfile`) ahora
+corren como `appuser` (UID/GID 1000), no como root. `timescaledb`,
+`pgadmin` y `sqlite-web` son imágenes de terceros que ya gestionan sus
+propios usuarios internamente — no se tocaron.
+
+**Si despliegas en un servidor Linux real**, antes del primer
+`docker compose up` asegúrate de que el host pueda escribir `./data` y
+`./logs` desde ese UID:
+
+```bash
+chown -R 1000:1000 data logs
+# o, más simple si no quieres atarte a un UID específico:
+chmod -R a+rwX data logs
+```
+
+En Windows con Docker Desktop (tu caso actual) esto normalmente no hace
+falta — la capa de compatibilidad de Docker Desktop maneja el mapeo de
+permisos sola, por eso no lo notaste al hacer el `--build`.
+
+### 2. Healthchecks reales + `depends_on` que espera de verdad
+
+Antes, `depends_on: - timescaledb` solo esperaba a que el **contenedor**
+arrancara, no a que Postgres estuviera realmente listo para aceptar
+conexiones — en un servidor con disco más lento o bajo más carga, el
+collector/dashboard podían intentar conectarse antes de tiempo y fallar en
+su primer intento. Ahora:
+
+- `timescaledb`: `pg_isready` cada 10s
+- `collector`: no tiene puerto HTTP que consultar, así que se agregó un
+  **heartbeat** — `src/collector.py` escribe `logs/heartbeat` con la hora
+  después de cada ciclo exitoso, y el healthcheck falla si pasaron más de
+  300s (2.5x el `--interval` por defecto) sin uno nuevo
+- `dashboard`: consulta `/_stcore/health`, el endpoint de salud nativo de
+  Streamlit
+- `pgadmin` y `sqlite-web`: no se les agregó healthcheck explícito (son
+  imágenes de terceros sin garantía de tener `curl`/`wget` disponible
+  adentro; agregar uno a ciegas podía fallar de forma menos predecible que
+  no tener ninguno)
+
+`dashboard` y `collector` ahora esperan `condition: service_healthy` de
+`timescaledb` antes de arrancar, no solo `service_started`.
+
+### 3. Límites de recursos por servicio
+
+Cada servicio tiene un tope de CPU/memoria (`deploy.resources.limits`) —
+sin esto, un solo contenedor con un bug (o un pico de tráfico) podría
+consumir todos los recursos del servidor y tumbar a los demás. Valores
+elegidos con margen generoso para el tamaño de este proyecto, no ajustados
+al límite — si en el futuro ves que algún contenedor se queda corto (por
+ejemplo, `dashboard` con datasets mucho más grandes), son los primeros
+números a subir.
+
+### 4. Contraseñas separadas y más fuertes
+
+- **Antes**: pgAdmin reusaba literalmente la contraseña de Postgres
+  (`PGPASSWORD`) — si alguien adivinaba/filtraba el login de pgAdmin, tenía
+  también la contraseña real de la base de datos.
+- **Ahora**: `PGADMIN_PASSWORD` es una variable separada.
+- **`sqlite-web` no tenía NINGUNA autenticación** — cualquiera con acceso a
+  ese puerto podía leer y editar `mobility.db` libremente. Ahora requiere
+  `SQLITE_WEB_PASSWORD`.
+- `PGPASSWORD` (la de Postgres) se dejó sin cambiar a propósito: Postgres
+  solo la usa en el primer arranque del volumen — cambiarla en `.env` sin
+  además rotarla dentro de Postgres (`ALTER USER postgres PASSWORD ...`)
+  simplemente rompe la autenticación de un despliegue que ya tiene datos.
+  Ver el comentario en `.env` para el comando exacto si quieres rotarla.
+
+### 5. Puertos de administración solo en `127.0.0.1`
+
+`timescaledb` (5432), `pgadmin` (8080) y `sqlite-web` (8082) ahora se
+publican como `127.0.0.1:puerto:puerto` en vez de `puerto:puerto` — antes
+escuchaban en `0.0.0.0`, es decir, alcanzables desde **cualquier
+dispositivo de la misma red**, no solo desde tu máquina. Con el cambio,
+solo son alcanzables desde el propio host. `dashboard` (8501) es la
+excepción intencional: es la aplicación en sí, se mantiene expuesta.
+
+**Efecto práctico para ti ahora mismo:** ninguno — seguías accediendo a
+todo por `localhost`, así que `127.0.0.1:8080` funciona exactamente igual
+que antes desde tu Windows. El cambio importa el día que esto corra en un
+servidor de verdad.
+
+### 6. Rotación de logs
+
+Todos los servicios ahora usan el driver `json-file` con
+`max-size: 10m, max-file: 3` — sin esto, `docker compose logs` de un
+collector corriendo por semanas/meses podía crecer sin límite hasta llenar
+el disco del servidor.
+
+### 7. Versiones de imagen fijadas
+
+`pgadmin` y `sqlite-web` no tenían tag explícito (`latest` implícito) —
+significa que un `docker compose pull` en el futuro podía traer una
+versión distinta sin aviso, con el riesgo de romper algo silenciosamente.
+Fijadas a `dpage/pgadmin4:9.17` y `coleifer/sqlite-web:0.7.2` (las
+estables más recientes al momento de este cambio). `timescaledb-ha:pg17`
+ya estaba razonablemente fijado (pins la versión mayor de Postgres) y no
+se tocó.
+
+## Qué NO se hizo (quedó fuera del alcance "lo esencial")
+
+No elegiste estas opciones cuando te pregunté, así que no se
+implementaron — pero el resto de las decisiones de arriba están pensadas
+para no tener que rehacer nada si más adelante sí las quieres:
+
+- **Reverse proxy con HTTPS** (nginx/traefik + certbot): necesario recién
+  si `dashboard` va a ser alcanzable desde internet público. Con la
+  arquitectura actual (dashboard como único puerto expuesto, todo lo demás
+  en 127.0.0.1), agregar esto después es sencillo: un servicio `nginx`
+  nuevo en `docker-compose.yml` que haga proxy hacia `dashboard:8501`, sin
+  tocar nada de lo existente.
+- **Backups automáticos** de TimescaleDB/SQLite: no configurados. Para
+  SQLite, un `cp data/mobility.db backups/mobility-$(date +%F).db` por
+  cron alcanza. Para TimescaleDB, `pg_dump` programado o los backups
+  nativos de `timescaledb-ha`.
+- **Usuario no-root para `timescaledb`/`pgadmin`/`sqlite-web`**: son
+  imágenes de terceros — ya gestionan sus propios usuarios internamente
+  (pgAdmin4 corre como `pgadmin`, no root, desde hace varias versiones);
+  no había nada que corregir ahí.
+
+## Checklist si el día de mañana esto sale a internet público
+
+1. Reverse proxy (nginx/traefik) con HTTPS delante de `dashboard` — nunca
+   Streamlit HTTP directo al puerto 8501 desde internet.
+2. Firewall del servidor: solo 80/443 abiertos hacia afuera (todo lo demás
+   ya está en 127.0.0.1, así que en realidad el firewall del SO es la
+   última capa, no la única).
+3. Rotar `PGPASSWORD` de verdad (ver sección 4) — el valor que trae este
+   proyecto (`tfm_password`) es un default de desarrollo, no debería llegar
+   a un servidor público tal cual.
+4. Backups automáticos (ver arriba) — sin reverse proxy ni backups, un
+   servidor expuesto sin respaldo es el escenario de mayor riesgo.
+5. Considerar autenticación adicional delante de pgAdmin/sqlite-web (están
+   en 127.0.0.1, pero si alguna vez necesitas alcanzarlos remotamente, hazlo
+   por VPN/túnel SSH — no los vuelvas a exponer directo a internet).

@@ -1,5 +1,17 @@
-streamlit
-pandas
-requests
-plotly
-python-dotenv
+# --- Core (BD_BI_TFM + urban-mobility-analytics1) ---
+pandas==3.0.3
+requests==2.34.2
+urllib3>=2.0          # usado directamente (Retry) en ors_client/tomtom_client/weather_client
+python-dotenv==1.0.1
+streamlit==1.57.0
+streamlit-autorefresh==1.0.1  # solo lo usa streamlit_app/legacy_reference/ (opcional)
+plotly==6.7.0
+numpy==2.4.6
+
+# --- Machine Learning / analítica avanzada (src/models, src/analytics) ---
+scikit-learn>=1.5.1
+scipy>=1.13
+statsmodels>=0.14
+
+# --- TimescaleDB (capa de producción) ---
+psycopg2-binary>=2.9

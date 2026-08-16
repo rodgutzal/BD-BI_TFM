@@ -1,31 +1,60 @@
+"""Main app with multi-level dashboard selection."""
+
 import streamlit as st
-import pandas as pd
 from pathlib import Path
+import sys
 
-st.set_page_config(page_title="Urban Mobility Analytics", page_icon="🚦", layout="wide")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
 
-st.title("🚦 Urban Mobility Analytics Dashboard")
-st.write("Análisis de movilidad urbana usando OpenRouteService y OpenWeather.")
+# Import dashboard modules
+from streamlit_app.dashboards import executive_dashboard, operations_dashboard, analyst_dashboard
 
-DATA_PATH = Path("data/raw/traffic_weather_data.csv")
 
-df = pd.read_csv(DATA_PATH)
+def main():
+    """Main application with dashboard selector."""
+    st.set_page_config(
+        page_title="Urban Mobility Analytics",
+        page_icon="🚗",
+        layout="wide"
+    )
 
-col1, col2, col3, col4 = st.columns(4)
+    # Dashboard selector
+    st.sidebar.markdown("## 📊 Dashboard Selection")
 
-col1.metric("Ruta", f"{df['origin'].iloc[-1]} → {df['destination'].iloc[-1]}")
-col2.metric("Distancia", f"{df['distance_km'].iloc[-1]} km")
-col3.metric("Duración estimada", f"{df['duration_min'].iloc[-1]} min")
-col4.metric("Movilidad", df["mobility_level"].iloc[-1])
+    dashboard = st.sidebar.radio(
+        "Choose your dashboard:",
+        ["Executive", "Operations", "Analyst"],
+        index=0,
+        label_visibility="collapsed"
+    )
 
-st.subheader("📊 Dataset")
-st.dataframe(df, use_container_width=True)
+    # User info
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("""
+    ### 👤 User Roles
 
-st.subheader("⏱️ Duración estimada")
-st.line_chart(df["duration_min"])
+    **Executive:** High-level KPIs and strategic insights
 
-st.subheader("🌦️ Temperatura")
-st.line_chart(df["temperature"])
+    **Operations:** Real-time monitoring and alerts
 
-st.subheader("💧 Humedad")
-st.line_chart(df["humidity"])
+    **Analyst:** Data exploration and statistical analysis
+    """)
+
+    # System status
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🔋 System Status")
+    st.sidebar.success("✅ All systems operational")
+    st.sidebar.info("📊 Last update: Now")
+
+    # Route dashboard based on selection
+    if dashboard == "Executive":
+        executive_dashboard.main()
+    elif dashboard == "Operations":
+        operations_dashboard.main()
+    else:  # Analyst
+        analyst_dashboard.main()
+
+
+if __name__ == "__main__":
+    main()
