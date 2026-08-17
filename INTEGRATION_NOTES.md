@@ -422,3 +422,51 @@ nunca, porque `init/01_init.sql` corre completo, con las columnas ya
 incluidas desde el `CREATE TABLE` original. Solo afecta upgrades in-place
 de una base ya existente — mismo patrón que el bug 3.15.
 
+### 3.17 Silver siempre en `+0` y Gold en `no_data`, a pesar de que Bronze sí inserta
+
+**Descubierto después de la primera entrega**, al revisar por qué el log
+del collector mostraba `bronze +12, silver +0, gold[fecha]=no_data` en
+cada ciclo, ciclo tras ciclo.
+
+**Causa raíz:** `bronze_layer.py` (paso "3. Data type validation", código
+original, no algo introducido en la fusión) convierte la columna
+`timestamp` a `datetime64` con `pd.to_datetime()` para poder validar y
+descartar filas inválidas. El problema es que esa conversión **se queda
+así** hasta el momento de guardar — y `pandas.to_sql()` serializa una
+columna `datetime64` usando un **espacio** como separador
+(`'2026-08-17 04:00:40...'`), no con `'T'` como el resto del proyecto
+(`'2026-08-17T04:00:40...'`).
+
+`src/collector.py::_run_incremental_medallion()` vuelve a consultar
+`bronze_measurements` justo después de insertar, buscando el `timestamp`
+original (con `'T'`) para pasárselo a Silver — como el valor realmente
+guardado tiene espacio en vez de `'T'`, la consulta **nunca encontraba
+nada**, Silver recibía un DataFrame vacío cada ciclo (de ahí el
+`silver +0` constante), y Gold nunca tenía datos del día que agregar (de
+ahí el `no_data` constante) — aunque Bronze sí insertaba bien sus 12
+filas por ciclo.
+
+**Fix:** después de la validación con `pd.to_datetime()`, se reconvierte
+explícitamente a string ISO (`df['timestamp'].apply(lambda t:
+t.isoformat())`) antes de guardar, preservando el formato `'T'`
+consistente con el resto del proyecto.
+
+**Efecto secundario encontrado al verificar el fix:** con esto, cualquier
+base que ya llevara varios ciclos corriendo *antes* del fix va a tener
+`bronze_measurements`/`silver_measurements` con una **mezcla** de
+timestamps viejos (con espacio) y nuevos (con `'T'`). `pd.to_datetime()`
+sin un `format` explícito intenta inferir un solo formato para todo el
+lote y se cae en cuanto encuentra una fila que no coincide — esto rompía
+específicamente `run_medallion_pipeline.py` (el backfill manual completo,
+que sí procesa todo el historial de una sola vez; el flujo incremental
+normal del collector no se ve afectado porque cada ciclo es un lote
+pequeño e internamente consistente). Se agregó `format='mixed'` en ambos
+puntos de parseo (`bronze_layer.py` y `silver_layer.py`) para que cada
+fila se interprete individualmente sin importar su formato exacto.
+
+**Verificado** con la base real de un despliegue que ya llevaba corriendo
+varios ciclos con el bug: `run_medallion_pipeline.py` ahora procesa las
+2.761 filas históricas sin crashear, y el flujo incremental muestra
+`silver +3` / `gold=success` en vez de `+0` / `no_data` en un ciclo nuevo
+de prueba.
+

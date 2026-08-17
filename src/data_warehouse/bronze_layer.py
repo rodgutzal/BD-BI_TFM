@@ -94,7 +94,9 @@ class BronzeLayer:
             return {'error': 'Missing required columns', 'issues': issues}
 
         # 3. Data type validation
-        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce', utc=True)
+        # format='mixed': ver la misma nota en silver_layer.py — robustez
+        # ante timestamps con formato inconsistente en el df de entrada.
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce', utc=True, format='mixed')
         df['travel_time_min'] = pd.to_numeric(df['travel_time_min'], errors='coerce')
 
         # 4. Remove rows with NaN in critical columns
@@ -102,6 +104,19 @@ class BronzeLayer:
         df = df.dropna(subset=['timestamp', 'travel_time_min', 'origin', 'destination'])
         if len(df) < before_validation:
             issues.append(f"Removed {before_validation - len(df)} rows with missing critical values")
+
+        # BD_BI_TFM2 fix: pd.to_datetime() de arriba convierte la columna a
+        # datetime64 (necesario para validar/soltar filas inválidas), pero
+        # si se guarda así, pandas.to_sql() la serializa con un ESPACIO
+        # como separador ('2026-08-17 04:00:40...'), no con 'T' como el
+        # resto del proyecto ('2026-08-17T04:00:40...'). Como
+        # src/collector.py vuelve a consultar bronze_measurements buscando
+        # el string original (con 'T') para pasárselo a Silver, esa
+        # comparación nunca coincidía — Silver recibía 0 filas cada ciclo,
+        # y por lo tanto Gold nunca tenía nada que agregar ("no_data").
+        # Se reconvierte a string ISO explícitamente para mantener el
+        # formato consistente en toda la base.
+        df['timestamp'] = df['timestamp'].apply(lambda t: t.isoformat())
 
         # 5. Outlier detection (basic bounds check)
         travel_time_bounds = (0, 500)  # 0 to 500 minutes

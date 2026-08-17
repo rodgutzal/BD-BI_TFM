@@ -100,7 +100,12 @@ class SilverLayer:
         df = df.rename(columns={
             'raw_timestamp': 'timestamp'
         })
-        df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+        # format='mixed': robustez ante timestamps guardados con distinto
+        # formato en distintos momentos (ver bug del separador T-vs-espacio
+        # en bronze_layer.py) — sin esto, pd.to_datetime() infiere un solo
+        # formato para todo el lote y falla en cuanto encuentra una fila
+        # que no coincide, en vez de parsear cada una individualmente.
+        df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True, format='mixed')
 
         # 2. Calculate derived metrics
         df['traffic_delay_min'] = df['travel_time_min'] - df.get('no_traffic_time_min', df['travel_time_min'])
