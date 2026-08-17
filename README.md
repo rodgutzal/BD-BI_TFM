@@ -113,7 +113,7 @@ BD_BI_TFM2/
 #    Si quieres usar las tuyas propias, edítalo, o copia .env.example.
 
 # 2. Levantar todo el stack
-docker compose up -d
+docker compose up -d --build collector
 
 # 3. Verificar que los contenedores están corriendo
 docker compose ps
