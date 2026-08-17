@@ -27,24 +27,21 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el resto del código
 COPY . .
 
-# Usuario no-root (buena práctica de seguridad: si algo dentro del
-# contenedor se ve comprometido, no corre como root). UID/GID 1000 porque
-# es el primer usuario "normal" en la gran mayoría de distros Linux —
-# facilita que, en un servidor real, el propietario de ./data y ./logs en
-# el host coincida sin fricción.
+# NOTA: se probó correr como usuario no-root (appuser, UID 1000) como parte
+# del endurecimiento para servidor real (ver PRODUCTION.md), pero causó
+# PermissionError en despliegues que ya tenían archivos en ./logs creados
+# por una versión anterior del contenedor corriendo como root — ver
+# INTEGRATION_NOTES.md, bug 3.15. Se revirtió a root por simplicidad; el
+# resto del endurecimiento (healthchecks, límites de recursos,
+# contraseñas separadas, puertos solo en 127.0.0.1, rotación de logs,
+# versiones fijadas) se mantiene sin cambios.
 #
-# NOTA para servidor Linux real: antes del primer `docker compose up`,
-# asegúrate de que el host pueda escribir esos directorios desde este UID:
-#   chown -R 1000:1000 data logs   (o `chmod -R a+rwX data logs` si prefieres
-#   no atarte a un UID específico)
-# En Windows con Docker Desktop esto normalmente no hace falta — la capa de
-# compatibilidad de Docker Desktop maneja el mapeo de permisos sola.
-RUN groupadd -g 1000 appuser \
-    && useradd -u 1000 -g appuser -m -s /bin/bash appuser \
-    && mkdir -p /app/data /app/logs \
-    && chown -R appuser:appuser /app
-
-USER appuser
+# Si más adelante quieres retomar el usuario no-root (recomendable para un
+# servidor real con acceso multiusuario), la forma robusta de hacerlo sin
+# repetir el mismo problema es con un entrypoint que corrija el ownership
+# de los volúmenes montados ANTES de bajar privilegios, en vez de solo
+# `USER appuser` al final del build (que no puede arreglar archivos que ya
+# existen en un bind mount de una ejecución anterior).
 
 # 8501 = Streamlit (dashboard). El servicio `collector` no expone puerto,
 # pero no hace daño declararlo aquí ya que ambos comparten esta imagen.

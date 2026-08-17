@@ -12,7 +12,9 @@
 #
 # ENDURECIDO PARA SERVIDOR REAL (ver PRODUCTION.md para el detalle completo
 # de cada decisión):
-#   - collector/dashboard corren como usuario no-root dentro del contenedor
+#   - collector/dashboard: se probó usuario no-root, revertido a root por
+#     un problema real con permisos en despliegues ya existentes — ver
+#     PRODUCTION.md sección 1 e INTEGRATION_NOTES.md bug 3.15
 #   - healthchecks reales + depends_on que espera a "healthy", no solo a
 #     que el contenedor haya arrancado
 #   - límites de CPU/memoria por servicio

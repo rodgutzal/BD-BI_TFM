@@ -7,26 +7,28 @@ adelante decides exponerlo a internet.
 
 ## Qué se hizo (alcance "lo esencial")
 
-### 1. Usuarios no-root en los contenedores propios
+### 1. Usuarios no-root en los contenedores propios — **revertido**
 
-`collector` y `dashboard` (los dos que construimos con `Dockerfile`) ahora
-corren como `appuser` (UID/GID 1000), no como root. `timescaledb`,
-`pgadmin` y `sqlite-web` son imágenes de terceros que ya gestionan sus
-propios usuarios internamente — no se tocaron.
+Se probó (`collector`/`dashboard` corriendo como `appuser`, UID/GID 1000,
+en vez de root), pero causó un problema real en la práctica: un
+despliegue que ya venía corriendo *antes* de este cambio tenía archivos en
+`./logs` con ownership de root (de cuando el contenedor sí corría como
+root) — el nuevo `appuser` no podía escribirlos, y `collector` quedó en
+bucle de reinicio (`PermissionError`). Ver INTEGRATION_NOTES.md, bug 3.15.
 
-**Si despliegas en un servidor Linux real**, antes del primer
-`docker compose up` asegúrate de que el host pueda escribir `./data` y
-`./logs` desde ese UID:
+Se revirtió a **root** por simplicidad — es el estado actual. `timescaledb`,
+`pgadmin` y `sqlite-web` son imágenes de terceros que gestionan sus
+propios usuarios internamente, no se tocaron en ningún momento.
 
-```bash
-chown -R 1000:1000 data logs
-# o, más simple si no quieres atarte a un UID específico:
-chmod -R a+rwX data logs
-```
-
-En Windows con Docker Desktop (tu caso actual) esto normalmente no hace
-falta — la capa de compatibilidad de Docker Desktop maneja el mapeo de
-permisos sola, por eso no lo notaste al hacer el `--build`.
+**Si más adelante quieres retomarlo** (recomendable para un servidor con
+acceso multiusuario real), la forma robusta de hacerlo sin repetir el
+mismo problema es con un **entrypoint script** que corrija el ownership de
+`./data`/`./logs` en cada arranque del contenedor (antes de bajar
+privilegios a `appuser`), en vez de solo `USER appuser` al final del
+`Dockerfile` — que solo controla permisos en tiempo de *build*, no puede
+arreglar archivos que ya existen en un bind mount de una ejecución
+anterior. No se implementó esta vez para no introducir una pieza nueva
+sin poder probarla contra un Docker real primero.
 
 ### 2. Healthchecks reales + `depends_on` que espera de verdad
 
