@@ -117,10 +117,6 @@ docker compose up -d
 
 # 3. Verificar que los contenedores están corriendo
 docker compose ps
-
-# Nota. Sí quieres iniciar con posibilidad de un espacio dedicado para queries de SQL usa los siguientes comandos
-docker compose up -d --force-recreate sqlite-web
-docker compose ps sqlite-web
 ```
 
 | Contenedor | Descripción | URL |

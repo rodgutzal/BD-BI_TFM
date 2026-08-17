@@ -229,6 +229,34 @@ create it."`) en vez de dejarlo en silencio.
 Igual que el bug 3.12: si ya tienes el stack corriendo,
 `docker compose up -d --build dashboard` para que tome el fix.
 
+### 3.14 Dashboard Executive — `NameError: name 'np' is not defined`
+
+**Descubierto después de la primera entrega**, al probar la pestaña Executive.
+
+**Síntoma:**
+
+```
+NameError: name 'np' is not defined
+File "streamlit_app/dashboards/executive_dashboard.py", line 131, in render_trend_chart
+    z = np.polyfit(range(len(daily_avg)), daily_avg.values, 1)
+```
+
+**Causa:** `render_trend_chart()` usa `np.polyfit`/`np.poly1d` para la línea
+de tendencia del gráfico de 30 días, pero el archivo nunca importaba
+`numpy` — solo `pandas`, `plotly.graph_objects` y `streamlit`. Se revisó
+el resto de dashboards (`operations_dashboard.py`, `analyst_dashboard.py`,
+`streamlit_app/legacy_reference/*.py`) por el mismo patrón; solo aparecía
+aquí.
+
+**Fix:** `import numpy as np` agregado. Verificado con datos reales de
+`data/mobility.db` reproduciendo la consulta exacta de la función — la
+guarda `if len(daily_avg) > 1:` que ya tenía el código protege
+correctamente el caso de un solo día de datos en la ventana (no llega a
+llamar `np.polyfit`), así que el único problema real era el import
+faltante.
+
+Igual que los anteriores: `docker compose up -d --build dashboard`.
+
 ### 3.7 `src/analytics.py` vs `src/analytics/` — colisión de nombres (crítico)
 
 El repo original tenía **a la vez** un archivo `src/analytics.py` (con la
