@@ -136,6 +136,96 @@ también rompía el insert. Se corrigieron ambas cosas.
 Verificado corriendo dos ciclos sintéticos consecutivos el mismo día: sin
 excepciones, y sin filas duplicadas.
 
+### 3.7 `src/analytics.py` vs `src/analytics/` — colisión de nombres (crítico)
+
+El repo original tenía **a la vez** un archivo `src/analytics.py` (con la
+clase `MobilityAnalytics`) y una carpeta `src/analytics/` (con
+`causal_analysis.py` y `time_series_analysis.py`) — algo que Python no
+permite de forma consistente. En la práctica, `import src.analytics`
+resolvía siempre al archivo `.py`, lo que hacía que
+`from src.analytics.time_series_analysis import TimeSeriesAnalytics` fuera
+**completamente imposible de importar** (`'src.analytics' is not a
+package`). Esto afectaba directamente al dashboard **Analyst**, a
+`src/api.py`, y a `tests/test_time_series.py` — nunca se habían ejecutado
+juntos antes de esta fusión.
+
+**Fix:** `src/analytics.py` se convirtió en `src/analytics/__init__.py`
+(la forma estándar de Python de tener un paquete con una clase "principal"
+en `__init__.py` y submódulos especializados al lado). Cero cambios
+necesarios en ningún otro archivo que ya hacía
+`from src.analytics import MobilityAnalytics`. Se agregó
+`src/analytics/__main__.py` para no perder el comando documentado
+`python -m src.analytics summary` (que de otra forma habría dejado de
+funcionar, porque `python -m paquete` ejecuta `paquete/__main__.py`, no
+`__init__.py`).
+
+### 3.8 Seguridad: clave de API hardcodeada en el código fuente
+
+`src/api_extraction.py` (BD_BI_TFM) tenía la clave de ORS escrita
+directamente en el código, committeada al repo. Se movió a `.env`
+(`ORS_API_KEY`), fuera de control de versiones.
+
+### 3.9 Seguridad: `.dockerignore` no excluía `.env`
+
+El `.dockerignore` original de urban-mobility-analytics1 no excluía `.env`,
+así que `COPY . .` en el `Dockerfile` horneaba las claves de API reales
+**dentro de la imagen Docker** — cualquiera con acceso a la imagen podía
+extraerlas. `docker-compose.yml` ya inyecta `.env` en tiempo de ejecución
+vía `env_file:`, así que no hace falta que viva dentro de la imagen. Se
+agregó `.env`/`.env.local` a `.dockerignore`.
+
+### 3.10 `setup.py` — dos inconsistencias
+
+1. Declaraba `python_requires=">=3.13"`, pero el propio CI del repo solo
+   probaba Python 3.10/3.11/3.12 — ninguna versión cumplía su propio
+   requisito. El código no usa nada exclusivo de 3.13. Ajustado a `>=3.10`.
+2. Leía `README_FINAL.md` para el `long_description`, archivo que no se
+   trajo a la fusión (se consolidó toda la documentación dispersa del repo
+   original — `COMPLETE_SUMMARY.md`, `IMPLEMENTATION_COMPLETE.md`,
+   `IMPLEMENTATION_SUMMARY.txt`, `MASTER_IMPROVEMENTS.md`,
+   `PHASES_IMPLEMENTATION.md`, `QUICKSTART.md`, `README_FINAL.md`,
+   `RUNNING_NOW.md`, `RESUMEN_PROYECTO.pdf` — en un único `README.md`
+   nuevo). Se corrigió para leer `README.md`.
+
+### 3.11 Dependencias declaradas incorrectamente
+
+- `requirements-dev.txt` no declaraba `xgboost` ni `prophet`, a pesar de que
+  `src/models/ensemble_predictor.py` los importa con `try/except` — el
+  ensemble se degradaba en silencio (2 de 4 modelos) sin ningún aviso.
+  Agregados como dependencias opcionales explícitas.
+- `dowhy` estaba declarado pero **ningún archivo lo importa** — ni siquiera
+  `causal_analysis.py`, que implementa su propia inferencia causal con
+  `sklearn`/`scipy`. Se dejó comentado como posible extensión futura.
+- `requirements.txt` incluía `pydeck`, que no usa ningún archivo (el mapa
+  usa `st.map()` nativo de Streamlit). Eliminado.
+- `urllib3` se usa directamente (`from urllib3.util.retry import Retry`) en
+  tres clientes HTTP, pero solo estaba presente de forma transitiva (vía
+  `requests`). Se agregó explícito.
+
+---
+
+## 4. Archivos deliberadamente NO incluidos
+
+- `backups/` (urban-mobility-analytics1): copias de versiones anteriores de
+  `app.py`, `api_extraction.py`, `config.py`, `route_extraction.py` —
+  redundantes con lo ya integrado en `src/`.
+- `COMPLETE_SUMMARY.md`, `IMPLEMENTATION_COMPLETE.md`,
+  `IMPLEMENTATION_SUMMARY.txt`, `MASTER_IMPROVEMENTS.md`,
+  `PHASES_IMPLEMENTATION.md`, `QUICKSTART.md`, `README_FINAL.md`,
+  `RUNNING_NOW.md`, `RESUMEN_PROYECTO.pdf`: documentación de proceso de
+  desarrollo del repo original, consolidada en un único `README.md` nuevo.
+- Los `polyline` del histórico masivo de TomTom (ver sección 2).
+
+## 5. Archivos movidos, no eliminados
+
+`streamlit_app/app_advanced.py` → `streamlit_app/legacy_reference/app_advanced.py`
+`streamlit_app/app_classic.py` → `streamlit_app/legacy_reference/app_classic.py`
+`streamlit_app/components.py` → `streamlit_app/legacy_reference/components.py`
+`streamlit_app/charts.py` → `streamlit_app/legacy_reference/charts.py`
+
+Ninguno se borró: siguen siendo funcionales de forma standalone (ver
+`README.md`, sección "Dashboards disponibles"), solo no forman parte del
+`streamlit_app/app.py` activo.
 ### 3.12 Dashboards — crash con rutas cuya última medición es de ORS
 
 **Descubierto después de la primera entrega**, al probar el dashboard
@@ -257,93 +347,78 @@ faltante.
 
 Igual que los anteriores: `docker compose up -d --build dashboard`.
 
-### 3.7 `src/analytics.py` vs `src/analytics/` — colisión de nombres (crítico)
+### 3.15 `collector` en bucle de reinicio tras pasar a usuario no-root
 
-El repo original tenía **a la vez** un archivo `src/analytics.py` (con la
-clase `MobilityAnalytics`) y una carpeta `src/analytics/` (con
-`causal_analysis.py` y `time_series_analysis.py`) — algo que Python no
-permite de forma consistente. En la práctica, `import src.analytics`
-resolvía siempre al archivo `.py`, lo que hacía que
-`from src.analytics.time_series_analysis import TimeSeriesAnalytics` fuera
-**completamente imposible de importar** (`'src.analytics' is not a
-package`). Esto afectaba directamente al dashboard **Analyst**, a
-`src/api.py`, y a `tests/test_time_series.py` — nunca se habían ejecutado
-juntos antes de esta fusión.
+**Descubierto después de aplicar el endurecimiento de PRODUCTION.md** (ver
+sección 1 de ese archivo), en un despliegue que ya venía corriendo desde
+antes del cambio.
 
-**Fix:** `src/analytics.py` se convirtió en `src/analytics/__init__.py`
-(la forma estándar de Python de tener un paquete con una clase "principal"
-en `__init__.py` y submódulos especializados al lado). Cero cambios
-necesarios en ningún otro archivo que ya hacía
-`from src.analytics import MobilityAnalytics`. Se agregó
-`src/analytics/__main__.py` para no perder el comando documentado
-`python -m src.analytics summary` (que de otra forma habría dejado de
-funcionar, porque `python -m paquete` ejecuta `paquete/__main__.py`, no
-`__init__.py`).
+**Síntoma:**
 
-### 3.8 Seguridad: clave de API hardcodeada en el código fuente
+```
+PermissionError: [Errno 13] Permission denied: '/app/logs/collector.log'
+```
 
-`src/api_extraction.py` (BD_BI_TFM) tenía la clave de ORS escrita
-directamente en el código, committeada al repo. Se movió a `.env`
-(`ORS_API_KEY`), fuera de control de versiones.
+`movilidad-collector` en `Restarting (1)` en bucle infinito.
 
-### 3.9 Seguridad: `.dockerignore` no excluía `.env`
+**Causa:** exactamente el riesgo anticipado en `PRODUCTION.md` sección 1
+— `collector`/`dashboard` pasaron a correr como `appuser` (UID 1000) en
+vez de root. El archivo `logs/collector.log` ya existía de **antes** de
+ese cambio (creado por una versión del contenedor que corría como root),
+así que sigue siendo propiedad de root en el bind mount — `appuser` no
+tiene permiso para escribirlo, aunque sí podría crear un archivo nuevo en
+esa misma carpeta sin problema.
 
-El `.dockerignore` original de urban-mobility-analytics1 no excluía `.env`,
-así que `COPY . .` en el `Dockerfile` horneaba las claves de API reales
-**dentro de la imagen Docker** — cualquiera con acceso a la imagen podía
-extraerlas. `docker-compose.yml` ya inyecta `.env` en tiempo de ejecución
-vía `env_file:`, así que no hace falta que viva dentro de la imagen. Se
-agregó `.env`/`.env.local` a `.dockerignore`.
+**Fix aplicado por el usuario:** borrar `logs/collector.log` (o toda la
+carpeta `logs/`) y dejar que el contenedor la regenere desde cero — el
+archivo nuevo se crea con el propietario correcto (`appuser`).
 
-### 3.10 `setup.py` — dos inconsistencias
+**Nota para quien despliegue esto en un servidor nuevo desde cero** (sin
+arrastrar archivos de una versión anterior corriendo como root): este
+problema específico no debería aparecer, porque nunca existiría un
+`logs/collector.log` con ownership viejo de por medio. Solo afecta
+**upgrades in-place** de un despliegue que ya estaba corriendo antes de
+adoptar el usuario no-root — exactamente el caso aquí.
 
-1. Declaraba `python_requires=">=3.13"`, pero el propio CI del repo solo
-   probaba Python 3.10/3.11/3.12 — ninguna versión cumplía su propio
-   requisito. El código no usa nada exclusivo de 3.13. Ajustado a `>=3.10`.
-2. Leía `README_FINAL.md` para el `long_description`, archivo que no se
-   trajo a la fusión (se consolidó toda la documentación dispersa del repo
-   original — `COMPLETE_SUMMARY.md`, `IMPLEMENTATION_COMPLETE.md`,
-   `IMPLEMENTATION_SUMMARY.txt`, `MASTER_IMPROVEMENTS.md`,
-   `PHASES_IMPLEMENTATION.md`, `QUICKSTART.md`, `README_FINAL.md`,
-   `RUNNING_NOW.md`, `RESUMEN_PROYECTO.pdf` — en un único `README.md`
-   nuevo). Se corrigió para leer `README.md`.
+**Actualización:** el usuario no-root se terminó revirtiendo por completo
+(ver PRODUCTION.md sección 1) — este bug ya no puede volver a ocurrir en
+este proyecto tal como está entregado, se documenta por si en el futuro
+se retoma esa práctica.
 
-### 3.11 Dependencias declaradas incorrectamente
+### 3.16 TimescaleDB — `column "data_source" does not exist` en un volumen ya existente
 
-- `requirements-dev.txt` no declaraba `xgboost` ni `prophet`, a pesar de que
-  `src/models/ensemble_predictor.py` los importa con `try/except` — el
-  ensemble se degradaba en silencio (2 de 4 modelos) sin ningún aviso.
-  Agregados como dependencias opcionales explícitas.
-- `dowhy` estaba declarado pero **ningún archivo lo importa** — ni siquiera
-  `causal_analysis.py`, que implementa su propia inferencia causal con
-  `sklearn`/`scipy`. Se dejó comentado como posible extensión futura.
-- `requirements.txt` incluía `pydeck`, que no usa ningún archivo (el mapa
-  usa `st.map()` nativo de Streamlit). Eliminado.
-- `urllib3` se usa directamente (`from urllib3.util.retry import Retry`) en
-  tres clientes HTTP, pero solo estaba presente de forma transitiva (vía
-  `requests`). Se agregó explícito.
+**Descubierto después de la primera entrega**, al confirmar que el
+collector escribía en TimescaleDB.
 
----
+**Síntoma:**
 
-## 4. Archivos deliberadamente NO incluidos
+```
+Error writing to TimescaleDB: column "data_source" of relation "traffic_trips" does not exist
+```
 
-- `backups/` (urban-mobility-analytics1): copias de versiones anteriores de
-  `app.py`, `api_extraction.py`, `config.py`, `route_extraction.py` —
-  redundantes con lo ya integrado en `src/`.
-- `COMPLETE_SUMMARY.md`, `IMPLEMENTATION_COMPLETE.md`,
-  `IMPLEMENTATION_SUMMARY.txt`, `MASTER_IMPROVEMENTS.md`,
-  `PHASES_IMPLEMENTATION.md`, `QUICKSTART.md`, `README_FINAL.md`,
-  `RUNNING_NOW.md`, `RESUMEN_PROYECTO.pdf`: documentación de proceso de
-  desarrollo del repo original, consolidada en un único `README.md` nuevo.
-- Los `polyline` del histórico masivo de TomTom (ver sección 2).
+**Causa:** no es un bug de código — es una característica de cómo
+funciona Postgres/TimescaleDB en Docker. Los scripts en
+`/docker-entrypoint-initdb.d` (donde `docker-compose.yml` monta
+`init/01_init.sql`) **solo se ejecutan la primerísima vez que se crea el
+volumen de datos**, nunca de nuevo en arranques posteriores. `init/01_init.sql`
+ya incluía `ALTER TABLE ... ADD COLUMN IF NOT EXISTS data_source` /
+`traffic_delay_min` pensado exactamente para bases que vinieran del
+BD_BI_TFM original (sin esas columnas) — pero como el volumen `movilidad-db`
+de este despliegue ya existía desde antes de la fusión, ese archivo
+completo (incluyendo esas líneas de compatibilidad) nunca se volvió a
+ejecutar contra él.
 
-## 5. Archivos movidos, no eliminados
+**Fix aplicado:** correr las dos líneas `ALTER TABLE` manualmente, una
+sola vez, contra la base ya viva:
 
-`streamlit_app/app_advanced.py` → `streamlit_app/legacy_reference/app_advanced.py`
-`streamlit_app/app_classic.py` → `streamlit_app/legacy_reference/app_classic.py`
-`streamlit_app/components.py` → `streamlit_app/legacy_reference/components.py`
-`streamlit_app/charts.py` → `streamlit_app/legacy_reference/charts.py`
+```bash
+docker compose exec timescaledb psql -U postgres -d movilidad_urbana -c "ALTER TABLE traffic_trips ADD COLUMN IF NOT EXISTS data_source TEXT DEFAULT 'unknown';"
+docker compose exec timescaledb psql -U postgres -d movilidad_urbana -c "ALTER TABLE traffic_trips ADD COLUMN IF NOT EXISTS traffic_delay_min NUMERIC(8,2);"
+```
 
-Ninguno se borró: siguen siendo funcionales de forma standalone (ver
-`README.md`, sección "Dashboards disponibles"), solo no forman parte del
-`streamlit_app/app.py` activo.
+**Para quien despliegue esto en un servidor nuevo desde cero** (volumen
+de TimescaleDB creado por primera vez): este problema no debería aparecer
+nunca, porque `init/01_init.sql` corre completo, con las columnas ya
+incluidas desde el `CREATE TABLE` original. Solo afecta upgrades in-place
+de una base ya existente — mismo patrón que el bug 3.15.
+
