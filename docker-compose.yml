@@ -95,12 +95,14 @@ services:
     networks:
       - mobility-network
 
-  # Recolector de datos (ORS o TomTom según DATA_SOURCE en .env).
+  # Recolector de datos: modo híbrido (ORS cada 15 min + TomTom cada 27
+  # min, en paralelo), dentro de las cuotas gratuitas mensuales reales de
+  # ambas APIs con las 12 rutas configuradas — ver PRODUCTION.md.
   # Escribe en ./data (CSV + SQLite) y en TimescaleDB.
   collector:
     build: .
     container_name: movilidad-collector
-    command: python -m src.route_extraction --interval 120
+    command: python -m src.route_extraction --hybrid --ors-interval 15 --tomtom-interval 27
     env_file:
       - .env
     environment:
@@ -120,13 +122,17 @@ services:
     healthcheck:
       # No hay puerto HTTP que consultar (a diferencia de dashboard), así
       # que se usa el heartbeat que collector.py escribe tras cada ciclo
-      # exitoso. 300s = 2.5x el --interval por defecto (120s), con margen.
+      # exitoso (de cualquiera de las dos fuentes). 1200s = 20min, con
+      # margen sobre los 15min de ORS (la más frecuente de las dos en modo
+      # híbrido) — con el viejo umbral de 300s (pensado para el intervalo
+      # único de 120s de antes del híbrido), el collector se hubiera
+      # marcado "unhealthy" a mitad de cada espera normal.
       test: ["CMD", "python", "-c",
-             "import sys, time; from pathlib import Path; p = Path('/app/logs/heartbeat'); sys.exit(0 if p.exists() and time.time() - p.stat().st_mtime < 300 else 1)"]
-      interval: 30s
+             "import sys, time; from pathlib import Path; p = Path('/app/logs/heartbeat'); sys.exit(0 if p.exists() and time.time() - p.stat().st_mtime < 1200 else 1)"]
+      interval: 60s
       timeout: 5s
       retries: 3
-      start_period: 60s
+      start_period: 120s
     deploy:
       resources:
         limits:

@@ -11,7 +11,7 @@ import logging
 import signal
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -53,6 +53,7 @@ class DataCollector:
         timescale_config: Optional[dict] = None,
         enable_timescale: bool = True,
         enable_medallion: bool = True,
+        register_signal_handler: bool = True,
     ):
         if data_source not in ("ors", "tomtom"):
             raise ValueError(f"data_source debe ser 'ors' o 'tomtom', recibido: {data_source}")
@@ -71,7 +72,14 @@ class DataCollector:
         self.enable_medallion = enable_medallion
         self.running = True
 
-        signal.signal(signal.SIGINT, self._signal_handler)
+        # BD_BI_TFM2: en modo híbrido (HybridScheduler) se crean DOS
+        # DataCollector a la vez (uno por fuente) — Python solo permite un
+        # handler de señal por proceso, así que si ambos lo registraran, el
+        # segundo pisaría al primero y su cliente HTTP nunca se cerraría
+        # bien al hacer Ctrl+C. El HybridScheduler registra un único
+        # handler que cierra ambos.
+        if register_signal_handler:
+            signal.signal(signal.SIGINT, self._signal_handler)
 
     def _signal_handler(self, signum, frame):
         """Maneja Ctrl+C para detener gracefully."""
@@ -290,3 +298,91 @@ class DataCollector:
                 time.sleep(1)
 
         logger.info("Collector stopped")
+
+
+class HybridScheduler:
+    """
+    Orquesta dos DataCollector (uno ORS, uno TomTom) con intervalos
+    independientes, dentro de un único proceso.
+
+    Existe porque los presupuestos gratuitos de las dos APIs de tráfico son
+    demasiado bajos para correr todas las rutas cada 2 minutos: TomTom
+    reporta tráfico en tiempo real pero permite ~20.000 peticiones/mes;
+    ORS no tiene tráfico en vivo pero permite ~40.000/mes. Con 12 rutas,
+    eso da un intervalo mínimo real de ~27 min para TomTom y ~13 min para
+    ORS (ver PRODUCTION.md). El híbrido usa ambas fuentes en paralelo:
+    ORS da una serie temporal densa de línea base, TomTom aporta fotos
+    periódicas de tráfico real — sin que ninguna de las dos supere su
+    cuota mensual.
+
+    Cada fuente corre en su propio reloj; no son ciclos alternados ni
+    sincronizados entre sí.
+    """
+
+    def __init__(
+        self,
+        ors_collector: "DataCollector",
+        tomtom_collector: "DataCollector",
+        ors_interval_min: float,
+        tomtom_interval_min: float,
+    ):
+        self.entries = [
+            {
+                "name": "ors",
+                "collector": ors_collector,
+                "interval": timedelta(minutes=ors_interval_min),
+                "last_run": None,
+            },
+            {
+                "name": "tomtom",
+                "collector": tomtom_collector,
+                "interval": timedelta(minutes=tomtom_interval_min),
+                "last_run": None,
+            },
+        ]
+        self.running = True
+        signal.signal(signal.SIGINT, self._signal_handler)
+
+    def _signal_handler(self, signum, frame):
+        """Maneja Ctrl+C cerrando ambos collectors."""
+        logger.info("Stopping hybrid scheduler...")
+        self.running = False
+        for entry in self.entries:
+            entry["collector"].traffic_client.close()
+            entry["collector"].weather.close()
+        sys.exit(0)
+
+    def run(self, tick_seconds: int = 60) -> None:
+        """
+        Bucle principal: cada `tick_seconds`, revisa si alguna de las dos
+        fuentes ya cumplió su intervalo y, si es así, dispara su ciclo.
+
+        En el primer tick, como `last_run` empieza en None, ambas fuentes
+        corren de inmediato (para tener datos frescos de las dos apenas
+        arranca), y de ahí en adelante cada una sigue su propio reloj.
+        """
+        logger.info(
+            f"Starting hybrid scheduler (ORS every "
+            f"{self.entries[0]['interval'].total_seconds() / 60:.0f} min, "
+            f"TomTom every {self.entries[1]['interval'].total_seconds() / 60:.0f} min)"
+        )
+
+        while self.running:
+            now = datetime.now(timezone.utc)
+
+            for entry in self.entries:
+                due = entry["last_run"] is None or (now - entry["last_run"]) >= entry["interval"]
+                if due:
+                    logger.info(f"[hybrid] Disparando ciclo de {entry['name']}")
+                    entry["collector"].collect_cycle()
+                    entry["last_run"] = now
+
+                if not self.running:
+                    break
+
+            for _ in range(tick_seconds):
+                if not self.running:
+                    break
+                time.sleep(1)
+
+        logger.info("Hybrid scheduler stopped")

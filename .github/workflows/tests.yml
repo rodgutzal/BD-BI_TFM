@@ -42,7 +42,7 @@ jobs:
         from src.analytics.time_series_analysis import TimeSeriesAnalytics
         from src.database import RouteDatabase
         from src.locations import LOCATIONS, ROUTES
-        from src.collector import DataCollector
+        from src.collector import DataCollector, HybridScheduler
         from src.data_warehouse.bronze_layer import BronzeLayer
         from src.data_warehouse.silver_layer import SilverLayer
         from src.data_warehouse.gold_layer import GoldLayer

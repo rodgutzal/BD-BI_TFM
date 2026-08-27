@@ -6,6 +6,8 @@ Uso:
     python -m src.route_extraction --interval 120         # Continuo cada 120 segundos
     python -m src.route_extraction --source tomtom        # Forzar TomTom para esta ejecución
     python -m src.route_extraction --source ors           # Forzar OpenRouteService para esta ejecución
+    python -m src.route_extraction --hybrid               # ORS + TomTom en paralelo, cada uno a su
+                                                            # propio ritmo (--ors-interval / --tomtom-interval)
 """
 
 import argparse
@@ -16,7 +18,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from src import config
-from src.collector import DataCollector
+from src.collector import DataCollector, HybridScheduler
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT_DIR / ".env"
@@ -43,6 +45,12 @@ logging.getLogger("requests").setLevel(logging.WARNING)
 
 load_dotenv(ENV_PATH)
 
+# Defaults calculados para 12 rutas dentro de las cuotas gratuitas
+# mensuales reales de cada API (ver PRODUCTION.md): ORS ~40,000/mes,
+# TomTom ~20,000/mes. Configurables por si el número de rutas cambia.
+DEFAULT_ORS_INTERVAL_MIN = 15
+DEFAULT_TOMTOM_INTERVAL_MIN = 27
+
 
 def main() -> None:
     """Punto de entrada principal."""
@@ -55,6 +63,7 @@ Examples:
   python -m src.route_extraction --interval 120      # Run continuously every 120 seconds
   python -m src.route_extraction --source tomtom     # Force TomTom for this run
   python -m src.route_extraction --no-timescale      # Skip writing to TimescaleDB (CSV/SQLite only)
+  python -m src.route_extraction --hybrid            # ORS every 15 min + TomTom every 27 min
         """,
     )
 
@@ -62,13 +71,13 @@ Examples:
         "--interval",
         type=int,
         default=None,
-        help="Interval in seconds for continuous collection. If not provided, runs once.",
+        help="Interval in seconds for continuous collection (single-source mode). If not provided, runs once.",
     )
     parser.add_argument(
         "--source",
         choices=["ors", "tomtom"],
         default=None,
-        help="Override DATA_SOURCE from .env for this run.",
+        help="Override DATA_SOURCE from .env for this run (ignored with --hybrid).",
     )
     parser.add_argument(
         "--no-timescale",
@@ -80,8 +89,82 @@ Examples:
         action="store_true",
         help="Do not run the Bronze/Silver/Gold pipeline (Executive dashboard KPIs won't update).",
     )
+    parser.add_argument(
+        "--hybrid",
+        action="store_true",
+        help="Run ORS and TomTom in parallel, each on its own interval, both within their free "
+             "monthly quotas (see PRODUCTION.md). Ignores --source and --interval.",
+    )
+    parser.add_argument(
+        "--ors-interval",
+        type=float,
+        default=DEFAULT_ORS_INTERVAL_MIN,
+        help=f"Minutes between ORS cycles in --hybrid mode (default: {DEFAULT_ORS_INTERVAL_MIN}).",
+    )
+    parser.add_argument(
+        "--tomtom-interval",
+        type=float,
+        default=DEFAULT_TOMTOM_INTERVAL_MIN,
+        help=f"Minutes between TomTom cycles in --hybrid mode (default: {DEFAULT_TOMTOM_INTERVAL_MIN}).",
+    )
 
     args = parser.parse_args()
+
+    timescale_config = config.get_timescale_config()
+
+    if args.hybrid:
+        try:
+            ors_key = config.get_ors_api_key()
+            tomtom_key = config.get_tomtom_api_key()
+            weather_api_key = config.get_openweather_api_key()
+        except RuntimeError as e:
+            logger.error(str(e))
+            sys.exit(1)
+
+        logger.info(
+            f"API keys validated (hybrid mode: ORS every {args.ors_interval}min, "
+            f"TomTom every {args.tomtom_interval}min)"
+        )
+
+        ors_collector = DataCollector(
+            data_source="ors",
+            traffic_api_key=ors_key,
+            weather_key=weather_api_key,
+            csv_path=CSV_PATH,
+            db_path=DB_PATH,
+            timescale_config=timescale_config,
+            enable_timescale=not args.no_timescale,
+            enable_medallion=not args.no_medallion,
+            register_signal_handler=False,
+        )
+        tomtom_collector = DataCollector(
+            data_source="tomtom",
+            traffic_api_key=tomtom_key,
+            weather_key=weather_api_key,
+            csv_path=CSV_PATH,
+            db_path=DB_PATH,
+            timescale_config=timescale_config,
+            enable_timescale=not args.no_timescale,
+            enable_medallion=not args.no_medallion,
+            register_signal_handler=False,
+        )
+
+        scheduler = HybridScheduler(
+            ors_collector=ors_collector,
+            tomtom_collector=tomtom_collector,
+            ors_interval_min=args.ors_interval,
+            tomtom_interval_min=args.tomtom_interval,
+        )
+
+        try:
+            scheduler.run()
+        except KeyboardInterrupt:
+            logger.info("Interrupted by user")
+            sys.exit(0)
+        except Exception as e:
+            logger.error(f"Fatal error: {e}", exc_info=True)
+            sys.exit(1)
+        return
 
     data_source = args.source or config.get_data_source()
 
@@ -95,8 +178,6 @@ Examples:
         sys.exit(1)
 
     logger.info(f"API keys validated (data_source={data_source})")
-
-    timescale_config = config.get_timescale_config()
 
     collector = DataCollector(
         data_source=data_source,
