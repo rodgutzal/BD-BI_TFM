@@ -113,7 +113,7 @@ BD_BI_TFM2/
 #    Si quieres usar las tuyas propias, edítalo, o copia .env.example.
 
 # 2. Levantar todo el stack
-docker compose up -d --build collector
+docker compose up -d
 
 # 3. Verificar que los contenedores están corriendo
 docker compose ps
@@ -151,11 +151,16 @@ cp .env.example .env      # y completa tus claves, o usa el .env ya incluido
 # Recolección puntual
 python -m src.route_extraction
 
-# Recolección continua cada 2 minutos
+# Recolección continua cada 2 minutos (una sola fuente)
 python -m src.route_extraction --interval 120
 
 # Forzar una fuente para una corrida puntual
 python -m src.route_extraction --source tomtom
+
+# Modo híbrido: ORS + TomTom en paralelo, cada uno en su propio intervalo,
+# ambos dentro de su cuota gratuita mensual (ver PRODUCTION.md) — es lo
+# que usa docker-compose.yml por defecto
+python -m src.route_extraction --hybrid --ors-interval 15 --tomtom-interval 27
 
 # Dashboard
 streamlit run streamlit_app/app.py
@@ -163,16 +168,66 @@ streamlit run streamlit_app/app.py
 
 ---
 
-## Fuentes de datos: ORS vs TomTom
+## Fuentes de datos: ORS vs TomTom vs HERE
 
-| | OpenRouteService (`DATA_SOURCE=ors`) | TomTom (`DATA_SOURCE=tomtom`) |
+| Característica | **ORS** | **TomTom** | **HERE** |
+|---|:---:|:---:|:---:|
+| Tráfico en tiempo real | ❌ | ✅ | ✅ |
+| Tiempo de viaje **sin** tráfico (`no_traffic_time_min`) | — (no aplica) | ✅ | ✅ |
+| Retraso por tráfico (`traffic_delay_min`) | ❌ | ✅ | ✅ |
+| Velocidad promedio | Calculada por nosotros | ✅ nativa | ✅ nativa |
+| Geometría de la ruta (polyline) | ✅ | ✅ | ✅ |
+| Requiere tarjeta de crédito (plan free) | ❌ | ❌ | ❌ |
+| Autenticación | API key simple | API key simple | API key simple |
+| Cuota mensual gratis — routing base | 40.000 | 20.000 | 30.000 |
+| Cuota diaria gratis | 2.500/día | — (solo mensual) | No confirmado por separado |
+| Cuota mensual gratis **con tráfico real** | — (no tiene) | 20.000 (mismo pool) | ⚠️ **Pendiente de confirmar** — quizás 30.000, quizás solo 5.000 (ver nota abajo) |
+| Límite de ráfaga (peticiones/seg) | No es el cuello de botella | No lo investigamos a fondo | ✅ 10 req/s confirmado |
+| Intervalo mínimo viable (12 rutas) | ~13 min | ~26 min | 3-5 min si es 30k, ~105 min si es 5k |
+| Integrado en el proyecto ahora mismo | ✅ `ORSClient` | ✅ `TomTomClient` | ⏳ Pendiente de la confirmación de cuota |
+| Rol actual en el híbrido | Línea base cada 15 min | Foto real cada 27 min | — |
+| Filas en el histórico ya recolectado | 97+ | 2.664+ | 0 |
+
+**Nota sobre HERE:** en el dashboard de precios de la cuenta, `Real-Time Traffic`
+(5.000/mes gratis) resultó ser un producto separado (la HERE Traffic API,
+`data.traffic.hereapi.com`, para mapas de calor de tráfico por zona) que no
+se dispara al llamar la Routing API — no debería aplicarnos. Pero
+`Time Aware Routing` tiene exactamente los mismos tramos de precio, y no
+hay documentación clara de si se activa al usar el parámetro
+`departureTime` (necesario para tráfico en tiempo real) dentro de una
+llamada de routing normal. Se está esperando ~2 días a que el dashboard
+de uso de HERE refleje una llamada de prueba para confirmarlo antes de
+integrarlo — con cobro real de por medio, no vale la pena asumir.
+
+Todas escriben (o escribirían, en el caso de HERE) al mismo esquema unificado (`src/database.py`), así que agregar o cambiar de fuente no rompe nada aguas abajo (analytics, ML, dashboards).
+
+## Modo híbrido (ambas fuentes en paralelo)
+
+Con 12 rutas, ninguna de las dos APIs gratuitas alcanza para recolectar
+cada pocos minutos sin agotar su cuota mensual:
+
+| Fuente | Cuota real | Intervalo mínimo con 12 rutas |
 |---|---|---|
-| Costo | Gratis | Requiere clave (plan free disponible) |
-| Tráfico en tiempo real | ❌ No | ✅ Sí (`traffic_delay_min`, `average_speed_kmh`, etc.) |
-| Geometría de ruta | ✅ | ✅ |
-| Usado en el histórico incluido | 97 registros (may-2026) | 2.664 registros (ago-2026) |
+| ORS | 2.500/día y 40.000/mes | ~13 min (manda el límite mensual) |
+| TomTom | 20.000/mes | ~26 min |
 
-Ambas escriben al mismo esquema unificado (`src/database.py`), así que se puede cambiar de fuente en cualquier momento sin romper nada aguas abajo (analytics, ML, dashboards).
+El **modo híbrido** (`--hybrid`, el que usa `docker-compose.yml` por
+defecto) corre ambas fuentes **a la vez, cada una en su propio reloj**:
+ORS cada 15 min (línea base densa, sin tráfico en tiempo real) + TomTom
+cada 27 min (fotos periódicas de tráfico real) — dentro del presupuesto
+mensual de ambas, con margen. No son ciclos alternados: cada fuente tiene
+su propio temporizador independiente (`src/collector.py::HybridScheduler`).
+
+```bash
+python -m src.route_extraction --hybrid --ors-interval 15 --tomtom-interval 27
+```
+
+**Nota metodológica para el TFM:** con esto, el dataset resultante tiene
+densidad y calidad mixtas — la mayoría de las mediciones (ORS) no tienen
+`traffic_delay_min` real, y solo las de TomTom (más escasas) sí. Vale la
+pena documentarlo explícitamente como decisión de diseño (línea base de
+alta frecuencia + muestreo periódico de tráfico real), no como una
+inconsistencia de los datos.
 
 ---
 

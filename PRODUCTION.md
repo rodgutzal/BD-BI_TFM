@@ -145,3 +145,46 @@ para no tener que rehacer nada si más adelante sí las quieres:
 5. Considerar autenticación adicional delante de pgAdmin/sqlite-web (están
    en 127.0.0.1, pero si alguna vez necesitas alcanzarlos remotamente, hazlo
    por VPN/túnel SSH — no los vuelvas a exponer directo a internet).
+
+## Recolección híbrida (ORS + TomTom en paralelo)
+
+Descubierto en producción real: con `DATA_SOURCE=tomtom` y el intervalo
+original de 2 minutos, la clave de TomTom empezó a devolver
+`403 Forbidden` en todas las rutas a los pocos días. Investigando la
+causa exacta (el dashboard de uso de TomTom, ver captura compartida
+durante el debugging), se confirmó que la cuota real es **mensual**
+(20.000 peticiones/mes para la Routing API), no diaria como se había
+asumido inicialmente — con 12 rutas cada 2 minutos, eso son ~263.000
+peticiones/mes, 13 veces el límite. Se agotaba en ~2-3 días.
+
+**Solución implementada:** `HybridScheduler`
+(`src/collector.py`) corre dos `DataCollector` (uno ORS, uno TomTom) en
+paralelo dentro del mismo proceso, cada uno con su propio temporizador
+independiente — no ciclos alternados, cada fuente respeta su propio
+intervalo sin importar qué esté haciendo la otra.
+
+**Números calculados y verificados** (con las 12 rutas de
+`src/locations.py`):
+
+| Fuente | Cuota real | Intervalo elegido | Uso resultante |
+|---|---|---|---|
+| ORS | 2.500/día, 40.000/mes | 15 min | ~35.000/mes (88% del límite mensual) |
+| TomTom | 20.000/mes | 27 min | ~19.500/mes (97% del límite, margen ajustado a propósito) |
+
+Se verificó también que OpenWeather (ambas fuentes disparan sus propias
+llamadas de clima por ubicación única en cada ciclo, así que el volumen
+combinado de ambas se suma) no se convierte en el nuevo cuello de
+botella: su free tier permite 1.000.000 de llamadas/mes, muy por encima
+del uso combinado estimado (~32.000/mes).
+
+**Si cambia el número de rutas** (`src/locations.py`), estos intervalos
+dejan de ser válidos — hay que recalcular. La fórmula: `intervalo_min =
+(días_del_mes × 24 × 60) / (cuota_mensual / número_de_rutas)`.
+
+**Implicación para el dashboard/análisis:** con este esquema, la mayoría
+de las mediciones (ORS, cada 15 min) no tienen `traffic_delay_min` real
+— solo las de TomTom (cada 27 min) sí. Ya está cubierto por el fix del
+bug 3.12 (`_safe()` en los dashboards), pero vale la pena tenerlo
+presente al interpretar tendencias de tráfico: los picos de dato real de
+congestión aparecen con menor frecuencia que las mediciones de tiempo de
+viaje en sí.
