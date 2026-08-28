@@ -470,3 +470,49 @@ varios ciclos con el bug: `run_medallion_pipeline.py` ahora procesa las
 `silver +3` / `gold=success` en vez de `+0` / `no_data` en un ciclo nuevo
 de prueba.
 
+### 3.18 ORS — `403 Forbidden` / `Access to this API has been disallowed` por migración de dominio
+
+**Descubierto en producción real**, una semana después de poner en marcha
+el híbrido — ORS empezó a fallar en el 100% de sus ciclos, primero con
+`403 Forbidden` genérico y luego, al probar manualmente con `curl`, con
+el mensaje explícito `{"error": "Access to this API has been disallowed"}`.
+
+**Investigación (y varios callejones sin salida antes de dar con la causa
+real):**
+1. Se recalculó el presupuesto de cuota (2.000-2.500/día según la fuente)
+   — con el intervalo de 15 min y 12 rutas, el uso real era de solo
+   46-58% del límite diario. La cuota no explicaba el fallo.
+2. Se revisó el dashboard de la cuenta (`account.heigit.org`): la clave
+   mostraba **2.000/2.000 de cuota disponible, sin usar nada** — la clave
+   ni siquiera estaba cerca de su límite.
+3. Se generó una clave nueva por si la original había sido revocada — el
+   mismo error persistió incluso con una clave recién creada y con cuota
+   completa.
+
+**Causa real, encontrada en el anuncio oficial de HeiGIT** (la
+organización detrás de ORS): `api.openrouteservice.org` — el dominio que
+usaba `src/ors_client.py` desde el principio de la fusión — fue
+**apagado por completo el 24 de agosto de 2026**, como parte de una
+migración hacia un dominio unificado (`api.heigit.org`) anunciada desde
+abril de 2026. El aviso oficial es explícito: *"tu clave ya está
+preparada para las URLs nuevas, y la cuota que ves en tu dashboard ya es
+la de `api.heigit.org`"* — es decir, nunca fue un problema de la clave,
+ninguna clave (vieja o nueva) iba a funcionar contra un dominio que ya no
+existe.
+
+**Fix:** `ROUTE_URL` en `src/ors_client.py` actualizada según la tabla de
+migración oficial:
+
+```
+api.openrouteservice.org/v2/directions  ->  api.heigit.org/openrouteservice/v2/directions
+```
+
+El resto de la petición (headers, formato del body, respuesta) no cambió
+— la migración es únicamente de dominio/ruta.
+
+**Lección para el futuro:** con servicios externos en evolución activa
+(como quedó claro con TomTom y HERE también), un error de autenticación/
+acceso no siempre es sobre la clave — vale la pena revisar primero si el
+proveedor publicó algún aviso de migración o depreciación antes de asumir
+que el problema está del lado de la cuenta.
+
