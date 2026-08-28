@@ -18,7 +18,13 @@ logger = logging.getLogger(__name__)
 class ORSClient:
     """Cliente HTTP para OpenRouteService (directions API) con reintentos automáticos."""
 
-    ROUTE_URL = "https://api.openrouteservice.org/v2/directions/driving-car"
+    # BD_BI_TFM2 fix: api.openrouteservice.org fue apagada definitivamente el
+    # 24 de agosto de 2026 (migración anunciada por HeiGIT desde abril 2026,
+    # ver ask.openrouteservice.org/t/deprecating-api-openrouteservice-org...).
+    # No es un problema de la clave — el anuncio oficial dice explícitamente
+    # que las claves existentes ya funcionan en el dominio nuevo tal cual,
+    # sin necesidad de regenerarlas. Solo cambia la URL.
+    ROUTE_URL = "https://api.heigit.org/openrouteservice/v2/directions/driving-car"
 
     def __init__(self, api_key: str, timeout: int = 30, max_retries: int = 3):
         self.api_key = api_key
