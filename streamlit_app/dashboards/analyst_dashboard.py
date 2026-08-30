@@ -62,7 +62,7 @@ def render_data_explorer():
         )
 
         if not df.empty:
-            st.dataframe(df, use_container_width=True, height=400)
+            st.dataframe(df, width='stretch', height=400)
 
             # Download button
             csv = df.to_csv(index=False)
@@ -176,7 +176,7 @@ def render_model_performance():
 
         if model_data:
             model_df = pd.DataFrame(model_data)
-            st.dataframe(model_df, use_container_width=True, hide_index=True)
+            st.dataframe(model_df, width='stretch', hide_index=True)
 
 
 def render_correlation_matrix():
@@ -223,7 +223,7 @@ def render_correlation_matrix():
                 template='plotly_dark'
             )
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
 
 def render_data_quality_report():
@@ -267,7 +267,7 @@ def render_data_quality_report():
 
     if completeness_data:
         comp_df = pd.DataFrame(completeness_data)
-        st.dataframe(comp_df, use_container_width=True, hide_index=True)
+        st.dataframe(comp_df, width='stretch', hide_index=True)
 
 
 def render_sql_query():
@@ -331,7 +331,7 @@ def render_sql_query():
             conn.close()
 
             st.success(f"{len(result_df)} filas")
-            st.dataframe(result_df, use_container_width=True, hide_index=True)
+            st.dataframe(result_df, width='stretch', hide_index=True)
 
             if not result_df.empty:
                 st.download_button(
@@ -388,7 +388,7 @@ def render_full_export():
                 f"{len(full_df):,} filas de {len(routes_included)} rutas "
                 "listas para descargar."
             )
-            st.dataframe(full_df.head(50), use_container_width=True, height=300)
+            st.dataframe(full_df.head(50), width='stretch', height=300)
 
             csv_data = full_df.to_csv(index=False)
             st.download_button(

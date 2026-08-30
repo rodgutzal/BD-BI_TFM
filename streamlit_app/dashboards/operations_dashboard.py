@@ -65,7 +65,7 @@ def render_real_time_alerts(db):
 
     if alerts:
         alerts_df = pd.DataFrame(alerts)
-        st.dataframe(alerts_df, use_container_width=True, hide_index=True)
+        st.dataframe(alerts_df, width='stretch', hide_index=True)
     else:
         st.info("✅ No critical alerts")
 
@@ -106,7 +106,7 @@ def render_route_status_grid(db):
 
     if status_data:
         status_df = pd.DataFrame(status_data)
-        st.dataframe(status_df, use_container_width=True, hide_index=True)
+        st.dataframe(status_df, width='stretch', hide_index=True)
 
 
 def render_24h_predictions(db, analytics):
@@ -142,7 +142,7 @@ def render_24h_predictions(db, analytics):
 
     if predictions_data:
         pred_df = pd.DataFrame(predictions_data)
-        st.dataframe(pred_df, use_container_width=True, hide_index=True)
+        st.dataframe(pred_df, width='stretch', hide_index=True)
 
 
 def render_incident_impact():
@@ -203,7 +203,7 @@ def render_performance_heatmap(db):
         template='plotly_dark'
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def main():
