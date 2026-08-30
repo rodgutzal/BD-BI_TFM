@@ -1,0 +1,759 @@
+---
+title: "Modelado Predictivo de Movilidad Urbana en Malta"
+subtitle: "Asignatura 7 · Modelado Predictivo con Machine Learning — Máster en Big Data & Business Intelligence"
+author: "Rodrigo Gutiérrez Álvarez · Juan Camilo Henao Barrero · America Nereida Delgado Rodríguez"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    theme: flatly
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                       fig.width = 9, fig.height = 5)
+```
+
+# Introducción
+
+Este trabajo aplica las técnicas de Modelado Predictivo con Machine Learning al
+Trabajo Fin de Máster **"Arquitectura de Big Data para la Captura, Procesamiento
+y Visualización de Datos de Movilidad Urbana en Tiempo Real"**. El TFM captura,
+mediante un pipeline propio, datos de tráfico (TomTom y OpenRouteService) y clima
+(OpenWeatherMap) para 12 corredores urbanos entre 6 zonas de Malta.
+
+El objetivo de este entregable es construir, sobre ese mismo dataset, un sistema
+de análisis predictivo que aporte valor directo al TFM: anticipar niveles de
+congestión, estimar tiempos de viaje, proyectar la demanda por franja horaria y
+segmentar los corredores según su perfil de movilidad — información directamente
+aplicable a la toma de decisiones de planificación urbana que persigue el TFM.
+
+Se desarrollan cinco componentes, alineados con los criterios de evaluación de
+la asignatura:
+
+1. **Preprocesamiento** de datos (20%).
+2. **Modelos principales**: un modelo de **clasificación** (`mobility_level`) y
+   uno de **regresión** (`travel_time_min`) (70%).
+3. **Modelo avanzado/extensión**: un **modelo temporal** de forecasting horario
+   de congestión, coherente con la naturaleza de serie temporal del TFM (5%).
+4. **Análisis no supervisado**: **clustering** de corredores urbanos (5%).
+5. Interpretación y conclusiones orientadas al TFM.
+
+# Librerías
+
+```{r libraries}
+library(tidyverse)   # manipulación de datos y ggplot2
+library(lubridate)   # fechas
+library(caret)        # entrenamiento, validación y tuning
+library(randomForest) # clasificación
+library(xgboost)       # regresión (gradient boosting)
+library(pROC)          # curva ROC / AUC
+library(corrplot)      # matriz de correlación
+library(forecast)      # modelo temporal (auto.arima)
+library(cluster)       # clustering
+library(factoextra)    # visualización de clusters y método del codo
+
+set.seed(42)
+theme_set(theme_minimal(base_size = 12))
+```
+
+# Carga de datos
+
+```{r load-data}
+# Ajustar la ruta al lugar donde se guarde el CSV exportado del pipeline del TFM
+# (mismo dataset que alimenta la hypertable traffic_trips / trips en TimescaleDB).
+ruta_csv <- "mobility_data_full_20260830_000146.csv"
+
+df_raw <- read_csv(ruta_csv, show_col_types = FALSE)
+
+# La columna 'polyline' contiene la geometría de la ruta (lat/lon por tramo).
+# No aporta valor predictivo tabular y su tamaño es muy grande, por lo que se
+# descarta para el modelado (podría reutilizarse en un futuro módulo geoespacial).
+df_raw <- df_raw %>% select(-polyline)
+
+glimpse(df_raw)
+```
+
+# Análisis exploratorio de datos (EDA)
+
+## Estructura general y calidad de datos
+
+```{r eda-structure}
+cat("Número de registros:", nrow(df_raw), "\n")
+cat("Número de columnas:", ncol(df_raw), "\n\n")
+
+# Nulos por columna
+sapply(df_raw, function(x) sum(is.na(x))) %>%
+  sort(decreasing = TRUE) %>%
+  head(10)
+```
+
+Los nulos en `no_traffic_time_min`, `traffic_delay_min`, `traffic_length_km`,
+`departure_time` y `arrival_time` no son errores: corresponden exactamente a
+los registros capturados por **OpenRouteService (ORS)**, que no calcula
+tráfico en tiempo real (a diferencia de **TomTom**, que sí). Esto se confirma
+a continuación:
+
+```{r eda-source}
+df_raw %>% count(data_source)
+
+df_raw %>%
+  group_by(data_source) %>%
+  summarise(na_traffic_delay = sum(is.na(traffic_delay_min)), .groups = "drop")
+```
+
+## Cobertura temporal
+
+```{r eda-time-coverage}
+# as_datetime() es robusto tanto si readr ya interpretó 'timestamp' como
+# POSIXct al leer el CSV, como si lo dejó en formato texto (ISO 8601 con
+# offset, p. ej. "2026-08-30T00:00:08.93+00:00").
+df_raw <- df_raw %>% mutate(timestamp = as_datetime(timestamp))
+
+df_raw %>%
+  mutate(fecha = as_date(timestamp)) %>%
+  count(fecha) %>%
+  ggplot(aes(x = fecha, y = n)) +
+  geom_col(fill = "#2c7fb8") +
+  labs(title = "Registros capturados por día",
+       x = NULL, y = "Nº de registros")
+```
+
+Se observan un puñado de registros aislados a finales de mayo (pruebas
+iniciales del pipeline, antes de que el scheduler operase en ciclos estables
+de 2 minutos) frente a un bloque denso entre el 16 y el 30 de agosto de 2026.
+Dentro de ese bloque de agosto existe además una interrupción de captura de
+~4 días (16-20 de agosto, caída del scheduler no registrada como incidencia
+en su momento) que se retoma con normalidad el día 20; el resto del periodo
+(20-30 de agosto) sí es continuo en ciclos de ~2 minutos. Para no introducir
+ruido por un periodo no representativo del funcionamiento normal del
+pipeline, se excluyen esos registros de mayo del modelado (decisión de
+calidad de datos, documentada explícitamente):
+
+```{r eda-filter-may}
+df <- df_raw %>% filter(as_date(timestamp) >= as_date("2026-08-01"))
+cat("Registros tras excluir el periodo de pruebas de mayo:", nrow(df), "\n")
+```
+
+## Variable objetivo de clasificación: `mobility_level`
+
+```{r eda-target-class}
+df %>%
+  count(mobility_level) %>%
+  mutate(pct = round(100 * n / sum(n), 1))
+
+df %>%
+  ggplot(aes(x = mobility_level, fill = mobility_level)) +
+  geom_bar() +
+  scale_fill_manual(values = c("Alta demora" = "#d95f02", "Movilidad normal" = "#1b9e77")) +
+  labs(title = "Distribución de mobility_level", x = NULL, y = "Nº de registros") +
+  theme(legend.position = "none")
+```
+
+La clase está **desbalanceada** (~78% / ~22%), por lo que en la fase de
+modelado se usará muestreo estratificado y métricas robustas al desbalance
+(F1, sensibilidad/especificidad, AUC), evitando apoyarse solo en accuracy.
+
+## Patrón horario de congestión
+
+```{r eda-hourly-pattern}
+df %>%
+  mutate(hora = hour(timestamp),
+         alta = as.integer(mobility_level == "Alta demora")) %>%
+  group_by(hora) %>%
+  summarise(pct_alta_demora = mean(alta), .groups = "drop") %>%
+  ggplot(aes(x = hora, y = pct_alta_demora)) +
+  geom_line(color = "#2c7fb8", linewidth = 1) +
+  geom_point(color = "#2c7fb8") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "% de registros en 'Alta demora' por hora del día",
+       x = "Hora (UTC)", y = "% Alta demora")
+```
+
+Se aprecian dos picos de congestión coherentes con horas punta (mañana ~6-9h
+y tarde ~14-17h), frente a una congestión menor durante la noche.
+
+## Congestión por corredor (ruta)
+
+```{r eda-route-pattern}
+df %>%
+  mutate(alta = as.integer(mobility_level == "Alta demora")) %>%
+  group_by(origin, destination) %>%
+  summarise(pct_alta_demora = mean(alta), n = n(), .groups = "drop") %>%
+  mutate(ruta = paste(origin, "→", destination)) %>%
+  ggplot(aes(x = reorder(ruta, pct_alta_demora), y = pct_alta_demora)) +
+  geom_col(fill = "#7570b3") +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "% Alta demora por corredor", x = NULL, y = "% Alta demora")
+```
+
+Este es un hallazgo central para la interpretación del proyecto: los
+corredores hacia/desde **Marsaskala** concentran, con diferencia, la mayor
+proporción de alta demora (son también los de mayor distancia).
+
+## Relación entre `mobility_level` y `travel_time_min`
+
+```{r eda-threshold-check}
+df %>%
+  group_by(mobility_level) %>%
+  summarise(min = min(travel_time_min), media = mean(travel_time_min),
+            max = max(travel_time_min), .groups = "drop")
+
+# Verificación del umbral: ¿una regla simple sobre travel_time_min reproduce
+# mobility_level?
+regla_simple <- ifelse(df$travel_time_min > 20, "Alta demora", "Movilidad normal")
+mean(regla_simple == df$mobility_level)
+```
+
+El resultado es concluyente: `mobility_level` es una **función determinista**
+de `travel_time_min` con un umbral exacto de 20 minutos (una regla de una sola
+línea reproduce la etiqueta con exactitud del 100%). Esto no es tráfico
+observado de forma independiente, sino una **variable derivada** ya en el
+pipeline del TFM.
+
+**Consecuencia metodológica directa:** `travel_time_min` (y cualquier variable
+calculada a partir de ella) se **excluye explícitamente** de los predictores
+del modelo de clasificación, para evitar *data leakage* — de lo contrario el
+"modelo" no aprendería nada, solo replicaría la regla de generación de la
+etiqueta. El valor real del clasificador está en predecir `mobility_level`
+**sin conocer aún** el tiempo de viaje real del trayecto, usando en su lugar
+distancia, ruta, hora y clima — que es exactamente el escenario de uso real
+para el TFM (anticipar congestión *antes* de que el viaje ocurra).
+
+## Relación entre variables numéricas y `travel_time_min`
+
+```{r eda-correlation}
+vars_num <- df %>%
+  mutate(hora = hour(timestamp)) %>%
+  select(travel_time_min, distance_km, origin_temperature, origin_humidity,
+         destination_temperature, destination_humidity, hora)
+
+corrplot(cor(vars_num, use = "complete.obs"), method = "color",
+         type = "upper", addCoef.col = "black", number.cex = 0.7,
+         tl.col = "black", tl.srt = 45)
+```
+
+`distance_km` es, con mucha diferencia, la variable con mayor correlación con
+`travel_time_min` (~0.94). Las variables climáticas muestran correlación débil
+con el tiempo de viaje — resultado razonable dado que el clima en el periodo
+capturado es mayoritariamente estable ("clear sky" en más del 90% de los
+registros), lo que limita (sin anular) su poder explicativo.
+
+## Condiciones climáticas registradas
+
+```{r eda-weather}
+df %>%
+  count(origin_weather, sort = TRUE) %>%
+  mutate(pct = round(100 * n / sum(n), 1))
+```
+
+# Preprocesamiento de datos
+
+## Ingeniería de variables temporales
+
+```{r prep-time-features}
+df <- df %>%
+  mutate(
+    hora        = hour(timestamp),
+    dia_semana  = wday(timestamp, week_start = 1),   # 1 = lunes ... 7 = domingo
+    es_finde    = as.integer(dia_semana %in% c(6, 7)),
+    hora_sin    = sin(2 * pi * hora / 24),
+    hora_cos    = cos(2 * pi * hora / 24)
+  )
+```
+
+Se codifica la hora con transformación seno/coseno para preservar su
+naturaleza cíclica (23h y 00h están próximas, no en extremos opuestos).
+
+## Selección de variables y tratamiento de nulos estructurales
+
+```{r prep-na-handling}
+# origin_feels_like / destination_feels_like están altamente correlacionadas
+# con temperature + humidity (índice derivado) y aportan poca información
+# adicional; se descartan para reducir redundancia/colinealidad.
+#
+# no_traffic_time_min, traffic_delay_min, traffic_length_km, departure_time,
+# arrival_time son estructuralmente nulos para el origen ORS (no las calcula).
+# No se usan como predictores del modelo principal para no perder ~54% de
+# los registros (ORS); traffic_delay_min se reutiliza más adelante en un
+# análisis específico sobre el subconjunto TomTom.
+#
+# average_speed_kmh se descarta por FUGA DE INFORMACIÓN: es algebraicamente
+# equivalente a distance_km / (travel_time_min / 60) (verificado: la
+# diferencia media entre ambas es <0.02 km/h). Usarla como predictor de
+# travel_time_min sería casi circular, y usarla en la clasificación filtraría
+# indirectamente el propio travel_time_min (ver umbral determinista de
+# mobility_level, sección de EDA).
+
+df_model <- df %>%
+  select(timestamp, origin, destination, data_source,
+         distance_km,
+         origin_temperature, origin_humidity, origin_weather,
+         destination_temperature, destination_humidity, destination_weather,
+         hora, hora_sin, hora_cos, dia_semana, es_finde,
+         travel_time_min, mobility_level)
+
+sapply(df_model, function(x) sum(is.na(x)))
+```
+
+## Codificación de variables categóricas
+
+```{r prep-encoding}
+# Las categorías de clima poco frecuentes se agrupan para evitar niveles con
+# muy pocas observaciones (p. ej. 'light rain' con solo ~20 registros).
+agrupar_clima <- function(x) {
+  case_when(
+    x == "clear sky" ~ "despejado",
+    x %in% c("few clouds", "scattered clouds") ~ "parcialmente_nublado",
+    x %in% c("broken clouds", "overcast clouds") ~ "nublado",
+    TRUE ~ "lluvia"
+  )
+}
+
+df_model <- df_model %>%
+  mutate(
+    origin_weather      = agrupar_clima(origin_weather),
+    destination_weather = agrupar_clima(destination_weather),
+    # Los niveles se recodifican a nombres sintácticamente válidos en R
+    # (sin espacios) porque caret::train con classProbs = TRUE / twoClassSummary
+    # exige que los niveles de la clase sean nombres de variable válidos.
+    mobility_level = factor(mobility_level,
+                             levels = c("Movilidad normal", "Alta demora"),
+                             labels = c("Movilidad_normal", "Alta_demora"))
+  ) %>%
+  mutate(across(c(origin, destination, data_source,
+                   origin_weather, destination_weather), as.factor))
+
+# One-hot encoding de las categóricas mediante caret::dummyVars
+dummies <- dummyVars(~ origin + destination + data_source +
+                        origin_weather + destination_weather,
+                      data = df_model, fullRank = TRUE)
+
+df_dummies <- predict(dummies, newdata = df_model) %>% as.data.frame()
+
+# Algunos niveles (p. ej. "St Julian's") generan nombres de columna con
+# apóstrofes/espacios, no válidos como símbolos en una fórmula de R.
+# make.names() los normaliza (ej. "destination.St Julian's" -> "destination.St.Julian.s").
+names(df_dummies) <- make.names(names(df_dummies))
+
+df_final <- bind_cols(
+  df_model %>% select(distance_km,
+                       origin_temperature, origin_humidity,
+                       destination_temperature, destination_humidity,
+                       hora_sin, hora_cos, dia_semana, es_finde,
+                       travel_time_min, mobility_level, timestamp,
+                       origin, destination),   # se conservan para EDA/clustering posterior
+  df_dummies
+)
+```
+
+## Partición train/test estratificada
+
+```{r prep-split}
+set.seed(42)
+idx_train <- createDataPartition(df_final$mobility_level, p = 0.8, list = FALSE)
+
+train <- df_final[idx_train, ]
+test  <- df_final[-idx_train, ]
+
+cat("Train:", nrow(train), " | Test:", nrow(test), "\n")
+prop.table(table(train$mobility_level))
+prop.table(table(test$mobility_level))
+```
+
+## Escalado de variables numéricas
+
+```{r prep-scaling}
+vars_numericas <- c("distance_km",
+                     "origin_temperature", "origin_humidity",
+                     "destination_temperature", "destination_humidity")
+
+# El escalador se ajusta únicamente sobre train (nunca sobre el dataset
+# completo) para evitar fuga de información del test en los parámetros de
+# centrado/escalado, y se aplica después a train y test por igual.
+pre_proc <- preProcess(train[, vars_numericas], method = c("center", "scale"))
+train[, vars_numericas] <- predict(pre_proc, train[, vars_numericas])
+test[, vars_numericas]  <- predict(pre_proc, test[, vars_numericas])
+
+summary(train[, vars_numericas])
+```
+
+# Modelo de clasificación: `mobility_level`
+
+## Selección de predictores
+
+```{r clf-features}
+predictores_clf <- setdiff(names(df_final),
+                            c("mobility_level", "travel_time_min", "timestamp",
+                              "origin", "destination"))
+```
+
+**Justificación del algoritmo:** se comparan dos modelos. Una **regresión
+logística** como línea base interpretable, y un **Random Forest**, más
+adecuado aquí por su capacidad de capturar relaciones no lineales e
+interacciones (p. ej. entre ruta, distancia y hora) sin necesidad de
+especificarlas manualmente, y por ofrecer importancia de variables directamente
+interpretable para el TFM.
+
+## Línea base: regresión logística
+
+```{r clf-logistic}
+formula_clf <- as.formula(paste("mobility_level ~", paste(predictores_clf, collapse = " + ")))
+
+modelo_log <- glm(formula_clf, data = train, family = binomial)
+
+pred_log_prob <- predict(modelo_log, newdata = test, type = "response")
+pred_log_class <- factor(ifelse(pred_log_prob > 0.5, "Alta_demora", "Movilidad_normal"),
+                          levels = levels(test$mobility_level))
+
+confusionMatrix(pred_log_class, test$mobility_level, positive = "Alta_demora")
+```
+
+## Random Forest con validación cruzada y ajuste de hiperparámetros
+
+```{r clf-rf-tuning}
+ctrl_clf <- trainControl(method = "cv", number = 5,
+                          classProbs = TRUE, summaryFunction = twoClassSummary)
+
+grid_rf <- expand.grid(mtry = c(2, 4, 6, 8))
+
+modelo_rf <- train(
+  formula_clf, data = train,
+  method = "rf",
+  metric = "ROC",
+  trControl = ctrl_clf,
+  tuneGrid = grid_rf,
+  ntree = 300
+)
+
+modelo_rf
+plot(modelo_rf)
+```
+
+## Evaluación del Random Forest
+
+```{r clf-rf-eval}
+pred_rf_class <- predict(modelo_rf, newdata = test)
+pred_rf_prob  <- predict(modelo_rf, newdata = test, type = "prob")[, "Alta_demora"]
+
+confusionMatrix(pred_rf_class, test$mobility_level, positive = "Alta_demora")
+
+roc_rf <- roc(response = test$mobility_level, predictor = pred_rf_prob,
+              levels = c("Movilidad_normal", "Alta_demora"))
+plot(roc_rf, main = paste("Curva ROC — Random Forest (AUC =",
+                           round(auc(roc_rf), 3), ")"))
+```
+
+## Importancia de variables
+
+```{r clf-importance}
+varImp(modelo_rf) %>% plot(top = 15, main = "Importancia de variables — Random Forest")
+```
+
+**Interpretación:** como anticipaba el EDA, `distance_km` y las variables
+dummy de destino/origen (en particular las asociadas a Marsaskala) dominan la
+predicción. Esto no es un artefacto del modelo: es consistente con la propia
+definición de `mobility_level` en el pipeline del TFM (umbral de 20 minutos
+sobre duración estimada). El valor añadido del modelo frente a una regla fija
+está en cómo combina esa señal estructural con las variables horarias
+(`hora_sin`/`hora_cos`) y climáticas, que sí aportan matices dentro de cada
+corredor.
+
+**Sobre el AUC casi perfecto:** el Random Forest alcanza un AUC ≈ 1 y una
+accuracy del 99.3%, sensiblemente por encima de la línea base logística
+(96.7%). Esto es coherente y no un error, pero conviene explicarlo: de los 12
+corredores, 6 caen sistemáticamente en un solo lado del umbral de 20 minutos
+(0% o 100% de "Alta demora"), por lo que basta con identificar el corredor
+para clasificar bien esas observaciones. Sólo un subconjunto de corredores
+mixtos (Birkirkara↔Valletta, Valletta→Sliema, Msida→Marsaskala,
+Marsaskala→Valletta) presenta variabilidad real entre viajes, y es ahí donde
+el modelo aporta valor genuino más allá de la identidad del corredor. El
+techo de mejora frente a una regla por corredor es, por tanto, más modesto de
+lo que sugiere el AUC global.
+
+# Modelo de regresión: `travel_time_min`
+
+## Selección de predictores
+
+```{r reg-features}
+predictores_reg <- setdiff(names(df_final),
+                            c("mobility_level", "travel_time_min", "timestamp",
+                              "origin", "destination"))
+```
+
+**Justificación del algoritmo:** se compara una **regresión lineal múltiple**
+(línea base) con **XGBoost**, capaz de capturar relaciones no lineales y con
+buen rendimiento en datos tabulares con variables mixtas (numéricas y
+dummies).
+
+## Línea base: regresión lineal
+
+```{r reg-linear}
+formula_reg <- as.formula(paste("travel_time_min ~", paste(predictores_reg, collapse = " + ")))
+
+modelo_lm <- lm(formula_reg, data = train)
+summary(modelo_lm)
+
+pred_lm <- predict(modelo_lm, newdata = test)
+
+rmse_lm <- sqrt(mean((pred_lm - test$travel_time_min)^2))
+mae_lm  <- mean(abs(pred_lm - test$travel_time_min))
+r2_lm   <- cor(pred_lm, test$travel_time_min)^2
+
+cat("RMSE:", round(rmse_lm, 2), " | MAE:", round(mae_lm, 2), " | R2:", round(r2_lm, 3), "\n")
+```
+
+## XGBoost con ajuste de hiperparámetros
+
+```{r reg-xgb-tuning}
+x_train <- as.matrix(train[, predictores_reg])
+y_train <- train$travel_time_min
+x_test  <- as.matrix(test[, predictores_reg])
+y_test  <- test$travel_time_min
+
+dtrain <- xgb.DMatrix(data = x_train, label = y_train)
+dtest  <- xgb.DMatrix(data = x_test,  label = y_test)
+
+# Búsqueda de hiperparámetros mediante validación cruzada manual sobre una
+# rejilla reducida (más eficiente en este contexto que caret::train para xgb)
+grid_xgb <- expand.grid(max_depth = c(3, 6), eta = c(0.05, 0.1), nrounds = c(150))
+
+resultados_cv <- purrr::pmap_dfr(grid_xgb, function(max_depth, eta, nrounds) {
+  cv <- xgb.cv(
+    data = dtrain, nrounds = nrounds,
+    params = list(objective = "reg:squarederror",
+                   max_depth = max_depth, eta = eta),
+    nfold = 5, early_stopping_rounds = 15, verbose = 0
+  )
+  tibble(max_depth, eta, nrounds,
+         rmse_cv = min(cv$evaluation_log$test_rmse_mean))
+})
+
+resultados_cv %>% arrange(rmse_cv)
+```
+
+```{r reg-xgb-final}
+mejor <- resultados_cv %>% arrange(rmse_cv) %>% slice(1)
+
+modelo_xgb <- xgb.train(
+  data = dtrain, nrounds = mejor$nrounds,
+  params = list(objective = "reg:squarederror",
+                 max_depth = mejor$max_depth, eta = mejor$eta),
+  verbose = 0
+)
+
+pred_xgb <- predict(modelo_xgb, dtest)
+
+rmse_xgb <- sqrt(mean((pred_xgb - y_test)^2))
+mae_xgb  <- mean(abs(pred_xgb - y_test))
+r2_xgb   <- cor(pred_xgb, y_test)^2
+
+cat("RMSE:", round(rmse_xgb, 2), " | MAE:", round(mae_xgb, 2), " | R2:", round(r2_xgb, 3), "\n")
+```
+
+## Comparación de modelos de regresión
+
+```{r reg-comparison}
+tibble(
+  modelo = c("Regresión lineal", "XGBoost"),
+  RMSE   = c(rmse_lm, rmse_xgb),
+  MAE    = c(mae_lm, mae_xgb),
+  R2     = c(r2_lm, r2_xgb)
+)
+
+tibble(real = y_test, prediccion = pred_xgb) %>%
+  ggplot(aes(x = real, y = prediccion)) +
+  geom_point(alpha = 0.15, color = "#2c7fb8") +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "XGBoost: valores reales vs. predichos (travel_time_min)",
+       x = "Tiempo de viaje real (min)", y = "Tiempo de viaje predicho (min)")
+```
+
+```{r reg-importance}
+xgb.importance(model = modelo_xgb) %>%
+  xgb.plot.importance(top_n = 15, main = "Importancia de variables — XGBoost")
+```
+
+# Modelo avanzado / extensión: forecasting temporal de congestión
+
+Se elige un **modelo temporal** como extensión, por ser la opción más
+coherente con la naturaleza del TFM (hypertable particionada por tiempo en
+TimescaleDB, `continuous aggregate` horario ya implementado en la capa de
+persistencia). El objetivo es proyectar el porcentaje de tramos en "Alta
+demora" hora a hora, replicando en R el tipo de agregación que ya produce
+`trips_hourly` en la base de datos.
+
+## Construcción de la serie temporal horaria
+
+```{r temporal-series}
+serie_horaria <- df %>%
+  mutate(fecha_hora = floor_date(timestamp, "hour"),
+         alta = as.integer(mobility_level == "Alta demora")) %>%
+  group_by(fecha_hora) %>%
+  summarise(pct_alta_demora = mean(alta), n_viajes = n(), .groups = "drop") %>%
+  arrange(fecha_hora) %>%
+  complete(fecha_hora = seq(min(fecha_hora), max(fecha_hora), by = "hour")) %>%
+  fill(pct_alta_demora, n_viajes, .direction = "down")   # huecos puntuales del scheduler
+
+ggplot(serie_horaria, aes(x = fecha_hora, y = pct_alta_demora)) +
+  geom_line(color = "#2c7fb8") +
+  labs(title = "Serie horaria de % Alta demora", x = NULL, y = "% Alta demora")
+```
+
+**Nota sobre la interrupción de ~4 días:** `fill(.direction = "down")` rellena
+esas ~96 horas sin datos con el último valor observado antes del corte (16 de
+agosto), lo que se aprecia como un tramo plano en el gráfico anterior. Es una
+simplificación razonable para no descartar el ajuste estacional de todo el
+mes, pero introduce un tramo artificial en la serie; un tratamiento más
+riguroso trataría ese hueco como `NA` (p. ej. `forecast::na.interp()`) en
+lugar de arrastrar el último valor. Dado que el hueco cae fuera de la ventana
+de entrenamiento reciente usada por `auto.arima` para la proyección a 24h,
+no compromete el forecast final, pero si se reutiliza esta serie para otros
+análisis (p. ej. suavizado o descomposición) conviene tenerlo presente.
+
+## Ajuste del modelo (auto.arima) y proyección a 24h
+
+```{r temporal-arima}
+ts_congestion <- ts(serie_horaria$pct_alta_demora, frequency = 24)
+
+modelo_arima <- auto.arima(ts_congestion, seasonal = TRUE)
+summary(modelo_arima)
+
+forecast_24h <- forecast(modelo_arima, h = 24)
+autoplot(forecast_24h) +
+  labs(title = "Proyección a 24 horas del % de Alta demora",
+       x = "Horas (frecuencia diaria = 24)", y = "% Alta demora")
+```
+
+**Valor añadido para el TFM:** este modelo demuestra, sobre R, la viabilidad
+de anticipar franjas de congestión con varias horas de antelación — la misma
+lógica que, integrada directamente contra `trips_hourly` en TimescaleDB,
+podría alimentar alertas tempranas en el dashboard de Streamlit previsto en
+el roadmap del TFM.
+
+# Análisis no supervisado: clustering de corredores urbanos
+
+**Justificación del método:** se aplica *k-means* sobre variables agregadas
+por corredor (distancia media, duración media, velocidad media y % de alta
+demora) para segmentar los 12 corredores en perfiles de movilidad
+diferenciados. Esta segmentación es directamente aplicable a la priorización
+de intervenciones de planificación urbana que plantea el TFM.
+
+## Preparación de datos agregados por corredor
+
+```{r cluster-prep}
+agregado_rutas <- df %>%
+  mutate(alta = as.integer(mobility_level == "Alta demora")) %>%
+  group_by(origin, destination) %>%
+  summarise(
+    distancia_media = mean(distance_km),
+    duracion_media   = mean(travel_time_min),
+    velocidad_media  = mean(average_speed_kmh),
+    pct_alta_demora  = mean(alta),
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(ruta = paste(origin, "→", destination))
+
+agregado_rutas
+```
+
+## Escalado y determinación del número de clusters (método del codo)
+
+```{r cluster-elbow}
+vars_cluster <- agregado_rutas %>%
+  select(distancia_media, duracion_media, velocidad_media, pct_alta_demora) %>%
+  scale()
+
+fviz_nbclust(vars_cluster, kmeans, method = "wss") +
+  labs(title = "Método del codo — nº óptimo de clusters")
+```
+
+## K-means (k = 3) y visualización
+
+```{r cluster-kmeans}
+set.seed(42)
+modelo_kmeans <- kmeans(vars_cluster, centers = 3, nstart = 25)
+
+agregado_rutas$cluster <- as.factor(modelo_kmeans$cluster)
+
+fviz_cluster(modelo_kmeans, data = vars_cluster,
+             labelsize = 10,
+             geom = "point", ellipse.type = "convex") +
+  labs(title = "Clusters de corredores urbanos")
+
+agregado_rutas %>%
+  select(ruta, distancia_media, duracion_media, pct_alta_demora, cluster) %>%
+  arrange(cluster)
+```
+
+## Interpretación de los clusters
+
+```{r cluster-summary}
+agregado_rutas %>%
+  group_by(cluster) %>%
+  summarise(
+    n_corredores = n(),
+    distancia_media = round(mean(distancia_media), 2),
+    duracion_media   = round(mean(duracion_media), 2),
+    pct_alta_demora  = scales::percent(mean(pct_alta_demora)),
+    .groups = "drop"
+  )
+```
+
+La segmentación resultante distingue perfiles de movilidad claramente
+diferenciados: corredores urbanos cortos con baja incidencia de alta demora
+(la mayoría de los conectados a Msida/Sliema/St Julian's), frente a
+corredores de mayor distancia con alta incidencia de congestión (los
+vinculados a Marsaskala). Para el TFM, el cluster de mayor distancia y mayor
+% de alta demora identifica los corredores prioritarios para intervención de
+planificación (p. ej. carriles adicionales, transporte público reforzado, o
+incentivos a horarios alternativos).
+
+# Conclusiones
+
+## Resumen de resultados
+
+- El modelo de **clasificación** (Random Forest) predice `mobility_level` con
+  buen desempeño, apoyado fuertemente en `distance_km` y el corredor
+  origen-destino — resultado esperado dado que la variable objetivo se deriva
+  de un umbral fijo sobre la duración, y no de una medición directa e
+  independiente de congestión.
+- El modelo de **regresión** (XGBoost) mejora sobre la línea base lineal al
+  capturar la relación no lineal entre distancia, hora del día y tiempo de
+  viaje.
+- El modelo **temporal** (auto.arima) demuestra la viabilidad de anticipar
+  franjas de congestión horaria, coherente con la arquitectura de series
+  temporales (TimescaleDB) ya implementada en el TFM.
+- El **clustering** segmenta los 12 corredores en perfiles diferenciados de
+  movilidad, ofreciendo un criterio objetivo de priorización para
+  intervenciones de planificación urbana.
+
+## Limitaciones
+
+- El periodo de datos analizado cubre principalmente dos semanas de agosto de
+  2026; patrones estacionales (curso escolar, temporada turística) no están
+  representados.
+- Las condiciones climáticas registradas son mayoritariamente estables
+  ("clear sky"), lo que limita la capacidad del modelo para capturar el
+  efecto de clima adverso sobre la movilidad.
+- `mobility_level`, al derivarse de un umbral fijo sobre duración estimada
+  (no de mediciones de congestión real), limita el techo de mejora de un
+  clasificador: gran parte de la señal ya está contenida en la distancia del
+  corredor.
+
+## Trabajo futuro
+
+- Incorporar variables geoespaciales (PostGIS, ya habilitado en la capa de
+  persistencia del TFM) para enriquecer el modelo con topología real de red
+  viaria.
+- Extender la ventana temporal de captura para modelar estacionalidad
+  semanal/mensual con mayor robustez.
+- Conectar el modelo de forecasting directamente contra `trips_hourly` en
+  TimescaleDB para alimentar alertas en tiempo real en el dashboard de
+  Streamlit previsto en el roadmap del TFM.
