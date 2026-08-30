@@ -79,7 +79,7 @@ def render_route_performance(best_routes, worst_routes):
             best_df['route'] = best_df['origin'] + ' → ' + best_df['destination']
             st.dataframe(
                 best_df[['route', 'avg_time', 'avg_reliability']].head(5),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
 
@@ -90,7 +90,7 @@ def render_route_performance(best_routes, worst_routes):
             worst_df['route'] = worst_df['origin'] + ' → ' + worst_df['destination']
             st.dataframe(
                 worst_df[['route', 'avg_time', 'avg_reliability']].tail(5),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
 
@@ -148,7 +148,7 @@ def render_trend_chart(days: int = 30):
         height=400
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def render_distribution_chart():
@@ -194,7 +194,7 @@ def render_distribution_chart():
         showlegend=True
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def main():
