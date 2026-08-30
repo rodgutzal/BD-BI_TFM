@@ -344,6 +344,62 @@ def render_sql_query():
             st.error(f"Error en la consulta: {e}")
 
 
+def render_full_export():
+    """Exporta el dataset completo (todas las rutas) en un único CSV."""
+    st.subheader("📦 Exportación completa")
+    st.caption(
+        "Descarga en un solo CSV las mediciones de **todas las rutas**, "
+        "a diferencia de la pestaña 'Data Explorer' que solo exporta la "
+        "ruta seleccionada arriba. Es una consulta de solo lectura sobre "
+        "`mobility.db` (mismo `query_measurements()` que usan las demás "
+        "pestañas) — no modifica la base de datos."
+    )
+
+    db = get_database()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        limit_dates = st.checkbox("Limitar por rango de fechas", value=False)
+    with col2:
+        export_days = st.slider(
+            "Días de historial a incluir",
+            1, 365, 90,
+            disabled=not limit_dates
+        )
+
+    if st.button("🔄 Generar exportación completa", type="primary"):
+        with st.spinner("Consultando la base de datos..."):
+            if limit_dates:
+                end_date = datetime.now(timezone.utc)
+                start_date = end_date - timedelta(days=export_days)
+                full_df = db.query_measurements(
+                    start_timestamp=start_date.isoformat(),
+                    end_timestamp=end_date.isoformat(),
+                    limit=1_000_000
+                )
+            else:
+                full_df = db.query_measurements(limit=1_000_000)
+
+        if full_df.empty:
+            st.warning("No hay datos disponibles para el rango seleccionado.")
+        else:
+            routes_included = full_df[["origin", "destination"]].drop_duplicates()
+            st.success(
+                f"{len(full_df):,} filas de {len(routes_included)} rutas "
+                "listas para descargar."
+            )
+            st.dataframe(full_df.head(50), use_container_width=True, height=300)
+
+            csv_data = full_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Descargar CSV completo",
+                data=csv_data,
+                file_name=f"mobility_data_full_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                key="download_full_export"
+            )
+
+
 def main():
     """Analyst dashboard main function."""
     st.set_page_config(page_title="Analyst Dashboard", layout="wide")
@@ -351,13 +407,14 @@ def main():
     st.markdown("# 🔬 Analyst Dashboard")
     st.markdown("Data exploration, statistical analysis, and model performance")
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Data Explorer",
         "Statistical Tests",
         "Correlations",
         "Model Performance",
         "Data Quality",
-        "SQL Query"
+        "SQL Query",
+        "Exportar Todo"
     ])
 
     with tab1:
@@ -377,6 +434,9 @@ def main():
 
     with tab6:
         render_sql_query()
+
+    with tab7:
+        render_full_export()
 
     st.divider()
     st.markdown("""
