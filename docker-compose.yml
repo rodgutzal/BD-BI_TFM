@@ -1,4 +1,4 @@
-# docker-compose.yml — BD_BI_TFM2
+# docker-compose.yml — BD_BI_TFM
 #
 # Fusiona el stack de BD_BI_TFM (TimescaleDB + PostGIS + pgAdmin, capa de
 # producción) con el de urban-mobility-analytics1 (collector + dashboard
@@ -202,11 +202,11 @@ services:
   # requiere contraseña (SQLITE_WEB_PASSWORD) y solo escucha en
   # 127.0.0.1 — antes no tenía ninguna protección.
   sqlite-web:
-    # BD_BI_TFM2 fix: el tag versionado (0.7.2) solo existe en GitHub
+    # BD_BI_TFM fix: el tag versionado (0.7.2) solo existe en GitHub
     # Container Registry, no en Docker Hub — `coleifer/sqlite-web:0.7.2`
     # a secas resuelve a docker.io por defecto y falla con "not found".
     #
-    # BD_BI_TFM2 fix 2: a diferencia de la imagen de Docker Hub
+    # BD_BI_TFM fix 2: a diferencia de la imagen de Docker Hub
     # (coleifer/sqlite-web, sin tag), esta imagen de ghcr.io NO lee la
     # variable SQLITE_DATABASE — espera el archivo como argumento
     # posicional del comando, y la contraseña necesita el flag

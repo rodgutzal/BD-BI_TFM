@@ -55,7 +55,7 @@ DEFAULT_TOMTOM_INTERVAL_MIN = 27
 def main() -> None:
     """Punto de entrada principal."""
     parser = argparse.ArgumentParser(
-        description="Urban Mobility Analytics - Data Collector (BD_BI_TFM2)",
+        description="Urban Mobility Analytics - Data Collector (BD_BI_TFM)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

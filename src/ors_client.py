@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class ORSClient:
     """Cliente HTTP para OpenRouteService (directions API) con reintentos automáticos."""
 
-    # BD_BI_TFM2 fix: api.openrouteservice.org fue apagada definitivamente el
+    # BD_BI_TFM fix: api.openrouteservice.org fue apagada definitivamente el
     # 24 de agosto de 2026 (migración anunciada por HeiGIT desde abril 2026,
     # ver ask.openrouteservice.org/t/deprecating-api-openrouteservice-org...).
     # No es un problema de la clave — el anuncio oficial dice explícitamente
