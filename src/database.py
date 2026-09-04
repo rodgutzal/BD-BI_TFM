@@ -260,6 +260,103 @@ class RouteDatabase:
             "avg_temperature": round(result[5], 2) if result[5] else None,
         }
 
+    # ------------------------------------------------------------------
+    # POIs / infraestructura urbana (escuelas, hospitales, centros
+    # comerciales, negocios) — refrescados periódicamente por
+    # src/poi_extraction.py vía Overpass API, no por el collector de
+    # tráfico/clima (cadencia totalmente distinta: esto cambia poco).
+    # ------------------------------------------------------------------
+
+    def init_poi_table(self) -> None:
+        """Crea la tabla de POIs si no existe."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pois (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                osm_type TEXT NOT NULL,
+                osm_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                subcategory TEXT,
+                name TEXT,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(osm_type, osm_id)
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_poi_category ON pois(category)"
+        )
+
+        conn.commit()
+        conn.close()
+
+    def save_pois(self, pois: List[dict]) -> int:
+        """Guarda/actualiza POIs (upsert por osm_type+osm_id), para que
+        refrescos sucesivos actualicen registros existentes en vez de
+        acumular duplicados indefinidamente."""
+        if not pois:
+            return 0
+
+        self.init_poi_table()
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        now = datetime.now(timezone.utc).isoformat()
+
+        for poi in pois:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO pois
+                        (osm_type, osm_id, category, subcategory, name, latitude, longitude, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(osm_type, osm_id) DO UPDATE SET
+                        category=excluded.category,
+                        subcategory=excluded.subcategory,
+                        name=excluded.name,
+                        latitude=excluded.latitude,
+                        longitude=excluded.longitude,
+                        updated_at=excluded.updated_at
+                    """,
+                    (
+                        poi["osm_type"], poi["osm_id"], poi["category"], poi.get("subcategory"),
+                        poi.get("name"), poi["latitude"], poi["longitude"], now,
+                    ),
+                )
+            except sqlite3.Error as e:
+                logger.error(f"Error upserting POI {poi.get('osm_type')}/{poi.get('osm_id')}: {e}")
+
+        conn.commit()
+        conn.close()
+        logger.info(f"Saved/updated {len(pois)} POIs")
+        return len(pois)
+
+    def get_pois(self, categories: Optional[List[str]] = None) -> pd.DataFrame:
+        """Consulta POIs guardados, opcionalmente filtrados por categoría."""
+        self.init_poi_table()
+        conn = sqlite3.connect(self.db_path)
+
+        query = "SELECT * FROM pois"
+        params: list = []
+        if categories:
+            placeholders = ",".join("?" for _ in categories)
+            query += f" WHERE category IN ({placeholders})"
+            params = list(categories)
+
+        try:
+            df = pd.read_sql_query(query, conn, params=params)
+        except pd.errors.DatabaseError as e:
+            logger.error(f"POI query error: {e}")
+            df = pd.DataFrame()
+        finally:
+            conn.close()
+
+        return df
+
     def get_all_routes_statistics(self, hours: int = 24) -> pd.DataFrame:
         """Obtiene estadísticas agregadas para todas las rutas."""
         self.init_sqlite()

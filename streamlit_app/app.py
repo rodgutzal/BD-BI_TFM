@@ -8,7 +8,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 # Import dashboard modules
-from streamlit_app.dashboards import executive_dashboard, operations_dashboard, analyst_dashboard
+from streamlit_app.dashboards import executive_dashboard, operations_dashboard, analyst_dashboard, maps_dashboard
 
 
 def main():
@@ -24,7 +24,7 @@ def main():
 
     dashboard = st.sidebar.radio(
         "Choose your dashboard:",
-        ["Executive", "Operations", "Analyst"],
+        ["Executive", "Operations", "Analyst", "Maps"],
         index=0,
         label_visibility="collapsed"
     )
@@ -39,6 +39,8 @@ def main():
     **Operations:** Real-time monitoring and alerts
 
     **Analyst:** Data exploration and statistical analysis
+
+    **Maps:** Geographic view of monitored routes
     """)
 
     # System status
@@ -52,8 +54,10 @@ def main():
         executive_dashboard.main()
     elif dashboard == "Operations":
         operations_dashboard.main()
-    else:  # Analyst
+    elif dashboard == "Analyst":
         analyst_dashboard.main()
+    else:  # Maps
+        maps_dashboard.main()
 
 
 if __name__ == "__main__":

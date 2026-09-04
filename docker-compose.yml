@@ -146,6 +146,35 @@ services:
     networks:
       - mobility-network
 
+  # Recolector de infraestructura urbana (escuelas, hospitales, centros
+  # comerciales, negocios) vía Overpass API (OpenStreetMap) — no requiere
+  # API key. A diferencia de `collector` (tráfico/clima, ciclos cada
+  # 1-27 min), este dato cambia muy poco: se refresca una vez por semana.
+  poi-collector:
+    build: .
+    container_name: movilidad-poi-collector
+    command: python -m src.poi_extraction --interval-hours 168
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - mobility-network
+
   # Dashboard Streamlit (streamlit_app/app.py: selector Executive /
   # Operations / Analyst). Lee de ./data/mobility.db (SQLite), no de
   # TimescaleDB directamente.
