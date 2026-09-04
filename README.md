@@ -1,4 +1,4 @@
-# BD_BI_TFM2 — Plataforma de Análisis de Movilidad Urbana
+# BD_BI_TFM — Plataforma de Análisis de Movilidad Urbana
 
 TFM · Máster en Big Data & Business Intelligence
 Fusión de **BD-BI_TFM** (base: TimescaleDB · PostGIS · Streamlit · pgAdmin) +
@@ -15,7 +15,7 @@ Este repo integra dos proyectos que analizaban movilidad urbana en Malta por sep
 - **BD_BI_TFM**: recolectaba datos con OpenRouteService (ORS) + OpenWeather y los guardaba en TimescaleDB/PostGIS (Docker), con un dashboard Streamlit simple.
 - **urban-mobility-analytics1**: recolectaba con TomTom + OpenWeather y los guardaba en SQLite, con analítica avanzada (tendencias, impacto del clima, consistencia), modelos de Machine Learning (Random Forest, ensemble XGBoost/Gradient Boosting), arquitectura de data warehouse (Bronze/Silver/Gold), tests, y CI/CD.
 
-**BD_BI_TFM2** no elige entre ambos: los combina.
+**BD_BI_TFM** no elige entre ambos: los combina.
 
 - **Dos fuentes de tráfico intercambiables** (`DATA_SOURCE=ors` o `tomtom` en `.env`)
 - **Dos capas de almacenamiento en paralelo**: TimescaleDB (producción/BI) + SQLite (local, analítica y ML)
@@ -60,7 +60,7 @@ Este repo integra dos proyectos que analizaban movilidad urbana en Malta por sep
 ## Estructura del proyecto
 
 ```
-BD_BI_TFM2/
+BD_BI_TFM/
 ├── data/
 │   ├── raw/
 │   │   ├── route_weather_data.csv              ← histórico fusionado (esquema unificado)
@@ -136,6 +136,52 @@ Para cargar también el histórico en TimescaleDB (opcional, la tabla `traffic_t
 ```bash
 docker compose exec collector python -m src.timescale_migration
 ```
+
+---
+
+## Acceso remoto para el equipo (Tailscale)
+
+`movilidad-streamlit` es el único contenedor expuesto en `0.0.0.0:8501` (ver tabla arriba) — TimescaleDB, pgAdmin y sqlite-web quedan atados a `127.0.0.1` a propósito, solo alcanzables desde la máquina que corre Docker. Para que el resto del equipo vea el dashboard sin exponer nada a internet abierto, usamos [Tailscale](https://tailscale.com) (VPN mesh privada, gratis hasta 6 usuarios con dispositivos ilimitados por usuario).
+
+> Esto es para **acceso del equipo durante el desarrollo**, no para exponer el proyecto a internet público — para eso, ver `PRODUCTION.md`.
+
+### Lado administrador (quien corre `docker compose up`)
+
+1. Instalar Tailscale y crear cuenta (con GitHub o Google): https://tailscale.com/download
+2. Confirmar que el dashboard sigue expuesto en todas las interfaces, no solo en local:
+   ```bash
+   docker compose ps
+   # movilidad-streamlit debe mostrar 0.0.0.0:8501->8501/tcp
+   # (si dice 127.0.0.1:8501->8501/tcp, solo este equipo puede verlo)
+   ```
+3. Invitar a cada integrante del equipo desde el admin console, **con su correo real** — no compartir esta cuenta entre todos: https://login.tailscale.com/admin/users
+4. Obtener la IP de Tailscale de este equipo para compartirla con el resto:
+   ```powershell
+   tailscale status
+   # la IP propia es del tipo 100.x.x.x
+   ```
+5. *(Opcional)* Si más adelante hace falta compartir también pgAdmin o sqlite-web, restringir por dispositivo vía ACL (https://login.tailscale.com/admin/acls) en vez de exponerlos a todo el tailnet sin filtro.
+
+### Lado de quien se une al equipo
+
+1. Instalar Tailscale en el propio dispositivo: https://tailscale.com/download
+2. **Aceptar la invitación** que llega al correo (o el link que comparta el administrador) — no crear una cuenta propia por separado. Este es el error más común: si te logueas con una cuenta que nunca fue invitada, quedas en una red privada distinta a la del resto del equipo, y nunca vas a poder ver su equipo aunque todo lo demás esté bien configurado.
+3. Confirmar que el equipo del administrador aparece como peer:
+   ```
+   tailscale status
+   ```
+4. Abrir el dashboard en el navegador, con la IP de Tailscale que compartió el administrador:
+   ```
+   http://100.x.x.x:8501
+   ```
+
+### Problemas comunes
+
+| Síntoma | Causa probable | Solución |
+|---|---|---|
+| "This site can't be reached" desde otro dispositivo, pero `localhost:8501` sí funciona en el host | Quien se une nunca aceptó la invitación — está en un tailnet distinto | Correr `tailscale status` en el dispositivo que se une: si el host no aparece como peer, revisar la invitación pendiente en el admin console |
+| Falla incluso con la IP de Tailscale, probado desde el propio host | El puerto del dashboard quedó bindeado a `127.0.0.1` en vez de `0.0.0.0` | Revisar `docker compose ps` y la sección `ports` del servicio `dashboard` en `docker-compose.yml` |
+| Funciona con la IP de Tailscale pero no con el nombre del equipo | MagicDNS no resolvió el hostname | Usar la IP `100.x.x.x` directamente, o correr `tailscale status` para confirmar el nombre exacto asignado |
 
 ---
 

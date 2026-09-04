@@ -21,7 +21,7 @@ def _safe(value, default=0.0):
     """
     Convierte None/NaN a `default`.
 
-    BD_BI_TFM2: con DATA_SOURCE=ors (el default), traffic_delay_min,
+    BD_BI_TFM: con DATA_SOURCE=ors (el default), traffic_delay_min,
     no_traffic_time_min y traffic_length_km vienen NULL — ORS no reporta
     tráfico en tiempo real, a diferencia de TomTom. dict.get(key, default) y
     pd.Series.get(key, default) NO usan `default` cuando la clave existe

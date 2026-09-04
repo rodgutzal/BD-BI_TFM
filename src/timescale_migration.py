@@ -5,7 +5,7 @@ Uso (con el stack Docker levantado, `docker compose up -d`):
 
     python -m src.timescale_migration
 
-Lee data/raw/route_weather_data.csv (esquema unificado BD_BI_TFM2) y lo
+Lee data/raw/route_weather_data.csv (esquema unificado BD_BI_TFM) y lo
 inserta en la tabla `traffic_trips`. Es idempotente a nivel de intento
 (usa INSERT simple; si se corre dos veces se duplicarán filas, ya que
 `traffic_trips` no tiene una restricción UNIQUE — está pensada para

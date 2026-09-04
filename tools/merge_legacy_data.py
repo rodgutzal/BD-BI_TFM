@@ -3,11 +3,11 @@
 Script de integración (one-off): fusiona el histórico de datos de
 BD_BI_TFM (ORS, data/raw/legacy_ors_traffic_weather_data.csv) y de
 urban-mobility-analytics1 (TomTom, data/raw/legacy_tomtom_route_weather_data.csv)
-en el esquema unificado de BD_BI_TFM2 (data/raw/route_weather_data.csv +
+en el esquema unificado de BD_BI_TFM (data/raw/route_weather_data.csv +
 data/mobility.db).
 
 Se documenta y se deja en el repo por transparencia/reproducibilidad, pero
-NO hace falta volver a ejecutarlo: BD_BI_TFM2 ya se entrega con los datos
+NO hace falta volver a ejecutarlo: BD_BI_TFM ya se entrega con los datos
 fusionados.
 
 Decisiones de mapeo (ver INTEGRATION_NOTES.md para el detalle completo):

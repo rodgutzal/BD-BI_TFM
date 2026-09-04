@@ -1,7 +1,7 @@
 """Gestión de almacenamiento: CSV (histórico crudo), SQLite (capa local/analítica
 con detalle completo) y TimescaleDB (capa de producción, resumen normalizado).
 
-NOTA DE INTEGRACIÓN (BD_BI_TFM2)
+NOTA DE INTEGRACIÓN (BD_BI_TFM)
 ---------------------------------
 El `RouteDatabase` original de urban-mobility-analytics1 guardaba en SQLite
 las columnas genéricas `temperature`, `feels_like`, `humidity`, `weather`,

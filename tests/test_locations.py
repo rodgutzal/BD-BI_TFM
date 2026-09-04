@@ -18,7 +18,7 @@ def test_locations_exist():
 def test_routes_exist():
     """Verifica que todas las rutas estén configuradas.
 
-    BD_BI_TFM2 fusiona las 6 rutas de urban-mobility-analytics1 (hub Msida)
+    BD_BI_TFM fusiona las 6 rutas de urban-mobility-analytics1 (hub Msida)
     con las 6 rutas adicionales de BD_BI_TFM (hub Valletta y otras
     direcciones), para un total de 12 rutas únicas.
     """
