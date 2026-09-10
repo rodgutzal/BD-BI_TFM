@@ -1,4 +1,4 @@
-# BD_BI_TFM — Plataforma de Análisis de Movilidad Urbana
+# BD_BI_TFM2 — Plataforma de Análisis de Movilidad Urbana
 
 TFM · Máster en Big Data & Business Intelligence
 Fusión de **BD-BI_TFM** (base: TimescaleDB · PostGIS · Streamlit · pgAdmin) +
@@ -15,7 +15,7 @@ Este repo integra dos proyectos que analizaban movilidad urbana en Malta por sep
 - **BD_BI_TFM**: recolectaba datos con OpenRouteService (ORS) + OpenWeather y los guardaba en TimescaleDB/PostGIS (Docker), con un dashboard Streamlit simple.
 - **urban-mobility-analytics1**: recolectaba con TomTom + OpenWeather y los guardaba en SQLite, con analítica avanzada (tendencias, impacto del clima, consistencia), modelos de Machine Learning (Random Forest, ensemble XGBoost/Gradient Boosting), arquitectura de data warehouse (Bronze/Silver/Gold), tests, y CI/CD.
 
-**BD_BI_TFM** no elige entre ambos: los combina.
+**BD_BI_TFM2** no elige entre ambos: los combina.
 
 - **Dos fuentes de tráfico intercambiables** (`DATA_SOURCE=ors` o `tomtom` en `.env`)
 - **Dos capas de almacenamiento en paralelo**: TimescaleDB (producción/BI) + SQLite (local, analítica y ML)
@@ -60,7 +60,7 @@ Este repo integra dos proyectos que analizaban movilidad urbana en Malta por sep
 ## Estructura del proyecto
 
 ```
-BD_BI_TFM/
+BD_BI_TFM2/
 ├── data/
 │   ├── raw/
 │   │   ├── route_weather_data.csv              ← histórico fusionado (esquema unificado)
@@ -179,7 +179,7 @@ docker compose exec collector python -m src.timescale_migration
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
-| "This site can't be reached" desde otro dispositivo, pero `localhost:8501` sí funciona en el host | Quien se une nunca aceptó la invitación — está en un tailnet distinto | Correr `tailscale status` en el dispositivo que se une: si el host no aparece como peer, revisar la invitación pendiente en el admin console |
+| "This site can't be reached" desde otro dispositivo, pero `localhost:8501` sí funciona en el host | Quien se une inició sesión con una cuenta que nunca fue invitada — está en una tailnet distinta. **Confirmado dos veces con Mac**: el cliente ofrece "Sign in with Apple" de forma muy visible, y eso crea/entra a una tailnet personal, no a la del equipo | Correr `tailscale status` en el dispositivo que se une: si el host no aparece como peer, cerrar sesión (menú de Tailscale → Settings → Log out) y volver a entrar con el **mismo correo/proveedor exacto** con el que se mandó la invitación — nunca "Sign in with Apple" |
 | Falla incluso con la IP de Tailscale, probado desde el propio host | El puerto del dashboard quedó bindeado a `127.0.0.1` en vez de `0.0.0.0` | Revisar `docker compose ps` y la sección `ports` del servicio `dashboard` en `docker-compose.yml` |
 | Funciona con la IP de Tailscale pero no con el nombre del equipo | MagicDNS no resolvió el hostname | Usar la IP `100.x.x.x` directamente, o correr `tailscale status` para confirmar el nombre exacto asignado |
 
@@ -375,6 +375,57 @@ pytest tests/ -v --cov=src --cov-report=term
 1. **`test`**: pytest en Python 3.10/3.11/3.12 + un chequeo explícito de que `src.analytics` (módulo) y `src.analytics.time_series_analysis`/`causal_analysis` (submódulos) importan correctamente — regresión directa contra un bug de estructura que encontramos durante la fusión (ver `INTEGRATION_NOTES.md`)
 2. **`docker-compose-lint`**: valida `docker-compose.yml` con `docker compose config`
 3. **`lint`**: `black` + `isort`
+
+---
+
+## Troubleshooting
+
+Registro de problemas reales encontrados operando el proyecto, con la causa raíz y cómo se resolvieron — para no re-diagnosticar lo mismo la próxima vez. Se va actualizando cada vez que aparece algo nuevo.
+
+### `.env not found` al correr `docker compose up`
+
+**Síntoma:**
+```
+env file .../.env not found: GetFileAttributesEx .../.env: The system cannot find the file specified.
+```
+
+**Causa:** `.env` está (correctamente) en `.gitignore` — nunca se sube al repo porque contiene API keys y contraseñas. Si el repo se clona de nuevo, o el archivo se pierde localmente, `docker-compose.yml` no encuentra los valores que espera.
+
+**Solución:**
+```powershell
+Get-ChildItem -Path . -Filter "*.env*" -Recurse -Force -File
+# si aparece .env.example:
+Copy-Item .env.example .env
+notepad .env   # completar las API keys y passwords reales
+```
+
+### `password authentication failed for user "postgres"` en el collector
+
+**Síntoma:** el collector loguea `FATAL: password authentication failed for user "postgres"` al escribir en TimescaleDB. Fácil de pasar por alto: el pipeline sigue reportando `"Successfully saved N records"` porque cae a un fallback (SQLite/CSV) — no se ve como un error crítico a simple vista.
+
+**Causa:** el password en `.env` (`PGPASSWORD`) no coincide con el que quedó grabado dentro del volumen de TimescaleDB. Postgres solo aplica `POSTGRES_PASSWORD` la **primera vez** que se crea el volumen — si `.env` se recrea o edita después (por ejemplo, al reconstruirlo desde `.env.example` tras el problema anterior), el volumen sigue con el password viejo aunque `.env` tenga uno nuevo.
+
+**Solución:**
+```powershell
+# 1. Confirmar el nombre real de la variable en docker-compose.yml (ojo, no es literalmente POSTGRES_PASSWORD)
+Select-String -Path .\docker-compose.yml -Pattern "PASSWORD"
+
+# 2. Sincronizar el password de la base con el valor actual de .env, sin exponerlo en pantalla
+$pw = ((Get-Content .env | Select-String "^PGPASSWORD=") -replace '^PGPASSWORD=', '').ToString()
+docker exec -it movilidad-db psql -U postgres -c "ALTER USER postgres WITH PASSWORD '$pw';"
+
+# 3. Reiniciar el collector para que reconecte
+docker compose restart collector
+docker compose logs -f collector
+```
+
+**Cómo confirmar que quedó resuelto:** buscar `Saved N records to TimescaleDB (traffic_trips)` en los logs del siguiente ciclo — no basta con que desaparezca el error, hay que ver la confirmación positiva.
+
+**Nota:** los registros guardados solo en SQLite/CSV mientras la conexión estuvo rota no se migran solos a TimescaleDB. Si el hueco es de pocos minutos, normalmente no vale la pena migrar; si es de horas o días, conviene un backfill manual.
+
+### Un compañero no aparece como máquina en Tailscale aunque ya "se unió"
+
+Ver la tabla de problemas comunes en [Acceso remoto para el equipo (Tailscale)](#acceso-remoto-para-el-equipo-tailscale) — el culpable casi siempre es iniciar sesión con una cuenta/proveedor distinto al invitado (en Mac, típicamente "Sign in with Apple"), lo que crea una tailnet personal separada de la del equipo.
 
 ---
 
