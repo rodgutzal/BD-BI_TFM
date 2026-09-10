@@ -64,7 +64,7 @@ class MobilityAnalytics:
         if df.empty:
             return {"status": "no_data"}
 
-        # BD_BI_TFM2: el esquema guarda el clima por separado en origen y
+        # BD_BI_TFM: el esquema guarda el clima por separado en origen y
         # destino (origin_temperature / destination_temperature); se usa
         # origin_temperature como referencia, con fallback a "temperature"
         # por si se consulta un CSV/DataFrame con el esquema antiguo.

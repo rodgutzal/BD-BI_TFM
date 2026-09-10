@@ -1,7 +1,7 @@
 # Development and testing dependencies
 # Install with: pip install -r requirements-dev.txt
 #
-# BD_BI_TFM2: auditado contra cada import real del proyecto (ver tabla en
+# BD_BI_TFM: auditado contra cada import real del proyecto (ver tabla en
 # README.md, sección "Qué necesitas instalar para cada cosa"). Cambios
 # respecto al requirements-dev.txt original de urban-mobility-analytics1:
 #   - Se agregaron xgboost y prophet: src/models/ensemble_predictor.py los
