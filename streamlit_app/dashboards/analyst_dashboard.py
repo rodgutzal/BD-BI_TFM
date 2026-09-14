@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT_DIR))
 from src.database import RouteDatabase
 from src.analytics import MobilityAnalytics
 from src.analytics.time_series_analysis import TimeSeriesAnalytics
+from streamlit_app.dashboards import predictive_modeling_dashboard
 
 
 @st.cache_resource
@@ -177,6 +178,9 @@ def render_model_performance():
         if model_data:
             model_df = pd.DataFrame(model_data)
             st.dataframe(model_df, width='stretch', hide_index=True)
+
+    st.divider()
+    predictive_modeling_dashboard.render()
 
 
 def render_correlation_matrix():
@@ -414,7 +418,7 @@ def main():
         "Model Performance",
         "Data Quality",
         "SQL Query",
-        "Exportar Todo"
+        "Exportar Todo",
     ])
 
     with tab1:

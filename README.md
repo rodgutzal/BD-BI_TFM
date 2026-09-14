@@ -139,6 +139,52 @@ docker compose exec collector python -m src.timescale_migration
 
 ---
 
+## Acceso remoto para el equipo (Tailscale)
+
+`movilidad-streamlit` es el único contenedor expuesto en `0.0.0.0:8501` (ver tabla arriba) — TimescaleDB, pgAdmin y sqlite-web quedan atados a `127.0.0.1` a propósito, solo alcanzables desde la máquina que corre Docker. Para que el resto del equipo vea el dashboard sin exponer nada a internet abierto, usamos [Tailscale](https://tailscale.com) (VPN mesh privada, gratis hasta 6 usuarios con dispositivos ilimitados por usuario).
+
+> Esto es para **acceso del equipo durante el desarrollo**, no para exponer el proyecto a internet público — para eso, ver `PRODUCTION.md`.
+
+### Lado administrador (quien corre `docker compose up`)
+
+1. Instalar Tailscale y crear cuenta (con GitHub o Google): https://tailscale.com/download
+2. Confirmar que el dashboard sigue expuesto en todas las interfaces, no solo en local:
+   ```bash
+   docker compose ps
+   # movilidad-streamlit debe mostrar 0.0.0.0:8501->8501/tcp
+   # (si dice 127.0.0.1:8501->8501/tcp, solo este equipo puede verlo)
+   ```
+3. Invitar a cada integrante del equipo desde el admin console, **con su correo real** — no compartir esta cuenta entre todos: https://login.tailscale.com/admin/users
+4. Obtener la IP de Tailscale de este equipo para compartirla con el resto:
+   ```powershell
+   tailscale status
+   # la IP propia es del tipo 100.x.x.x
+   ```
+5. *(Opcional)* Si más adelante hace falta compartir también pgAdmin o sqlite-web, restringir por dispositivo vía ACL (https://login.tailscale.com/admin/acls) en vez de exponerlos a todo el tailnet sin filtro.
+
+### Lado de quien se une al equipo
+
+1. Instalar Tailscale en el propio dispositivo: https://tailscale.com/download
+2. **Aceptar la invitación** que llega al correo (o el link que comparta el administrador) — no crear una cuenta propia por separado. Este es el error más común: si te logueas con una cuenta que nunca fue invitada, quedas en una red privada distinta a la del resto del equipo, y nunca vas a poder ver su equipo aunque todo lo demás esté bien configurado.
+3. Confirmar que el equipo del administrador aparece como peer:
+   ```
+   tailscale status
+   ```
+4. Abrir el dashboard en el navegador, con la IP de Tailscale que compartió el administrador:
+   ```
+   http://100.x.x.x:8501
+   ```
+
+### Problemas comunes
+
+| Síntoma | Causa probable | Solución |
+|---|---|---|
+| "This site can't be reached" desde otro dispositivo, pero `localhost:8501` sí funciona en el host | Quien se une inició sesión con una cuenta que nunca fue invitada — está en una tailnet distinta. **Confirmado dos veces con Mac**: el cliente ofrece "Sign in with Apple" de forma muy visible, y eso crea/entra a una tailnet personal, no a la del equipo | Correr `tailscale status` en el dispositivo que se une: si el host no aparece como peer, cerrar sesión (menú de Tailscale → Settings → Log out) y volver a entrar con el **mismo correo/proveedor exacto** con el que se mandó la invitación — nunca "Sign in with Apple" |
+| Falla incluso con la IP de Tailscale, probado desde el propio host | El puerto del dashboard quedó bindeado a `127.0.0.1` en vez de `0.0.0.0` | Revisar `docker compose ps` y la sección `ports` del servicio `dashboard` en `docker-compose.yml` |
+| Funciona con la IP de Tailscale pero no con el nombre del equipo | MagicDNS no resolvió el hostname | Usar la IP `100.x.x.x` directamente, o correr `tailscale status` para confirmar el nombre exacto asignado |
+
+---
+
 ## Uso local (sin Docker)
 
 ```bash
@@ -329,6 +375,57 @@ pytest tests/ -v --cov=src --cov-report=term
 1. **`test`**: pytest en Python 3.10/3.11/3.12 + un chequeo explícito de que `src.analytics` (módulo) y `src.analytics.time_series_analysis`/`causal_analysis` (submódulos) importan correctamente — regresión directa contra un bug de estructura que encontramos durante la fusión (ver `INTEGRATION_NOTES.md`)
 2. **`docker-compose-lint`**: valida `docker-compose.yml` con `docker compose config`
 3. **`lint`**: `black` + `isort`
+
+---
+
+## Troubleshooting
+
+Registro de problemas reales encontrados operando el proyecto, con la causa raíz y cómo se resolvieron — para no re-diagnosticar lo mismo la próxima vez. Se va actualizando cada vez que aparece algo nuevo.
+
+### `.env not found` al correr `docker compose up`
+
+**Síntoma:**
+```
+env file .../.env not found: GetFileAttributesEx .../.env: The system cannot find the file specified.
+```
+
+**Causa:** `.env` está (correctamente) en `.gitignore` — nunca se sube al repo porque contiene API keys y contraseñas. Si el repo se clona de nuevo, o el archivo se pierde localmente, `docker-compose.yml` no encuentra los valores que espera.
+
+**Solución:**
+```powershell
+Get-ChildItem -Path . -Filter "*.env*" -Recurse -Force -File
+# si aparece .env.example:
+Copy-Item .env.example .env
+notepad .env   # completar las API keys y passwords reales
+```
+
+### `password authentication failed for user "postgres"` en el collector
+
+**Síntoma:** el collector loguea `FATAL: password authentication failed for user "postgres"` al escribir en TimescaleDB. Fácil de pasar por alto: el pipeline sigue reportando `"Successfully saved N records"` porque cae a un fallback (SQLite/CSV) — no se ve como un error crítico a simple vista.
+
+**Causa:** el password en `.env` (`PGPASSWORD`) no coincide con el que quedó grabado dentro del volumen de TimescaleDB. Postgres solo aplica `POSTGRES_PASSWORD` la **primera vez** que se crea el volumen — si `.env` se recrea o edita después (por ejemplo, al reconstruirlo desde `.env.example` tras el problema anterior), el volumen sigue con el password viejo aunque `.env` tenga uno nuevo.
+
+**Solución:**
+```powershell
+# 1. Confirmar el nombre real de la variable en docker-compose.yml (ojo, no es literalmente POSTGRES_PASSWORD)
+Select-String -Path .\docker-compose.yml -Pattern "PASSWORD"
+
+# 2. Sincronizar el password de la base con el valor actual de .env, sin exponerlo en pantalla
+$pw = ((Get-Content .env | Select-String "^PGPASSWORD=") -replace '^PGPASSWORD=', '').ToString()
+docker exec -it movilidad-db psql -U postgres -c "ALTER USER postgres WITH PASSWORD '$pw';"
+
+# 3. Reiniciar el collector para que reconecte
+docker compose restart collector
+docker compose logs -f collector
+```
+
+**Cómo confirmar que quedó resuelto:** buscar `Saved N records to TimescaleDB (traffic_trips)` en los logs del siguiente ciclo — no basta con que desaparezca el error, hay que ver la confirmación positiva.
+
+**Nota:** los registros guardados solo en SQLite/CSV mientras la conexión estuvo rota no se migran solos a TimescaleDB. Si el hueco es de pocos minutos, normalmente no vale la pena migrar; si es de horas o días, conviene un backfill manual.
+
+### Un compañero no aparece como máquina en Tailscale aunque ya "se unió"
+
+Ver la tabla de problemas comunes en [Acceso remoto para el equipo (Tailscale)](#acceso-remoto-para-el-equipo-tailscale) — el culpable casi siempre es iniciar sesión con una cuenta/proveedor distinto al invitado (en Mac, típicamente "Sign in with Apple"), lo que crea una tailnet personal separada de la del equipo.
 
 ---
 

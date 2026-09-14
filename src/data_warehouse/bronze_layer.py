@@ -105,7 +105,7 @@ class BronzeLayer:
         if len(df) < before_validation:
             issues.append(f"Removed {before_validation - len(df)} rows with missing critical values")
 
-        # BD_BI_TFM2 fix: pd.to_datetime() de arriba convierte la columna a
+        # BD_BI_TFM fix: pd.to_datetime() de arriba convierte la columna a
         # datetime64 (necesario para validar/soltar filas inválidas), pero
         # si se guarda así, pandas.to_sql() la serializa con un ESPACIO
         # como separador ('2026-08-17 04:00:40...'), no con 'T' como el
@@ -136,7 +136,7 @@ class BronzeLayer:
         df['ingestion_timestamp'] = datetime.utcnow().isoformat()
         df['validation_status'] = 'validated'
 
-        # BD_BI_TFM2 fix: la tabla bronze_measurements define la columna
+        # BD_BI_TFM fix: la tabla bronze_measurements define la columna
         # como `raw_timestamp` (no `timestamp`), y sólo acepta las columnas
         # de su propio esquema. El df de entrada puede traer columnas extra
         # del esquema unificado de route_measurements (traffic_delay_min,

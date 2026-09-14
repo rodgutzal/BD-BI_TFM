@@ -1,6 +1,6 @@
 name: Tests & Code Quality
 
-# BD_BI_TFM2: dispara en las convenciones de rama de ambos repos
+# BD_BI_TFM: dispara en las convenciones de rama de ambos repos
 # originales (BD_BI_TFM usaba `develop`, urban-mobility-analytics1 usaba
 # `main`).
 on:
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # BD_BI_TFM2 fix: el setup.py original declaraba
+        # BD_BI_TFM fix: el setup.py original declaraba
         # python_requires=">=3.13" pero el CI solo probaba 3.10-3.12 (ninguna
         # de esas versiones cumplía su propio requisito). Se alinearon
         # ambos a ">=3.10", que es lo que realmente usa el código (p.ej.

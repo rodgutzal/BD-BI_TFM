@@ -1,6 +1,6 @@
 """Orquestador principal de recolección de datos de tráfico y clima.
 
-BD_BI_TFM2: fusiona el `collector.py` de urban-mobility-analytics1 (TomTom,
+BD_BI_TFM: fusiona el `collector.py` de urban-mobility-analytics1 (TomTom,
 SQLite) con el flujo de BD_BI_TFM (ORS, TimescaleDB). La fuente de tráfico
 es intercambiable vía `DATA_SOURCE` (ver src/config.py); ambas escriben al
 mismo esquema unificado en CSV/SQLite (capa local y de analítica/ML) y,
@@ -72,7 +72,7 @@ class DataCollector:
         self.enable_medallion = enable_medallion
         self.running = True
 
-        # BD_BI_TFM2: en modo híbrido (HybridScheduler) se crean DOS
+        # BD_BI_TFM: en modo híbrido (HybridScheduler) se crean DOS
         # DataCollector a la vez (uno por fuente) — Python solo permite un
         # handler de señal por proceso, así que si ambos lo registraran, el
         # segundo pisaría al primero y su cliente HTTP nunca se cerraría

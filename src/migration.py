@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def migrate_csv_to_sqlite(csv_path: Path, db_path: Path, dry_run: bool = False) -> int:
     """
-    Migra registros del CSV histórico (esquema unificado BD_BI_TFM2) a SQLite.
+    Migra registros del CSV histórico (esquema unificado BD_BI_TFM) a SQLite.
 
     Args:
         csv_path: Ruta al archivo CSV
