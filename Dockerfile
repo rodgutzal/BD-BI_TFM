@@ -1,4 +1,4 @@
-# Dockerfile — BD_BI_TFM2
+# Dockerfile — BD_BI_TFM
 #
 # Imagen compartida por los servicios `collector` y `dashboard` de
 # docker-compose.yml (cada uno la usa con un `command:` distinto). Basado

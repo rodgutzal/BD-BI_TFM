@@ -92,7 +92,7 @@ class SilverLayer:
         df = bronze_df.copy()
 
         # 1. Standardize column names
-        # BD_BI_TFM2 fix: este rename tenía que ir ANTES de convertir la
+        # BD_BI_TFM fix: este rename tenía que ir ANTES de convertir la
         # columna a datetime — el df que llega de bronze_measurements trae
         # `raw_timestamp`, no `timestamp`, así que la línea original
         # `pd.to_datetime(df['timestamp'], ...)` fallaba con KeyError antes
@@ -135,7 +135,7 @@ class SilverLayer:
         # 5. Store in silver
         df['transformation_timestamp'] = datetime.utcnow().isoformat()
 
-        # BD_BI_TFM2 fix: el df que llega de bronze_measurements trae
+        # BD_BI_TFM fix: el df que llega de bronze_measurements trae
         # columnas propias de esa capa (id, ingestion_timestamp,
         # data_quality_score, validation_status) que no existen en el
         # esquema de silver_measurements y que `to_sql` rechazaría. Se
@@ -190,7 +190,7 @@ class SilverLayer:
     def aggregate_hourly(self) -> Dict:
         """Aggregate silver data to hourly summaries.
 
-        BD_BI_TFM2 fix: la consulta original usaba MEDIAN()/STDDEV() en
+        BD_BI_TFM fix: la consulta original usaba MEDIAN()/STDDEV() en
         SQL, funciones que SQLite no trae integradas (a diferencia de
         PostgreSQL) — fallaba con `no such function`. Se agrupa en pandas
         en su lugar, que sí soporta .median()/.std() nativamente.

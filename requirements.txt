@@ -12,6 +12,7 @@ numpy==2.4.6
 scikit-learn>=1.5.1
 scipy>=1.13
 statsmodels>=0.14
+matplotlib>=3.8  # usado por sklearn.tree.plot_tree en predictive_modeling_dashboard.py
 
 # --- TimescaleDB (capa de producción) ---
 psycopg2-binary>=2.9

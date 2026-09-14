@@ -1,4 +1,4 @@
-# INTEGRATION_NOTES.md — BD_BI_TFM2
+# INTEGRATION_NOTES.md — BD_BI_TFM
 
 Registro completo de cómo se fusionaron **BD-BI_TFM** y **urban-mobility-analytics1**,
 qué se decidió en cada punto, y — sobre todo — cada bug real que se encontró
@@ -306,7 +306,7 @@ del bloque `if models_dir.exists():`, pero lo usa más abajo **fuera** de ese
 bloque, sin importar si la carpeta existió o no. `models_dir` apunta a
 `models/` en la raíz del proyecto — la carpeta que crea
 `train_ensemble_models.py` (distinta de `src/models/trained/`, que sí
-viene con un modelo de ejemplo) — y como BD_BI_TFM2 nunca corre ese script
+viene con un modelo de ejemplo) — y como BD_BI_TFM nunca corre ese script
 automáticamente, esa carpeta no existe hasta que alguien la ejecuta a mano.
 Con `models_dir.exists()` en `False`, el código nunca entraba al `if` y
 `model_files` quedaba sin definir para el resto de la función.

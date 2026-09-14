@@ -1,6 +1,6 @@
 # PRODUCTION.md — Endurecimiento para servidor real
 
-BD_BI_TFM2 corre hoy en tu máquina, pero está preparado para moverse a un
+BD_BI_TFM corre hoy en tu máquina, pero está preparado para moverse a un
 servidor real (red privada o con salida a internet) sin rearquitectura.
 Este documento explica qué se endureció, por qué, y qué falta si más
 adelante decides exponerlo a internet.

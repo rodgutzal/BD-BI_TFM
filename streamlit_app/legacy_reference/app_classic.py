@@ -1,6 +1,6 @@
 """Dashboard original de BD_BI_TFM (previo a la fusión).
 
-BD_BI_TFM2: NO es el entrypoint activo (streamlit_app/app.py es ahora
+BD_BI_TFM: NO es el entrypoint activo (streamlit_app/app.py es ahora
 app_multi_dashboard.py). Se conserva aquí solo como referencia histórica
 del proyecto base — el CSV que leía (`traffic_weather_data.csv`, columnas
 datetime/duration_min/temperature/humidity, solo ORS) ya no existe con ese

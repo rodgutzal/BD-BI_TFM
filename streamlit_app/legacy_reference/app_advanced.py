@@ -1,6 +1,6 @@
 """Professional Streamlit dashboard for Urban Mobility Analytics.
 
-BD_BI_TFM2: NO es el entrypoint activo (streamlit_app/app.py es ahora
+BD_BI_TFM: NO es el entrypoint activo (streamlit_app/app.py es ahora
 app_multi_dashboard.py, con las vistas Executive/Operations/Analyst). Este
 archivo se conserva en legacy_reference/ como referencia — la vista de
 ruta única con mapa, comparación de clima origen/destino y exportación

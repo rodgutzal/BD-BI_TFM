@@ -1,5 +1,5 @@
 -- =============================================================
--- init/01_init.sql  (BD_BI_TFM2)
+-- init/01_init.sql  (BD_BI_TFM)
 -- Se ejecuta UNA SOLA VEZ al primer arranque del contenedor.
 -- Docker monta ./init en /docker-entrypoint-initdb.d
 --
@@ -15,7 +15,7 @@
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- 2. Tabla principal — columnas exactas de traffic_weather_data.csv + extensión BD_BI_TFM2
+-- 2. Tabla principal — columnas exactas de traffic_weather_data.csv + extensión BD_BI_TFM
 CREATE TABLE IF NOT EXISTS traffic_trips (
     datetime              TIMESTAMPTZ   NOT NULL,
     origin                TEXT          NOT NULL,

@@ -48,7 +48,7 @@ class GoldLayer:
         """)
 
         # Route rankings (daily)
-        # BD_BI_TFM2 fix: se añade UNIQUE(date, origin, destination) — la
+        # BD_BI_TFM fix: se añade UNIQUE(date, origin, destination) — la
         # tabla original no tenía ninguna restricción, así que recalcular
         # el ranking del mismo día (cada vez que corre el collector)
         # acumulaba filas duplicadas sin parar. Con la restricción,
@@ -159,7 +159,7 @@ class GoldLayer:
                 kpis.append(kpi)
 
             # Store in gold
-            # BD_BI_TFM2 fix: el `to_sql(if_exists='append')` original
+            # BD_BI_TFM fix: el `to_sql(if_exists='append')` original
             # hacía un INSERT plano — la segunda vez que se calculaban las
             # KPIs de un mismo día (p.ej. porque el collector corre cada
             # pocos minutos) chocaba con el UNIQUE(date, origin,
@@ -196,7 +196,7 @@ class GoldLayer:
     def calculate_rankings(self, date: Optional[str] = None, metric: str = 'reliability_score') -> Dict:
         """Calculate route rankings for a date.
 
-        BD_BI_TFM2 fix: el valor por defecto original era 'reliability',
+        BD_BI_TFM fix: el valor por defecto original era 'reliability',
         que no es el nombre real de ninguna columna de gold_route_kpis
         (la columna se llama `reliability_score`) — SQLite fallaba con
         `no such column: reliability` en cuanto se llamaba sin argumentos.
