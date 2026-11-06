@@ -16,6 +16,9 @@ venv
 .env.local
 
 data/mobility.db
+# Respaldos de tools/normalize_bronze_timestamps.py (mobility.db.bak-*): sin esta línea,
+# `COPY . .` del Dockerfile los metía dentro de la imagen (~400 MB cada uno).
+data/mobility.db.bak-*
 data/raw/*.csv
 data/processed/*.csv
 logs/
