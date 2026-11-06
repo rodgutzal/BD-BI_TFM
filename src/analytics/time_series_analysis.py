@@ -30,7 +30,7 @@ class TimeSeriesAnalytics:
             if len(series) < 2 * period:
                 return {'error': 'Insufficient data'}
 
-            decomposition = seasonal_decompose(series, model='additive', period=period, extrapolate='fill_ea')
+            decomposition = seasonal_decompose(series, model='additive', period=period, extrapolate_trend='freq')
 
             return {
                 'trend': decomposition.trend.tolist(),

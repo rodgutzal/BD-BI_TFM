@@ -97,7 +97,7 @@ async def predict_route(
                 "std": prediction.get('prediction_std')
             },
             "timestamp": end_date.isoformat(),
-            "models_used": list(predictor.models.keys())
+            "models_used": [name for name, model in predictor.models.items() if model is not None]
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

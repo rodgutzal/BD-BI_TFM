@@ -17,11 +17,6 @@ except (ImportError, Exception):
     HAS_XGBOOST = False
 
 try:
-    from statsmodels.tsa.holtwinters import ExponentialSmoothing
-except ImportError:
-    ExponentialSmoothing = None
-
-try:
     from prophet import Prophet
     HAS_PROPHET = True
 except ImportError:
@@ -31,7 +26,15 @@ warnings.filterwarnings('ignore')
 
 
 class EnsemblePredictor:
-    """Ensemble de múltiples modelos para predicción robusta."""
+    """Ensemble de modelos de regresión sobre features tabulares (hora, día,
+    mes, clima): XGBoost (opcional), Random Forest y Gradient Boosting.
+
+    Suavizado exponencial (Holt-Winters) NO forma parte del ensemble: se
+    entrenaba y se guardaba, pero predict() nunca lo usaba, porque un modelo
+    de serie temporal no predice a partir de una fila de features y además
+    se ajustaba sobre mediciones ordenadas de la más reciente a la más
+    antigua. Prophet se usa solo en forecast_week_ahead().
+    """
 
     def __init__(self, route_name: str = 'default', models_dir: Path = None):
         """Inicializar ensemble."""
@@ -43,10 +46,11 @@ class EnsemblePredictor:
             'xgboost': None,
             'random_forest': None,
             'gradient_boosting': None,
-            'exponential_smoothing': None,
         }
         self.scaler = StandardScaler()
-        self.ensemble_weights = {'xgboost': 0.4, 'random_forest': 0.25, 'gradient_boosting': 0.25, 'exponential_smoothing': 0.1}
+        # Se normalizan en predict() sobre los modelos disponibles, así que
+        # no hace falta que sumen 1 (p. ej. si xgboost no está instalado).
+        self.ensemble_weights = {'xgboost': 0.4, 'random_forest': 0.25, 'gradient_boosting': 0.25}
         self.is_trained = False
 
     def prepare_features(self, df: pd.DataFrame) -> tuple:
@@ -140,16 +144,6 @@ class EnsemblePredictor:
         except Exception as e:
             results['models_trained'].append({'model': 'gradient_boosting', 'error': str(e)})
 
-        # 4. Exponential Smoothing (para series temporales)
-        try:
-            if ExponentialSmoothing is not None and len(y) >= 12:
-                self.models['exponential_smoothing'] = ExponentialSmoothing(
-                    y, seasonal_periods=12, trend='add', seasonal='add', initialization_method='estimated'
-                ).fit(optimized=True, disp=False)
-                results['models_trained'].append({'model': 'exponential_smoothing', 'status': 'trained'})
-        except Exception as e:
-            results['models_trained'].append({'model': 'exponential_smoothing', 'error': str(e)})
-
         self.is_trained = True
         results['status'] = 'success'
         results['samples_used'] = len(df)
@@ -213,7 +207,14 @@ class EnsemblePredictor:
                 'upper': float(ensemble_pred[0] + 1.96 * ensemble_std[0])
             }
             predictions['prediction_std'] = float(ensemble_std[0])
-            predictions['model_predictions'] = predictions
+            # Predicción individual de cada modelo, en un dict aparte. Antes
+            # se asignaba `predictions` a sí mismo (referencia circular, que
+            # rompe json.dumps / la serialización de FastAPI).
+            predictions['model_predictions'] = {
+                name: predictions[name]
+                for name in ('xgboost', 'random_forest', 'gradient_boosting')
+                if name in predictions
+            }
 
         return predictions
 

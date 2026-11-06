@@ -67,29 +67,59 @@ def _fetch_executive_summary(_gold, days: int):
     return _gold.get_executive_summary(days=days)
 
 
-def render_kpi_cards(summary: dict):
-    """Render executive KPI cards."""
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_period_comparison(_gold, days: int):
+    """Promedios de los últimos `days` días (incluido hoy) y de los `days`
+    anteriores, para calcular los deltas de las tarjetas KPI. Antes los
+    deltas eran texto fijo ("-2 min", "+5%") que no dependía de los datos."""
+    today = datetime.now(timezone.utc).date()
+    tomorrow = (today + timedelta(days=1)).isoformat()
+    cur_start = (today - timedelta(days=days - 1)).isoformat()
+    prev_start = (today - timedelta(days=2 * days - 1)).isoformat()
+    return {
+        'current': _gold.get_period_metrics(cur_start, tomorrow),
+        'previous': _gold.get_period_metrics(prev_start, cur_start),
+    }
+
+
+def _delta(current, previous, fmt: str):
+    """Texto del delta, o None si falta alguno de los dos periodos."""
+    if current is None or previous is None:
+        return None
+    return fmt.format(current - previous)
+
+
+def render_kpi_cards(summary: dict, comparison: dict = None):
+    """Render executive KPI cards.
+
+    `comparison` trae los promedios del periodo actual y del anterior
+    (ver _fetch_period_comparison). Sin periodo anterior con datos no se
+    muestra delta, en lugar de inventar uno.
+    """
+    comparison = comparison or {}
+    cur = comparison.get('current') or {}
+    prev = comparison.get('previous') or {}
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric(
             "System Avg Travel Time",
             f"{summary.get('system_avg_travel_time', 0):.1f} min",
-            delta="-2 min" if summary.get('system_avg_travel_time', 0) > 0 else None
+            delta=_delta(cur.get('avg_travel_time'), prev.get('avg_travel_time'), "{:+.1f} min vs. periodo anterior"),
+            delta_color="inverse",  # menos tiempo de viaje es mejor
         )
 
     with col2:
         st.metric(
             "System Reliability",
             f"{summary.get('system_reliability', 0):.1f}%",
-            delta="+5%" if summary.get('system_reliability', 0) > 0 else None
+            delta=_delta(cur.get('reliability'), prev.get('reliability'), "{:+.1f} pts vs. periodo anterior"),
         )
 
     with col3:
         st.metric(
             "Active Routes",
             summary.get('total_routes', 0),
-            delta=f"+{summary.get('total_routes', 0)}"
         )
 
     with col4:
@@ -229,7 +259,7 @@ def main():
 
     # KPI Cards
     st.subheader("Key Performance Indicators")
-    render_kpi_cards(summary)
+    render_kpi_cards(summary, _fetch_period_comparison(gold, days=30))
 
     st.divider()
 

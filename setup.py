@@ -21,14 +21,15 @@ setup(
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Intended Audience :: Developers",
         "Topic :: Scientific/Engineering :: GIS",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
-    python_requires=">=3.10",
+    python_requires=">=3.11",
     install_requires=requirements,
     entry_points={
         "console_scripts": [
