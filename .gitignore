@@ -25,6 +25,10 @@ htmlcov/
 # Los CSV "legacy_*" (snapshot fijo del histórico original de cada repo)
 # sí se versionan: no están cubiertos por este patrón.
 data/mobility.db
+# Respaldos que deja tools/normalize_bronze_timestamps.py --apply (~400 MB cada uno):
+# mobility.db.bak-AAAAMMDD-HHMMSS. No son "data/mobility.db", así que el patrón de arriba
+# no los cubría y aparecían como archivos nuevos en git status.
+data/mobility.db.bak-*
 data/raw/route_weather_data.csv
 data/processed/*.csv
 
