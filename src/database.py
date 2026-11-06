@@ -862,6 +862,45 @@ class RouteDatabase:
         finally:
             conn.close()
 
+    def get_latest_per_route(self, require_column: Optional[str] = None) -> pd.DataFrame:
+        """La medición más reciente de CADA ruta, en una sola consulta.
+
+        Si se pasa `require_column`, se considera solo las filas donde esa
+        columna NO es NULL: p. ej. `require_column="traffic_delay_min"` trae,
+        por ruta, la última lectura que tiene dato de tráfico real (las filas de
+        ORS nunca lo traen, así que la medición más reciente puede ser de ORS y
+        no servir para saber el estado del tráfico). Una ruta sin ninguna fila
+        que cumpla la condición no aparece en el resultado.
+
+        Reemplaza al bucle `for ruta: query_measurements(limit=1)` (una consulta
+        por ruta) del dashboard Operations. Se omite `polyline` (pesado y no se
+        usa aquí).
+        """
+        self.init_sqlite()
+        conn = self._connect()
+        try:
+            valid = {row[1] for row in conn.execute("PRAGMA table_info(route_measurements)")}
+            if require_column is not None and require_column not in valid:
+                raise ValueError(f"Columna desconocida en route_measurements: {require_column!r}")
+            where = f'WHERE "{require_column}" IS NOT NULL' if require_column else ""
+            df = pd.read_sql_query(
+                f"""
+                SELECT * FROM (
+                    SELECT r.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY origin, destination ORDER BY timestamp DESC, id DESC
+                           ) AS rn
+                    FROM route_measurements r
+                    {where}
+                ) WHERE rn = 1
+                ORDER BY origin, destination
+                """,
+                conn,
+            )
+        finally:
+            conn.close()
+        return df.drop(columns=["rn", "polyline"], errors="ignore")
+
     def get_numeric_columns(self) -> List[str]:
         """Columnas numéricas (REAL/INTEGER) de route_measurements, sin `id`."""
         self.init_sqlite()
