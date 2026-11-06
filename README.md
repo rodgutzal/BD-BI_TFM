@@ -728,7 +728,9 @@ La herramienta (solo lectura) indica cuándo llegó el último dato, avisa si ho
 | Medios (1 a 3 días) | 4 | 6,8 días | Paradas puntuales / fines de semana |
 | Largos (> 3 días) | 3 | 23 días (el mayor, 15,8 días: del 7 al 22 de octubre) | Equipo o stack apagado varios días |
 
-**Por qué ocurre (en el equipo anfitrión actual):** es un sobremesa con Windows en plan *Balanced* y con la suspensión por inactividad, estando enchufado, en **0 (nunca)**: no se duerme solo, así que las noches sin datos son apagados o suspensiones manuales. Docker Desktop sí arranca con Windows (`AutoStart`). Pero el stack solo vuelve si no se detuvo a mano: `restart: unless-stopped` **no** reinicia lo que se paró manualmente, y `docker compose down` además elimina los contenedores. Un `down` o `stop` sin el `up -d` posterior es la explicación más probable de los huecos medios y largos (es una hipótesis: los datos muestran *cuándo* se para la recolección, no *por qué*). Para comprobar la configuración en tu equipo:
+**Por qué ocurre (confirmado por quien opera el stack):** **es una decisión deliberada, no una falla**: el equipo anfitrión se apaga a propósito porque, con el volumen de datos ya acumulado, se considera suficiente y no hace falta que esté encendido las 24 h. Los huecos son, por tanto, un *coste aceptado*, y lo importante es que el análisis los trate bien (ver "Consecuencia para los análisis" más abajo: no rellenar las horas sin datos).
+
+Detalle técnico del equipo actual, útil para entender qué pasa al volver a encenderlo: es un sobremesa con Windows en plan *Balanced* y con la suspensión por inactividad, estando enchufado, en **0 (nunca)**, es decir, no se duerme solo. Docker Desktop sí arranca con Windows (`AutoStart`) y los servicios, al arrancar Docker, se levantan solos porque tienen `restart: unless-stopped`. **Pero** esa política **no** reinicia lo que se detuvo a mano, y `docker compose down` además elimina los contenedores: si antes de apagar se hace `down` (o `stop`), al volver a encender hay que hacer `docker compose up -d`. Si se apaga el equipo *sin* hacer `down`, el stack debería volver solo. Para comprobar la configuración en tu equipo:
 
 ```powershell
 powercfg /getactivescheme                                   # plan de energía activo
@@ -738,7 +740,7 @@ docker compose ps                                           # ¿está arriba el 
 
 **Lo que NO se puede hacer:** recuperar los datos perdidos. Las APIs de tráfico (ORS, TomTom) y de clima entregan solo el estado *de ahora*; no existe un histórico al que pedir lo que faltó.
 
-**Opciones para reducir los huecos futuros** (de menor a mayor esfuerzo; ninguna está implementada en el repo, es decisión de quien opera el stack):
+**Si algún día se quiere reducir los huecos** (hoy no es el caso: se aceptan; de menor a mayor esfuerzo; ninguna está implementada en el repo):
 
 | Opción | Qué arregla | Qué no arregla |
 |---|---|---|
@@ -747,7 +749,7 @@ docker compose ps                                           # ¿está arriba el 
 | Dejar el equipo encendido 24/7 (y sin suspender/hibernar manualmente) | Los huecos nocturnos | Cortes de luz y reinicios de Windows Update |
 | Mover el stack a una máquina siempre encendida (servidor, Raspberry Pi, VM en la nube): mismo `docker-compose.yml` y `.env`, y copiar `data/` | Todos, es la única que da cobertura continua | Requiere una máquina y migrar la base |
 
-**Cómo saber si está recolectando:** el panel lateral del dashboard muestra la hora del último dato y avisa en amarillo si pasan más de 60 min sin datos nuevos; `docker compose ps`; y `tools/check_collection_gaps.py` para medir los huecos.
+**Cómo saber si está recolectando:** el panel lateral del dashboard muestra la hora del último dato y avisa en amarillo si pasan más de 60 min sin datos nuevos (es lo esperado justo después de volver a encender un equipo que estuvo apagado: se quita solo en cuanto llega el primer ciclo); `docker compose ps`; y `tools/check_collection_gaps.py` para medir los huecos.
 
 **Consecuencia para los análisis:** las horas sin datos **no deben rellenarse** (ni con `ffill` ni interpolando). El notebook de la Asignatura 7 rellenaba con el último valor conocido: eso fabricó 110 de 337 horas (un tercio de la serie) y el RMSE del modelo temporal salía 0,016; sin horas inventadas es 0,025. Corregido en ambos notebooks.
 
