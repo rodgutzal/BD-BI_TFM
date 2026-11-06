@@ -64,21 +64,47 @@ def render_weight_controls() -> dict:
     return normalize_weights(w_demanda, w_competencia, w_accesibilidad)
 
 
-def render_results_table(out):
-    tabla = out.reset_index()[[
-        "zone_name", "score", "demanda", "competencia_cruda", "competencia",
-        "tiempo_viaje_prom", "dimensiones_con_dato",
+def build_results_table(out):
+    """Tabla de resultados con el desglose completo: para cada factor, el
+    valor CRUDO (lo medido) y el valor NORMALIZADO 0-1 que entra en el
+    puntaje. Nunca solo el número final.
+
+    Las tres columnas normalizadas están todas orientadas igual: "más alto =
+    mejor para el negocio". Por eso la de competencia aparece invertida
+    (1 = la zona con menos competencia) y la de accesibilidad también (1 = la
+    zona con menor tiempo de viaje). Una zona sin dato en un factor queda en
+    blanco ("sin dato") y el puntaje la trata como neutral (0.5) en ese factor.
+    """
+    return out.reset_index()[[
+        "zone_name", "score",
+        "demanda", "demanda_norm",
+        "competencia_cruda", "competencia", "competencia_norm",
+        "tiempo_viaje_prom", "accesibilidad_norm",
+        "dimensiones_con_dato",
     ]].rename(columns={
-        "zone_name": "Zona", "score": "Puntaje", "demanda": "Población",
+        "zone_name": "Zona", "score": "Puntaje",
+        "demanda": "Población", "demanda_norm": "Demanda (0-1)",
         "competencia_cruda": "Competencia (conteo real)", "competencia": "Competencia (ajustada)",
-        "tiempo_viaje_prom": "Tiempo de viaje prom. (min)", "dimensiones_con_dato": "Datos completos (de 3)",
+        "competencia_norm": "Baja competencia (0-1)",
+        "tiempo_viaje_prom": "Tiempo de viaje prom. (min)", "accesibilidad_norm": "Accesibilidad (0-1)",
+        "dimensiones_con_dato": "Datos completos (de 3)",
     })
+
+
+def render_results_table(out):
+    tabla = build_results_table(out)
     st.dataframe(
         tabla.style.format({
             "Puntaje": "{:.3f}", "Población": "{:,.0f}", "Competencia (ajustada)": "{:.1f}",
             "Tiempo de viaje prom. (min)": "{:.1f}",
+            "Demanda (0-1)": "{:.2f}", "Baja competencia (0-1)": "{:.2f}", "Accesibilidad (0-1)": "{:.2f}",
         }, na_rep="sin dato"),
         width="stretch", hide_index=True,
+    )
+    st.caption(
+        "Las columnas (0-1) son los valores normalizados que entran en el puntaje; en las tres, "
+        "**más alto = mejor para el negocio** (por eso la competencia y el tiempo de viaje van invertidos). "
+        "Puntaje = suma ponderada de las tres columnas (0-1) con los pesos elegidos arriba."
     )
 
 
