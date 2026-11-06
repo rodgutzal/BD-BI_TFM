@@ -1,7 +1,6 @@
 """Operations dashboard for managers and operations team."""
 
 import sys
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -58,14 +57,14 @@ def _fetch_all_routes_statistics(_db, hours: int):
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
-def _fetch_recent_measurements(_db, days: int):
-    end_date = datetime.now(timezone.utc)
-    start_date = end_date - timedelta(days=days)
-    return _db.query_measurements(
-        start_timestamp=start_date.isoformat(),
-        end_timestamp=end_date.isoformat(),
-        limit=10000,
-    )
+def _fetch_route_hour_average(_db, days: int):
+    """Promedio por ruta y hora de los últimos `days` días, agregado en SQL.
+
+    FIX: antes se traían las 10.000 mediciones MÁS RECIENTES
+    (`query_measurements(limit=10000)`) y se agrupaban en pandas; con
+    recolección continua eso eran ~5 días, no los 7 que dice el título.
+    """
+    return _db.get_route_hour_average(days)
 
 
 def render_real_time_alerts(db):
@@ -174,19 +173,21 @@ def render_performance_heatmap(db):
     """Render route performance heatmap by hour."""
     st.subheader("🔥 Performance Heatmap (24-hour)")
 
-    df = _fetch_recent_measurements(db, days=7)
+    df = _fetch_route_hour_average(db, days=7)
 
     if df.empty:
         st.warning("No data available")
         return
 
-    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
-    df['hour'] = df['timestamp'].dt.hour
     df['route'] = df['origin'] + ' → ' + df['destination']
 
-    # Create heatmap data
-    heatmap_data = df.groupby(['route', 'hour'])['travel_time_min'].mean().reset_index()
-    pivot_data = heatmap_data.pivot(index='route', columns='hour', values='travel_time_min')
+    # Una fila por ruta y hora (ya promediadas en SQL). Se fuerzan las 24
+    # columnas: si alguna hora no tiene mediciones, el pivote traía menos
+    # columnas que las 24 etiquetas fijas del eje X y el mapa se desalineaba.
+    pivot_data = (
+        df.pivot(index='route', columns='hour', values='avg_travel_time')
+        .reindex(columns=range(24))
+    )
 
     fig = go.Figure(data=go.Heatmap(
         z=pivot_data.values,

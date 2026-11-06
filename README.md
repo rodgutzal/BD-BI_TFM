@@ -469,7 +469,7 @@ Ver `INTEGRATION_NOTES.md` para el detalle de los bugs que tenía este pipeline 
 **`streamlit_app/app.py`** (activo, arranca con `docker compose up` / `streamlit run streamlit_app/app.py`):
 selector lateral entre 4 vistas —
 
-- **Executive**: KPIs del sistema, mejores/peores rutas, tendencia de 30 días (lee de `gold_route_kpis`)
+- **Executive**: KPIs del sistema (con su variación frente al periodo anterior) y mejores/peores rutas, que leen de `gold_route_kpis`; la tendencia y el histograma de 30 días se agregan en SQL directamente desde `route_measurements` (`RouteDatabase.get_daily_average` / `query_columns`), cubriendo la ventana completa y no solo las últimas N filas
 - **Operations**: monitoreo en tiempo real y alertas
 - **Analyst**: exploración de datos, correlaciones y análisis de series de tiempo (incluye un tab **SQL Query** de solo lectura sobre `data/mobility.db`). Al final de esta vista se renderiza **`predictive_modeling_dashboard`** — clasificación (Random Forest / regresión logística) y regresión de tiempo de viaje, con curva ROC y comparación de modelos; no es una vista aparte del selector, vive dentro de Analyst
 - **Maps**: rutas monitorizadas sobre un mapa (`plotly.graph_objects.Scattermapbox`, estilo `open-street-map` — sin token), coloreadas por retraso reciente, con overlay opcional de POIs. Selector de fuente (Ninguna / Overpass / Foursquare — una a la vez, no combinadas) y, debajo, un multiselect con las categorías de esa fuente (en Foursquare todas marcadas por defecto; en Overpass arrancan marcadas solo las 4 clásicas — `food_drink`, `leisure` y `sport` suman miles de puntos y se activan a pedido)
