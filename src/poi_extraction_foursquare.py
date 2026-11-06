@@ -1,8 +1,11 @@
 """
 Recolector de infraestructura urbana COMPLEMENTARIO vía Foursquare Places API
-(tier Pro/gratis) — refina la categoría "business" de poi_extraction.py
-(Overpass) con categorías más ricas (restaurant, retail, services,
-entertainment). No pide escuelas/hospitales/malls: eso ya lo cubre Overpass.
+(tier Pro/gratis) — aporta una taxonomía de negocio más rica que la categoría
+genérica "business" de poi_extraction.py (Overpass): restaurant, retail,
+services, entertainment... Trae TODO lo que devuelve Foursquare, sin excluir
+ninguna categoría: también school, health y mall, que se solapan a propósito
+con Overpass para poder comparar la cobertura entre fuentes. Se guarda en la
+tabla pois_foursquare, separada de `pois`.
 
 Mismo espíritu que poi_extraction.py: este dato cambia con muy poca
 frecuencia, por defecto se refresca una vez por semana.
