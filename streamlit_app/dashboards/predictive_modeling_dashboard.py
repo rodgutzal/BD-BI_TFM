@@ -132,7 +132,15 @@ def _design_matrix(d: pd.DataFrame) -> pd.DataFrame:
 # Clasificación: mobility_level
 # --------------------------------------------------------------------------
 
-@st.cache_data(show_spinner="Entrenando clasificador (regresión logística + Random Forest)...")
+# Los modelos ajustados se guardan con cache_resource (el objeto tal cual) y no con
+# cache_data (que guarda una copia serializada de lo que devuelve: con un Random Forest de
+# 300 árboles eso duplicaba cientos de MB). max_entries=1: si los datos cambian, la entrada
+# nueva REEMPLAZA a la anterior en vez de acumularse. Las funciones _fit_* no modifican su
+# resultado y las render_* solo lo leen, así que compartir el objeto es seguro.
+_CACHE_MODELO = dict(max_entries=1)
+
+
+@st.cache_resource(show_spinner="Entrenando clasificador (regresión logística + Random Forest)...", **_CACHE_MODELO)
 def _fit_classification(d: pd.DataFrame):
     d = _complete_cases(d)
     X = _design_matrix(d)
@@ -276,7 +284,7 @@ def render_classification(d: pd.DataFrame) -> None:
 # Regresión: travel_time_min
 # --------------------------------------------------------------------------
 
-@st.cache_data(show_spinner="Entrenando regresores (lineal + Gradient Boosting)...")
+@st.cache_resource(show_spinner="Entrenando regresores (lineal + Gradient Boosting)...", **_CACHE_MODELO)
 def _fit_regression(d: pd.DataFrame):
     d = _complete_cases(d)
     X = _design_matrix(d)
@@ -353,7 +361,7 @@ def render_regression(d: pd.DataFrame) -> None:
 # Forecasting horario (extensión temporal)
 # --------------------------------------------------------------------------
 
-@st.cache_data(show_spinner="Ajustando el modelo de series temporales...")
+@st.cache_resource(show_spinner="Ajustando el modelo de series temporales...", **_CACHE_MODELO)
 def _fit_temporal(d: pd.DataFrame, max_gap_hours: int = 3):
     from statsmodels.tsa.arima.model import ARIMA
 
@@ -363,10 +371,16 @@ def _fit_temporal(d: pd.DataFrame, max_gap_hours: int = 3):
         .resample("1h").mean()
     )
 
-    # A diferencia del fill(down) del .Rmd (que arrastra el valor plano sobre
-    # huecos de varios días), aquí se identifica el bloque contiguo más
-    # reciente sin huecos > max_gap_hours y se modela solo ese tramo, evitando
-    # el artefacto de un tramo plano artificial en la serie.
+    # A diferencia del fill(down) del .Rmd (que arrastra el valor plano sobre huecos de varios
+    # días), las horas sin dato NO se rellenan más allá de `max_gap_hours` consecutivas: quedan
+    # como NaN y el modelo de espacio de estados las trata como datos faltantes.
+    #
+    # OJO, lo que realmente hace este código (la versión anterior de este comentario decía otra
+    # cosa): `resample("1h")` crea un índice horario REGULAR, así que la diferencia entre horas
+    # consecutivas es siempre 1 h y `gap > max_gap_hours` nunca se cumple: la serie NUNCA se
+    # parte en bloques, y se modela entera (con los huecos como NaN), no "el bloque continuo más
+    # reciente". Se deja así a propósito: dividir por los huecos reales dejaría, con un equipo que
+    # se apaga cada noche, un bloque de pocas horas, inútil para una estacionalidad de 24 h.
     gap = s.index.to_series().diff().dt.total_seconds() / 3600
     block_id = (gap > max_gap_hours).cumsum()
     last_block = block_id.iloc[-1]
@@ -376,7 +390,11 @@ def _fit_temporal(d: pd.DataFrame, max_gap_hours: int = 3):
     best_aic, best_fit, best_order = np.inf, None, None
     for order in order_candidates:
         try:
-            fit = ARIMA(s_block, order=order, seasonal_order=(1, 0, 1, 24)).fit()
+            # low_memory=True: mismo AIC y mismo pronóstico (comprobado con la base real: idénticos
+            # a 4 decimales) con un pico de memoria de ~405 MB en vez de ~870 MB; solo cuesta
+            # ~15% más de tiempo. No hay resultados suavizados ni predicción dentro de muestra,
+            # pero aquí solo se usa el pronóstico a futuro y el AIC.
+            fit = ARIMA(s_block, order=order, seasonal_order=(1, 0, 1, 24)).fit(low_memory=True)
             if fit.aic < best_aic:
                 best_aic, best_fit, best_order = fit.aic, fit, order
         except Exception:
@@ -416,7 +434,14 @@ def render_temporal(d: pd.DataFrame) -> None:
     fig.update_layout(title=f"ARIMA{res['order']} estacional (24h) — AIC={res['aic']:.1f}",
                        xaxis_title=None, yaxis_title="% Alta demora", template="plotly_dark", height=450)
     st.plotly_chart(fig, width="stretch")
-    st.caption(f"Modelado sobre {len(res['series'])} horas continuas más recientes (ver nota sobre huecos en el .Rmd).")
+    n_total = len(res["series"])
+    n_con_dato = int(res["series"].notna().sum())
+    st.caption(
+        f"Modelado sobre {n_total:,} horas de calendario, de las cuales {n_con_dato:,} tienen dato "
+        f"({n_con_dato / n_total:.0%}); el resto son huecos de la recolección (equipo apagado) que el "
+        "modelo trata como datos faltantes, sin rellenarlos. Los ajustes ARIMA pueden terminar con "
+        "avisos de convergencia del optimizador: tómese el pronóstico como orientativo."
+    )
 
 
 # --------------------------------------------------------------------------
@@ -495,6 +520,32 @@ def render_clustering(d: pd.DataFrame) -> None:
 # Entrada principal del tab
 # --------------------------------------------------------------------------
 
+# Secciones que se entrenan bajo demanda: clave -> (nombre, qué hace, coste aproximado).
+SECCIONES = {
+    "clf": ("Clasificación", "regresión logística + Random Forest (300 árboles, búsqueda en rejilla con validación cruzada)", "~25 s con 16 CPUs"),
+    "reg": ("Regresión", "regresión lineal + Gradient Boosting", "~20 s con 16 CPUs"),
+    "temporal": ("Forecast temporal", "ARIMA estacional de 24 h (4 candidatos)", "~25 s con 16 CPUs; el que más tarda con 1 CPU"),
+    "cluster": ("Clustering", "k-means sobre los corredores", "~3 s"),
+}
+
+
+def _flag(key: str) -> str:
+    return f"pm_run_{key}"
+
+
+def _solicitado(key: str) -> bool:
+    """True si el usuario ya pidió esta sección en esta sesión. Si no, muestra el botón que la
+    pide y devuelve False, para que NO se entrene nada hasta entonces."""
+    if st.session_state.get(_flag(key)):
+        return True
+    nombre, detalle, coste = SECCIONES[key]
+    st.caption(f"{detalle}. Coste aproximado: {coste}.")
+    if st.button(f"▶ Entrenar y mostrar: {nombre}", key=f"pm_btn_{key}", type="primary"):
+        st.session_state[_flag(key)] = True
+        st.rerun()
+    return False
+
+
 def render() -> None:
     st.markdown("## 🧠 Modelado Predictivo")
     st.caption(
@@ -527,18 +578,38 @@ def render() -> None:
             "el forecast temporal y el clustering sí los conservan."
         )
 
+    # Streamlit ejecuta el contenido de TODAS las pestañas en cada rerun (no solo la visible).
+    # Antes los cuatro modelos se entrenaban de golpe al abrir Analyst: con la base real
+    # (78,5 mil filas) ~75 s en un equipo de 16 CPUs y ~9 min dentro del contenedor del
+    # dashboard (1 CPU, 1 GiB, donde además rozaba el límite de memoria). Ahora cada modelo
+    # se entrena cuando se pide; el resultado queda en caché y, a partir de ahí, es inmediato.
+    st.info(
+        "Los modelos **no se entrenan al abrir esta pantalla**: pulsa el botón de cada pestaña "
+        "(o el de abajo para los cuatro). Con los datos actuales tarda del orden de **1 minuto en un "
+        "equipo con varios núcleos y varios minutos con 1 CPU** (p. ej. dentro de Docker); después "
+        "queda en caché."
+    )
+    if st.button("▶ Entrenar y mostrar los cuatro modelos", key="pm_btn_all"):
+        for key in SECCIONES:
+            st.session_state[_flag(key)] = True
+        st.rerun()
+
     tab_clf, tab_reg, tab_temporal, tab_cluster = st.tabs([
         "Clasificación", "Regresión", "Forecast temporal", "Clustering",
     ])
 
     with tab_clf:
-        render_classification(d)
+        if _solicitado("clf"):
+            render_classification(d)
     with tab_reg:
-        render_regression(d)
+        if _solicitado("reg"):
+            render_regression(d)
     with tab_temporal:
-        render_temporal(d)
+        if _solicitado("temporal"):
+            render_temporal(d)
     with tab_cluster:
-        render_clustering(d)
+        if _solicitado("cluster"):
+            render_clustering(d)
 
 
 if __name__ == "__main__":
