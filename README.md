@@ -492,7 +492,7 @@ selector lateral entre 5 vistas —
 
 - **Executive**: KPIs del sistema (con su variación frente al periodo anterior) y mejores/peores rutas, que leen de `gold_route_kpis`; la tendencia y el histograma de 30 días se agregan en SQL directamente desde `route_measurements` (`RouteDatabase.get_daily_average` / `query_columns`), cubriendo la ventana completa y no solo las últimas N filas
 - **Operations**: monitoreo en tiempo real y alertas
-- **Analyst**: exploración de datos, correlaciones y análisis de series de tiempo (incluye un tab **SQL Query** de solo lectura sobre `data/mobility.db`). La pestaña **Model Performance** muestra el estado de los modelos entrenados por ruta y, debajo, renderiza **`predictive_modeling_dashboard`** — clasificación (Random Forest / regresión logística) y regresión de tiempo de viaje, con curva ROC y comparación de modelos; no es una vista aparte del selector, vive dentro de esa pestaña de Analyst
+- **Analyst**: exploración de datos, correlaciones y análisis de series de tiempo (incluye un tab **SQL Query** de solo lectura sobre `data/mobility.db`). La pestaña **Model Performance** muestra el estado de los modelos entrenados por ruta y, debajo, renderiza **`predictive_modeling_dashboard`** — clasificación (Random Forest / regresión logística) y regresión de tiempo de viaje, con curva ROC y comparación de modelos, más forecast temporal (ARIMA) y clustering; no es una vista aparte del selector, vive dentro de esa pestaña de Analyst. **Los cuatro modelos se entrenan bajo demanda**, al pulsar su botón (o el de "los cuatro"), no al abrir la pantalla (ver Troubleshooting)
 - **Maps**: rutas monitorizadas sobre un mapa (`plotly.graph_objects.Scattermapbox`, estilo `open-street-map` — sin token), coloreadas por retraso reciente, con overlay opcional de POIs. Selector de fuente (Ninguna / Overpass / Foursquare — una a la vez, no combinadas) y, debajo, un multiselect con las categorías de esa fuente (en Foursquare todas marcadas por defecto; en Overpass arrancan marcadas solo las 4 clásicas — `food_drink`, `leisure` y `sport` suman miles de puntos y se activan a pedido)
 - **Recomendación**: para el usuario final — describe el negocio en texto libre ("quiero abrir una pizzería"), el sistema lo interpreta y puntúa las 7 zonas (`src/location_scoring.py`), con un mapa de las zonas (marcadores coloreados por puntaje), tabla con el desglose completo (nunca solo el número final: cada factor aparece con su valor crudo —población, conteo de competencia, tiempo de viaje— y con su valor normalizado 0-1, donde más alto siempre es mejor; una zona sin dato en un factor se muestra como "sin dato" y se puntúa como neutral) y pesos ajustables por el usuario
 
@@ -636,6 +636,47 @@ Auditoría de imports reales contra el código activo (docker-compose.yml, `app.
 | `data/processed/clean_traffic_weather_data.csv`, `cleaned_traffic_weather_data.csv` | Solo los generaba `cleaning.py`; son archivos de bytes, no reflejan el histórico real | El pipeline medallion (Bronze/Silver/Gold) cumple ese rol ahora |
 
 No se borraron en esta pasada (por si algún commit reciente todavía los necesita para algo no evidente en el grep) — pero si nadie objeta, son seguros de eliminar en un PR aparte.
+
+### Analyst tardaba minutos en abrir (y se quedaba sin memoria en Docker)
+
+**Síntoma:** abrir la vista Analyst con la base real (78,5 mil filas) tardaba ~82 s en un equipo de 16 CPUs y **~9 min dentro del contenedor del dashboard** (1 CPU, 1 GiB), donde además el proceso podía morir por falta de memoria (código 137).
+
+**Causas (medidas, no supuestas):**
+1. **Streamlit ejecuta el contenido de todas las pestañas en cada rerun**, así que los cuatro modelos de *Modelado Predictivo* se entrenaban de golpe al abrir la pantalla: clasificación 25 s, regresión 20 s, forecast temporal 25 s y clustering 3 s (con 16 CPUs), y cada uno ocupaba su propia memoria (el forecast llegaba a ~870 MB de pico).
+2. `query_measurements` cargaba la columna `polyline` (el 93% de la memoria de la tabla: 339 de 365 MB). Resuelto antes: ya no se carga por defecto.
+
+**Solución aplicada:**
+- **Modelado bajo demanda:** al abrir Analyst no se entrena nada; cada pestaña tiene su botón y hay uno para los cuatro. Lo pedido se mantiene durante la sesión y queda en caché (`max_entries=1`: si cambian los datos, la entrada nueva sustituye a la vieja). Los modelos se guardan con `st.cache_resource` (el objeto tal cual, sin la copia serializada que hacía `cache_data`).
+- **`low_memory=True` en el ARIMA:** mismo AIC y mismo pronóstico (idénticos a 4 decimales), con un pico de ~405 MB en vez de ~870 MB, a cambio de un ~15% más de tiempo.
+- En tu equipo (16 CPUs), **abrir Analyst pasó de ~82 s a ~5 s**.
+
+**Qué esperar al pulsar los botones:** del orden de 1 minuto en un equipo con varios núcleos y varios minutos con 1 CPU (p. ej. dentro de Docker). Después, inmediato mientras no cambien los datos.
+
+**Medido dentro del contenedor del dashboard (1 CPU, 1 GiB, base real de 78,5 mil filas, `data/` en un volumen de Docker):**
+
+| | Antes de estos cambios | Ahora |
+|---|---|---|
+| Abrir Analyst | 536 s | **3,2 s** |
+| Entrenar los cuatro modelos (al pulsar el botón) | — (se hacía al abrir) | 445 s (≈ 7,4 min), sin excepciones |
+| Pico de memoria del contenedor (límite 1.024 MiB) | 961 MiB (margen del 6%) | **728 MiB (margen del 29%)** |
+| `OOMKilled` / reinicios | — | no / 0 |
+
+Esos 445 s son cómputo puro de una sola CPU: lo que cambió es que ya **no se pagan al abrir la pantalla** y que la memoria deja de acumularse. Si se quiere reducirlos hay que cambiar los modelos (menos árboles, rejilla más pequeña, menos candidatos ARIMA), lo que altera la metodología respecto al `.Rmd` y no se hizo.
+
+**Corrección de un texto engañoso:** el comentario del forecast temporal decía que se modelaba "el bloque continuo más reciente". No es así: `resample("1h")` crea un índice horario *regular*, así que la serie nunca se parte y se modela **entera** (82 días, con el ~46% de las horas vacías tratadas como datos faltantes, sin rellenar). Se dejó el comportamiento y se corrigió el texto: dividir por los huecos reales dejaría, con un equipo que se apaga cada noche, un bloque de pocas horas, inútil para una estacionalidad de 24 h. Además, **los 4 candidatos ARIMA terminan con avisos de convergencia del optimizador**: el pronóstico es orientativo.
+
+#### En Windows, `./data` como bind mount de Docker es ~30 veces más lento
+
+Además de lo anterior, al medir **dentro del contenedor** apareció otra causa, esta del entorno:
+
+| Lectura completa de `route_measurements` (78.597 filas) | Bind mount de Windows (`./data`) | Sistema de archivos del contenedor |
+|---|---|---|
+| Columnas anteriores a `polyline` | 4,9 s | 0,36 s |
+| Sin `polyline` pero con `created_at` | **14,9 s** | 0,47 s |
+
+Con el bind mount, **abrir Analyst dentro del contenedor tardaba 114 s** (resumen de la base 8 s, las 12 consultas del informe de calidad 41 s, la muestra de 78 mil filas 18 s…), aunque ya no entrenara ningún modelo. **Con `data/` en un volumen de Docker tardó 3,3 s.** Dos efectos se suman: el acceso a archivos de Windows desde un contenedor (Docker Desktop) es lento, y `created_at` va *después* de `polyline` en cada fila, por lo que leerla obliga a recorrer las páginas de desbordamiento de la polilínea de todas las filas.
+
+Esto afecta solo a quien ejecuta el stack en **Docker Desktop sobre Windows**; en un servidor Linux el bind mount es nativo. Si la lentitud importa, las opciones son: mover `data/` a un volumen con nombre (**es lo único que se midió**: 3,3 s; a costa de no ver `data/mobility.db` desde el host, de modo que las herramientas de `tools/` y los respaldos tendrían que correr con `docker compose run`), o ejecutar el proyecto desde el sistema de archivos de WSL2 (p. ej. `~/BD-BI_TFM`, no desde `C:\...`), que es la recomendación habitual de Docker pero **no se probó aquí**. **No se cambió el `docker-compose.yml`**: es una decisión de quien opera el stack.
 
 ### Dashboard lento / demasiadas consultas a SQLite por interacción
 
