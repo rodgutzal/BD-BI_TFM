@@ -26,12 +26,20 @@ api.datacommons.org. NO usar la "trial key" que aparece pública en la
 documentación: está compartida entre todo el que lea esos mismos docs y
 tiene cuota muy limitada, no pensada para un recolector programado.
 
-NOTA IMPORTANTE: no se pudo probar contra la API real en este entorno (sin
-acceso a red ni al paquete instalado) — el código sigue al pie de la letra
-la documentación oficial confirmada (docs.datacommons.org), pero, igual
-que se hizo con Foursquare, conviene correrlo una vez a mano la primera
-vez y revisar que la respuesta tenga la forma esperada antes de dejarlo
-en modo continuo.
+ESTADO DE VALIDACIÓN: probado contra la API real (datacommons-client 2.1.6):
+las 7 zonas de Malta se resuelven por nombre y su población está cargada en
+`zone_demographics` / `zone_population_history`. Lo aprendido en esas
+pruebas, y que el código ya contempla (detalle en el README, sección
+"Troubleshooting"):
+  - la key hay que pasarla de forma EXPLÍCITA al constructor; dejarla solo en
+    la variable de entorno DC_API_KEY da 401 "unregistered callers" en las
+    consultas de observación;
+  - `date="latest"` puede devolver un dato menos reciente que otro de la misma
+    serie (Valletta: 2014 frente a 2021), de ahí fetch_population_history() y
+    el reconciliado a un año común de demographics_extraction.py;
+  - resolve_dcid() toma el primer candidato que devuelve la API: al agregar
+    una ciudad o zona nueva, revisar a ojo el nombre que Data Commons le
+    asocia (`dc_name`, que se registra en el log) por si hay una homónima.
 """
 
 import inspect
