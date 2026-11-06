@@ -407,7 +407,7 @@ class RouteDatabase:
         UNIQUE(osm_type, osm_id), específico de OpenStreetMap — forzar ahí
         filas de Foursquare (que se identifican por fsq_place_id, sin
         osm_type/osm_id) habría implicado modificar el esquema de una tabla
-        que ya tiene 2.400+ registros reales de Overpass. Mismo patrón de
+        que ya tiene miles de registros reales de Overpass (3.800+ al 6-nov-2026). Mismo patrón de
         inicialización única por instancia que init_sqlite/init_poi_table
         (ver nota en init_sqlite): evita repetir el DDL en cada consulta.
         """

@@ -15,12 +15,13 @@ Las 3 dimensiones, con lo que ya existe en el proyecto:
     - accesibilidad:  qué tan bien conectada está la zona con el resto
                       (route_measurements, vía get_all_routes_statistics)
 
-Corrección conocida: Overpass ve ~58% de los restaurantes reales que ve
-Foursquare (medido en tools/compare_overpass_foursquare.py, en los únicos
-puntos donde Foursquare no estaba topado en 50 resultados). Para la
-categoría food_drink, el conteo de competencia se corrige dividiendo por
-ese factor — un solo número por zona, marcado como corregido, no como
-observado directo.
+Corrección conocida: Overpass ve ~61% de los restaurantes reales que ve
+Foursquare (FOOD_DRINK_OSM_COVERAGE, más abajo; medido en
+tools/compare_overpass_foursquare.py, en los únicos puntos donde Foursquare
+no estaba topado en 50 resultados). Para la categoría food_drink, el conteo
+de competencia se corrige dividiendo por ese factor — un solo número por
+zona, marcado como corregido, no como observado directo. La constante es la
+única fuente del valor: si se vuelve a medir, se cambia solo allí.
 """
 
 import logging
