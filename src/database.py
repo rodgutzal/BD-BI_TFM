@@ -219,6 +219,13 @@ class RouteDatabase:
         y cargarla era lo que agotaba el límite de 1 GiB del contenedor del
         dashboard al abrir Analyst. Pasar `include_polyline=True` solo si de
         verdad se necesita (p. ej. la exportación completa a CSV).
+
+        Con `include_polyline=False` tampoco se lee `created_at` (la hora en que se
+        insertó la fila; ningún código la usa). Va DESPUÉS de `polyline` en cada fila y
+        las filas largas se desbordan a páginas aparte, así que leerla obliga a recorrer
+        la cadena de la polilínea de todas las filas aunque `polyline` no se pida: en el
+        bind mount de Windows de Docker, 100 mil filas pasan de 15,2 s a 4,9 s sin ella.
+        Con `include_polyline=True` se devuelve todo (`SELECT *`).
         """
         self.init_sqlite()
         conn = self._connect()
@@ -227,7 +234,7 @@ class RouteDatabase:
             select_list = "*"
         else:
             columns = [row[1] for row in conn.execute("PRAGMA table_info(route_measurements)")]
-            select_list = ", ".join(f'"{c}"' for c in columns if c != "polyline")
+            select_list = ", ".join(f'"{c}"' for c in columns if c not in ("polyline", "created_at"))
 
         query = f"SELECT {select_list} FROM route_measurements WHERE 1=1"
         params = []
@@ -974,8 +981,103 @@ class RouteDatabase:
             logger.error(f"Export failed: {e}")
             return False
 
-    def get_database_summary(self) -> dict:
-        """Obtiene un resumen completo de la base de datos."""
+    def get_last_timestamp(self) -> Optional[str]:
+        """Timestamp de la medición más reciente (None si la tabla está vacía).
+
+        Es `MAX(timestamp)` sobre el índice `idx_timestamp`: instantáneo. El panel
+        lateral del dashboard lo pide en TODAS las pantallas y antes usaba
+        get_database_summary() solo para esto, con su `DISTINCT` de rutas (~8 s en
+        el bind mount de Windows).
+        """
+        self.init_sqlite()
+        conn = self._connect()
+        try:
+            return conn.execute("SELECT MAX(timestamp) FROM route_measurements").fetchone()[0]
+        finally:
+            conn.close()
+
+    def get_data_profile(self) -> dict:
+        """Perfil de calidad de TODA la tabla en UNA sola pasada.
+
+        Una consulta agregada por ruta (filas, primera y última fecha, duplicados y
+        nulos de cada columna de medición) en lugar de la docena de consultas que
+        hacía Analyst (rutas únicas ×4, completitud ruta por ruta, resumen...). Cada
+        recorrido de la tabla cuesta ~8 s en el bind mount de Windows de Docker y
+        décimas de segundo en el host; hacerlo una vez en vez de más de diez es lo que
+        importa.
+
+        Columnas de medición = todas salvo `id`, `polyline` y `created_at`: no son
+        datos medidos, y las dos últimas son las pesadas de leer.
+
+        Devuelve un dict con:
+          total_rows, first_timestamp, last_timestamp, n_routes, n_origins,
+          duplicates      filas con la misma ruta, instante y fuente (la clave UNIQUE
+                          debería impedirlas: 0 salvo que falte la restricción),
+          missing_pct     % de celdas vacías sobre (filas × columnas de medición),
+          measurement_columns, null_counts (dict columna -> nulos),
+          routes          DataFrame por ruta: origin, destination, rows, first_timestamp,
+                          last_timestamp, duplicates, nulls, completeness_pct.
+        """
+        self.init_sqlite()
+        conn = self._connect()
+        try:
+            all_cols = [row[1] for row in conn.execute("PRAGMA table_info(route_measurements)")]
+            measured = [c for c in all_cols if c not in ("id", "polyline", "created_at")]
+            null_sums = ", ".join(f'SUM("{c}" IS NULL)' for c in measured)
+            rows = conn.execute(
+                f"""
+                SELECT origin, destination,
+                       COUNT(*)                                                       AS n_rows,
+                       MIN(timestamp), MAX(timestamp),
+                       COUNT(*) - COUNT(DISTINCT timestamp || '|' || data_source)     AS duplicates
+                       {', ' + null_sums if measured else ''}
+                FROM route_measurements
+                GROUP BY origin, destination
+                ORDER BY origin, destination
+                """
+            ).fetchall()
+        finally:
+            conn.close()
+
+        route_cols = ["origin", "destination", "rows", "first_timestamp", "last_timestamp", "duplicates"]
+        records = []
+        null_counts = {c: 0 for c in measured}
+        for row in rows:
+            per_col = [int(v or 0) for v in row[6:]]
+            for c, v in zip(measured, per_col):
+                null_counts[c] += v
+            nulls = sum(per_col)
+            cells = row[2] * len(measured)
+            records.append([
+                row[0], row[1], int(row[2]), row[3], row[4], int(row[5] or 0), nulls,
+                round(100 * (1 - nulls / cells), 1) if cells else 100.0,
+            ])
+        routes = pd.DataFrame(records, columns=route_cols + ["nulls", "completeness_pct"])
+
+        total_rows = int(routes["rows"].sum()) if not routes.empty else 0
+        total_nulls = int(routes["nulls"].sum()) if not routes.empty else 0
+        total_cells = total_rows * len(measured)
+        return {
+            "total_rows": total_rows,
+            "first_timestamp": routes["first_timestamp"].min() if not routes.empty else None,
+            "last_timestamp": routes["last_timestamp"].max() if not routes.empty else None,
+            "n_routes": len(routes),
+            "n_origins": routes["origin"].nunique() if not routes.empty else 0,
+            "duplicates": int(routes["duplicates"].sum()) if not routes.empty else 0,
+            "missing_pct": round(100 * total_nulls / total_cells, 1) if total_cells else 0.0,
+            "measurement_columns": measured,
+            "null_counts": null_counts,
+            "routes": routes,
+        }
+
+    def get_database_summary(self, include_routes: bool = True) -> dict:
+        """Obtiene un resumen completo de la base de datos.
+
+        `include_routes=False` omite `unique_routes` (queda en None): contarlas exige
+        un `SELECT DISTINCT origin, destination` que recorre toda la tabla (~7,7 s en el
+        bind mount de Windows de Docker); el resto del resumen sale de índices y es
+        casi instantáneo. Los dashboards no necesitan ese número.
+        """
         self.init_sqlite()
         conn = self._connect()
         cursor = conn.cursor()
@@ -983,10 +1085,13 @@ class RouteDatabase:
         cursor.execute("SELECT COUNT(*) FROM route_measurements")
         total_records = cursor.fetchone()[0]
 
-        cursor.execute(
-            "SELECT COUNT(*) FROM (SELECT DISTINCT origin, destination FROM route_measurements)"
-        )
-        unique_routes = cursor.fetchone()[0]
+        if include_routes:
+            cursor.execute(
+                "SELECT COUNT(*) FROM (SELECT DISTINCT origin, destination FROM route_measurements)"
+            )
+            unique_routes = cursor.fetchone()[0]
+        else:
+            unique_routes = None
 
         cursor.execute("SELECT MIN(timestamp), MAX(timestamp) FROM route_measurements")
         date_range = cursor.fetchone()

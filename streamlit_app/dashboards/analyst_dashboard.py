@@ -27,9 +27,11 @@ _CACHE_TTL = 60
 # por ruta ≈ 13.500 filas: el tope anterior (10.000) las recortaba.
 _ROUTE_ROW_LIMIT = 100_000
 
-# Filas más recientes sobre las que se calculan "Missing Values" y "Duplicates"
-# en Data Quality (el total real viene de get_database_summary()).
-_QUALITY_SAMPLE_ROWS = 100_000
+# El perfil de calidad recorre TODA la tabla (una pasada, ~8 s en el bind mount de
+# Windows de Docker) y los datos nuevos llegan cada 15-27 min: no hace falta refrescarlo
+# cada minuto. Un mismo perfil alimenta las rutas disponibles, los conteos por ruta y el
+# informe de calidad (antes: más de diez consultas, varias repetidas).
+_PROFILE_TTL = 300
 
 
 @st.cache_resource
@@ -65,20 +67,18 @@ def _fetch_columns(_db, columns: tuple, days: int):
     return _db.query_columns(list(columns), days)
 
 
-@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
-def _fetch_all_routes_statistics(_db, hours: int = 24 * 365 * 10):
-    """Ver nota equivalente en operations_dashboard.py. Aquí se usa con una
-    ventana de 10 años porque el uso es distinto: no son alertas en tiempo
-    real, es contar cuántas muestras tiene cada ruta en todo el histórico
-    disponible — get_all_routes_statistics() siempre filtra por fecha
-    (no tiene modo "sin filtro"), así que se pasa un número generosamente
-    grande en vez de un valor que pueda quedarse corto según pase el tiempo."""
-    return _db.get_all_routes_statistics(hours=hours)
+@st.cache_data(ttl=_PROFILE_TTL, show_spinner="Perfilando la base de datos...")
+def _fetch_data_profile(_db):
+    """Perfil de toda la tabla en una sola pasada (ver RouteDatabase.get_data_profile)."""
+    return _db.get_data_profile()
 
 
-@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
-def _fetch_database_summary(_db):
-    return _db.get_database_summary()
+def _routes(db) -> list:
+    """Rutas disponibles como lista de (origen, destino), sacadas del perfil: no cuesta
+    una consulta más. Antes get_available_routes() (un `SELECT DISTINCT` que recorre toda
+    la tabla) se llamaba 4 veces al abrir Analyst."""
+    r = _fetch_data_profile(db)["routes"]
+    return list(zip(r["origin"], r["destination"]))
 
 
 def render_data_explorer():
@@ -86,7 +86,7 @@ def render_data_explorer():
     st.subheader("📊 Raw Data Explorer")
 
     db = get_database()
-    routes = db.get_available_routes()
+    routes = _routes(db)
 
     col1, col2 = st.columns(2)
 
@@ -128,7 +128,7 @@ def render_statistical_tests():
     st.subheader("📈 Statistical Analysis")
 
     db = get_database()
-    routes = db.get_available_routes()
+    routes = _routes(db)
 
     selected_route = st.selectbox(
         "Select Route for Analysis",
@@ -202,19 +202,17 @@ def render_model_performance():
         st.info("Models directory not found — run train_ensemble_models.py to create it.")
 
     # Model comparison
-    # FIX (rendimiento, antes N+1): antes se hacía, por cada ruta,
-    # len(db.query_measurements(origin=X, destination=Y, limit=1000)) — una
-    # consulta separada por ruta solo para contar filas (y con el límite de
-    # 1000, ni siquiera daba el conteo real si una ruta tenía más). La
-    # columna `measurements` de get_all_routes_statistics() ya trae el
-    # conteo exacto (COUNT(*) real, sin tope) para todas las rutas de una vez.
-    stats_df = _fetch_all_routes_statistics(db)
+    # Muestras por ruta: salen del perfil de la base (una sola pasada compartida con el
+    # informe de calidad). Antes: una consulta por ruta con LIMIT 1000 (que ni daba el
+    # conteo real) y luego get_all_routes_statistics() con una ventana de 10 años, un
+    # recorrido completo de la tabla solo para contar filas.
+    profile_routes = _fetch_data_profile(db)["routes"]
     samples_by_route = {
-        (row["origin"], row["destination"]): int(row["measurements"])
-        for _, row in stats_df.iterrows()
+        (row["origin"], row["destination"]): int(row["rows"])
+        for _, row in profile_routes.iterrows()
     }
 
-    routes = db.get_available_routes()
+    routes = _routes(db)
     if routes:
         st.markdown("**Model Metrics by Route**")
         model_data = []
@@ -275,31 +273,20 @@ def render_correlation_matrix():
             st.plotly_chart(fig, width='stretch')
 
 
-@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
-def _fetch_completeness_by_route(_db):
-    """% de completitud (no-nulos) por ruta.
+def _completeness_by_route(db) -> pd.DataFrame:
+    """% de completitud (celdas no vacías) por ruta, sacado del perfil de la base.
 
-    NOTA: mismo caso que _fetch_route_status_grid en operations_dashboard.py
-    — sigue siendo una consulta por ruta (N+1), porque no hay una función
-    agregada existente para "% de nulos por columna, por ruta". Cacheado
-    como mejora inmediata; una consulta agregada de verdad queda pendiente
-    para la siguiente pasada (junto con el status grid de Operations).
+    Antes: una consulta por ruta (`LIMIT 1000`, 12 en total; ~33 s en el bind mount de
+    Windows de Docker) sobre una muestra de las 1.000 filas más recientes y contando
+    también `id`, `polyline` y `created_at`. Ahora sale de la misma pasada que el resto
+    del informe, sobre TODAS las filas y solo las columnas de medición.
     """
-    routes = _db.get_available_routes()
-    completeness_data = []
-
-    for origin, destination in routes:
-        df = _db.query_measurements(origin=origin, destination=destination, limit=1000)
-        if df.empty:
-            continue
-        completeness = (1 - (df.isna().sum().sum() / (len(df) * len(df.columns)))) * 100
-        completeness_data.append({
-            'Route': f'{origin} → {destination}',
-            'Completeness': f"{completeness:.1f}%",
-            'Records': len(df)
-        })
-
-    return pd.DataFrame(completeness_data)
+    routes = _fetch_data_profile(db)["routes"]
+    return pd.DataFrame({
+        "Route": routes["origin"] + " → " + routes["destination"],
+        "Completeness": routes["completeness_pct"].map(lambda v: f"{v:.1f}%"),
+        "Records": routes["rows"],
+    })
 
 
 def render_data_quality_report():
@@ -307,42 +294,41 @@ def render_data_quality_report():
     st.subheader("✅ Data Quality Report")
 
     db = get_database()
+    profile = _fetch_data_profile(db)
 
     col1, col2, col3, col4 = st.columns(4)
 
-    # Muestra: las `_QUALITY_SAMPLE_ROWS` mediciones más recientes. El total
-    # real sale de la base completa (antes "Total Records" era len(muestra) y
-    # se estancaba en el tope de la consulta).
-    total_records = _fetch_measurements(db, limit=_QUALITY_SAMPLE_ROWS)
-    total = len(total_records)
-    summary = _fetch_database_summary(db)
-
     with col1:
-        st.metric("Total Records", f"{summary.get('total_records', total):,}")
+        st.metric("Total Records", f"{profile['total_rows']:,}")
 
     with col2:
-        missing_pct = (
-            total_records.isna().sum().sum() / (total * len(total_records.columns)) * 100
-            if total else 0.0
-        )
+        missing_pct = profile["missing_pct"]
         st.metric("Missing Values", f"{missing_pct:.1f}%", "✅" if missing_pct < 5 else "⚠️")
 
     with col3:
-        duplicates = total - len(total_records.drop_duplicates())
+        # Filas repetidas para la misma ruta, instante y fuente. La clave UNIQUE de la tabla
+        # debería impedirlas, así que lo normal es 0: es una comprobación de que la
+        # restricción sigue en pie. (La versión anterior contaba duplicados exactos de la
+        # fila entera INCLUYENDO `id`, que es autoincremental, así que daba 0 siempre.)
+        duplicates = profile["duplicates"]
         st.metric("Duplicates", duplicates, "✅" if duplicates == 0 else "⚠️")
 
     with col4:
         # Rango real de la base completa (antes: texto fijo "30+ days").
-        first_ts, last_ts = summary.get("first_timestamp"), summary.get("last_timestamp")
+        first_ts, last_ts = profile["first_timestamp"], profile["last_timestamp"]
         if first_ts and last_ts:
             span_days = (pd.to_datetime(last_ts, utc=True) - pd.to_datetime(first_ts, utc=True)).days
             st.metric("Date Range", f"{span_days} days", f"{str(first_ts)[:10]} → {str(last_ts)[:10]}", delta_color="off")
         else:
             st.metric("Date Range", "sin datos")
 
+    st.caption(
+        f"Calculado sobre **toda** la base en una sola pasada ({len(profile['measurement_columns'])} columnas de "
+        "medición; no se cuentan `id`, `polyline` ni `created_at`). Se refresca cada 5 minutos."
+    )
     # Data completeness by route
     st.markdown("**Completeness by Route**")
-    comp_df = _fetch_completeness_by_route(db)
+    comp_df = _completeness_by_route(db)
     if not comp_df.empty:
         st.dataframe(comp_df, width='stretch', hide_index=True)
 

@@ -52,10 +52,18 @@ def test_include_polyline_la_devuelve_intacta(db):
 
 
 def test_las_demas_columnas_son_exactamente_las_mismas(db):
+    """Sin polyline tampoco se lee created_at (va después de polyline y leerla recorre las
+    páginas de desbordamiento de todas las filas); el resto de columnas no cambia."""
     sin = db.query_measurements(limit=1000)
     con = db.query_measurements(limit=1000, include_polyline=True)
-    assert list(sin.columns) == [c for c in con.columns if c != "polyline"]
-    pd.testing.assert_frame_equal(sin.reset_index(drop=True), con.drop(columns="polyline").reset_index(drop=True))
+    pesadas = ["polyline", "created_at"]
+    assert list(sin.columns) == [c for c in con.columns if c not in pesadas]
+    pd.testing.assert_frame_equal(sin.reset_index(drop=True), con.drop(columns=pesadas).reset_index(drop=True))
+
+
+def test_por_defecto_tampoco_lee_created_at_pero_con_include_polyline_si(db):
+    assert "created_at" not in db.query_measurements(limit=5).columns
+    assert "created_at" in db.query_measurements(limit=5, include_polyline=True).columns
 
 
 def test_los_filtros_y_el_orden_no_cambian(db):
