@@ -105,7 +105,7 @@ BD_BI_TFM/
 │   ├── run_medallion_pipeline.py ← backfill manual de Bronze/Silver/Gold sobre todo el histórico
 │   ├── analytics/                ← paquete: tendencias, impacto del clima, consistencia, series de tiempo, causal
 │   ├── data_warehouse/           ← Bronze / Silver / Gold (arquitectura medallion)
-│   ├── models/                   ← RandomForest + Ensemble (XGBoost/GradientBoosting/Exp. Smoothing)
+│   ├── models/                   ← RandomForest + Ensemble (XGBoost/RandomForest/GradientBoosting; Prophet solo para el pronóstico semanal)
 │   ├── predictor.py              ← orquesta entrenamiento/predicción por ruta
 │   ├── api.py                    ← API REST opcional (FastAPI) sobre analytics/predicciones
 │   └── api_extraction.py, cleaning.py, scheduler.py
@@ -191,7 +191,7 @@ docker compose logs -f nombre_del_servicio   # ej: collector, dashboard, timesca
 
 ### 4. Abrir el dashboard
 
-http://localhost:8501 — con el histórico ya cargado (ver más abajo), deberías ver datos reales desde el primer arranque.
+http://localhost:8501 — si ya tienes el histórico en `data/mobility.db` (ver más abajo), verás datos reales desde el primer arranque; en un clon limpio, el dashboard empieza vacío y se va llenando con cada ciclo del collector.
 
 | Contenedor | Descripción | URL |
 |---|---|---|
@@ -205,7 +205,9 @@ http://localhost:8501 — con el histórico ya cargado (ver más abajo), deberí
 
 Desde la versión endurecida para servidor real (ver `PRODUCTION.md`), `timescaledb`/`pgadmin`/`sqlite-web` solo escuchan en `127.0.0.1` — alcanzables desde tu propia máquina, no desde el resto de la red. Solo `dashboard` se expone hacia afuera.
 
-El histórico ya viene cargado en `data/mobility.db` (47.500+ registros al momento de escribir esto, y creciendo cada ciclo — `SELECT COUNT(*) FROM route_measurements` para el número exacto), así que el dashboard muestra datos reales desde el primer arranque — no hace falta esperar a que el collector junte datos nuevos.
+**El histórico NO viene en el repositorio.** `data/mobility.db` y `data/raw/route_weather_data.csv` están en `.gitignore` (crecen con cada ciclo del collector y pesan cientos de MB), así que un clon limpio los **no trae**: el dashboard arranca vacío y se llena a medida que el collector guarda datos. En la máquina donde se ha venido recolectando, esos archivos sí existen (47.500+ registros cuando se escribió esto y creciendo — `SELECT COUNT(*) FROM route_measurements` para el número exacto).
+
+Para trabajar con el histórico existente en otra máquina, copia a mano `data/mobility.db` (y, si lo necesitas, `data/raw/route_weather_data.csv`) desde la máquina que lo recolectó, con el stack apagado (`docker compose down`) para no copiar la base a mitad de una escritura. Lo único del histórico que sí está versionado son los CSV `data/raw/legacy_*` (snapshots fijos de los repos originales).
 
 Para cargar también el histórico en TimescaleDB (opcional, la tabla `traffic_trips` empieza vacía):
 
@@ -378,7 +380,7 @@ El proyecto separa dependencias en `requirements.txt` (lo mínimo para correr el
 | Correr los tests (`pytest tests/`) | `pip install -r requirements-dev.txt` | `pytest`, `pytest-cov`, `pytest-xdist` |
 | Lint / formato (igual que el CI) | incluido en `requirements-dev.txt` | `flake8`, `pylint`, `black`, `isort`, `mypy` |
 | Levantar la API REST (`src/api.py`) | incluido en `requirements-dev.txt` | `fastapi`, `uvicorn`, `pydantic` |
-| Ensemble ML completo (XGBoost + Exponential Smoothing) | incluido en `requirements-dev.txt` | `xgboost`, `prophet` — **opcionales**: `src/models/ensemble_predictor.py` los detecta con `try/except`; sin ellos, el ensemble usa solo Random Forest + Gradient Boosting |
+| Ensemble ML completo (XGBoost + Random Forest + Gradient Boosting) y pronóstico semanal | incluido en `requirements-dev.txt` | `xgboost`, `prophet` — **opcionales**: `src/models/ensemble_predictor.py` los detecta con `try/except`; sin `xgboost`, el ensemble usa solo Random Forest + Gradient Boosting; `prophet` solo alimenta `forecast_week_ahead()` (sin él, ese pronóstico devuelve un error explícito) |
 | Demografía por zona (`src/demographics_extraction.py`, opcional) | incluido en `requirements-dev.txt` | `datacommons-client` |
 | Generar documentación con Sphinx | incluido en `requirements-dev.txt` | `sphinx`, `sphinx-rtd-theme` |
 | Notebooks / exploración | incluido en `requirements-dev.txt` | `ipython`, `jupyter`, `notebook` |
@@ -450,11 +452,13 @@ Por defecto usa el año más reciente de la serie nacional como objetivo; `--tar
 
 Se dispara automáticamente en cada ciclo del collector (`src/collector.py::_run_incremental_medallion`), solo sobre los registros nuevos de ese ciclo (no reprocesa todo el histórico, por rendimiento). Alimenta `gold_route_kpis` / `gold_route_rankings`, que es lo que lee el dashboard **Executive**.
 
-Para reprocesar todo el histórico desde cero:
+Para procesar todo el histórico de `route_measurements` por las tres capas:
 
 ```bash
 python -m src.run_medallion_pipeline
 ```
+
+El script es **idempotente**: Bronze y Silver ignoran las filas que ya tienen (índice/restricción única sobre `timestamp, origin, destination`) y Gold recalcula cada fecha (`INSERT OR REPLACE`), así que se puede volver a ejecutar sin duplicar. Pero **no borra** lo que ya había: para rehacer las capas realmente desde cero, vacía antes `bronze_measurements`, `silver_measurements`, `gold_route_kpis` y `gold_route_rankings`.
 
 Ver `INTEGRATION_NOTES.md` para el detalle de los bugs que tenía este pipeline en el repo original (mezcla de nombres de columnas, funciones SQL no soportadas por SQLite, restricciones `UNIQUE` faltantes) y cómo se corrigieron.
 
@@ -494,9 +498,11 @@ pytest tests/ -v --cov=src --cov-report=term
 ```
 
 `.github/workflows/tests.yml` corre en cada push/PR a `main`/`develop`:
-1. **`test`**: pytest en Python 3.10/3.11/3.12 + un chequeo explícito de que `src.analytics` (módulo) y `src.analytics.time_series_analysis`/`causal_analysis` (submódulos) importan correctamente — regresión directa contra un bug de estructura que encontramos durante la fusión (ver `INTEGRATION_NOTES.md`)
+1. **`test`**: pytest en Python 3.11/3.12 (Python ≥ 3.11, que es lo que exigen los pines de `requirements.txt`) + un chequeo explícito de que `src.analytics` (módulo) y `src.analytics.time_series_analysis`/`causal_analysis` (submódulos) importan correctamente — regresión directa contra un bug de estructura que encontramos durante la fusión (ver `INTEGRATION_NOTES.md`). Incluye calidad de código:
+   - **Bloqueante**: `flake8 --select=E9,F63,F7,F82` (sintaxis y nombres sin definir) y `pylint --enable=E,F` (errores y fatales). Si fallan, el pipeline falla.
+   - **Informativo** (`continue-on-error`, no bloquea): `flake8` de estilo completo.
 2. **`docker-compose-lint`**: valida `docker-compose.yml` con `docker compose config`
-3. **`lint`**: `black` + `isort`
+3. **`lint`**: `black` + `isort`, **informativos** por ahora (`continue-on-error`): el código actual no está formateado con ellos, así que se muestran como aviso en vez de bloquear. Para volverlos obligatorios: aplicar el formato una vez y quitar `continue-on-error` de `.github/workflows/tests.yml`.
 
 ---
 
@@ -576,7 +582,7 @@ git rm --cached backup.sql backup_.sql
 echo "/backup*.sql" >> .gitignore
 git commit -m "Quitar backups de Postgres del control de versiones"
 ```
-(Los archivos siguen existiendo en tu disco como respaldo local — esto solo los saca de git, no los borra.)
+(Los archivos siguen existiendo en tu disco como respaldo local — esto solo los saca de git, no los borra. Seguirán apareciendo en el historial de commits anteriores; quitarlos de ahí exigiría reescribir el historial.)
 
 ### Archivos que ya no se usan (candidatos a limpiar)
 

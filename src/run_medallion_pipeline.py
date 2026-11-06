@@ -7,13 +7,15 @@ Executive (`streamlit_app/dashboards/executive_dashboard.py`).
 Uso:
     python -m src.run_medallion_pipeline
 
-Es seguro volver a ejecutarlo: Bronze usa INSERT normal (puede duplicar si
-corres sobre las mismas filas dos veces — pensado para correr sobre datos
-nuevos), Silver usa INSERT OR IGNORE (respeta UNIQUE(timestamp, origin,
-destination), no duplica), y Gold usa UNIQUE(date, origin, destination) /
-UNIQUE(date, hour) — si repites una fecha ya calculada, fallará esa fila
-puntual con un error de integridad que el script atrapa y reporta sin
-detener el resto del proceso.
+Es seguro volver a ejecutarlo (idempotente): Bronze y Silver usan INSERT OR
+IGNORE sobre un índice/restricción única (raw_timestamp|timestamp, origin,
+destination), así que reprocesar filas ya vistas no las duplica; Gold usa
+INSERT OR REPLACE sobre UNIQUE(date, origin, destination), por lo que repetir
+una fecha ya calculada la recalcula en lugar de fallar.
+
+Ojo: "idempotente" no es "desde cero". Las filas que ya estaban en
+Bronze/Silver/Gold se conservan (no se borran); si hace falta rehacer las
+capas de verdad, hay que vaciar esas tablas antes de ejecutar este script.
 
 Ver INTEGRATION_NOTES.md para el detalle de los bugs originales que este
 pipeline corrige (bronze_layer.py, silver_layer.py, gold_layer.py).

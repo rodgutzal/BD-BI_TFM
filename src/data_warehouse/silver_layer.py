@@ -2,7 +2,7 @@
 
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Optional
 import sqlite3
@@ -251,21 +251,27 @@ class SilverLayer:
         """Get silver-layer profile for a route."""
         conn = sqlite3.connect(self.db_path)
 
-        query = f"""
-            SELECT
-                hour,
-                day_of_week,
-                AVG(travel_time_min) as avg_time,
-                STDDEV(travel_time_min) as std_time,
-                COUNT(*) as count
+        # SQLite no trae STDDEV() (a diferencia de PostgreSQL): se traen las
+        # filas y la desviación estándar se calcula en pandas, igual que en
+        # aggregate_hourly(). El corte por fecha usa un parámetro ISO 8601
+        # (los timestamps se guardan como '2026-08-17T04:00:40+00:00'), en vez
+        # de datetime('now', ...), que devuelve el formato con espacio y
+        # compara mal contra el separador 'T'.
+        start_time = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        query = """
+            SELECT hour, day_of_week, travel_time_min
             FROM silver_measurements
             WHERE origin = ? AND destination = ?
-            AND timestamp > datetime('now', '-{days} days')
-            GROUP BY hour, day_of_week
+            AND timestamp > ?
         """
 
         try:
-            df = pd.read_sql_query(query, conn, params=(origin, destination))
+            raw = pd.read_sql_query(query, conn, params=(origin, destination, start_time))
+            df = (
+                raw.groupby(['hour', 'day_of_week'])['travel_time_min']
+                .agg(avg_time='mean', std_time='std', count='count')
+                .reset_index()
+            )
             return {
                 'status': 'success',
                 'route': f'{origin} -> {destination}',
