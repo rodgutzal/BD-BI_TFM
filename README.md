@@ -126,13 +126,14 @@ BD_BI_TFM/
 │   │   ├── maps_dashboard.py               ← mapa de rutas (Plotly Scattermapbox) + overlay de POIs
 │   │   └── recommendation_dashboard.py     ← ¿dónde abrir un negocio? — interfaz de src/location_scoring.py para el usuario final
 │   └── legacy_reference/          ← dashboards de los repos originales, NO activos (ver más abajo)
-├── tests/                        ← pytest (locations, database, config, analytics, ensemble, time series)
+├── tests/                        ← pytest, un archivo por módulo o tema; todos documentados: ver la sección "Tests" y docs/TESTS.md (catálogo generado)
 ├── tools/
 │   ├── merge_legacy_data.py      ← script (ya ejecutado) que generó el histórico fusionado
 │   ├── compare_overpass_foursquare.py ← (solo lectura) mide qué tan completo es OpenStreetMap frente a Foursquare, emparejando por nombre y distancia
 │   ├── check_collection_gaps.py  ← (solo lectura) detecta y mide huecos en la recolección de tráfico (cuándo estuvo apagado el stack)
 │   ├── normalize_bronze_timestamps.py ← (ensayo por defecto; `--apply` con respaldo) normaliza los timestamps antiguos de Bronze al formato ISO — ver Troubleshooting
-├── docs/                         ← documentación heredada de urban-mobility-analytics1 (API, research paper)
+│   ├── generate_tests_doc.py     ← genera docs/TESTS.md (catálogo de todos los tests, una línea por test); `--check` verifica que esté al día
+├── docs/                         ← documentación heredada de urban-mobility-analytics1 (API, research paper) + TESTS.md (catálogo de tests, generado)
 ├── .github/workflows/tests.yml   ← CI: tests + lint + validación de docker-compose.yml
 ├── collect.py                    ← wrapper de conveniencia: `python collect.py` == `python -m src.route_extraction`
 ├── docker-compose.yml            ← TimescaleDB + pgAdmin + collector + poi-collector + dashboard + sqlite-web
@@ -514,9 +515,58 @@ Para la capa de producción (TimescaleDB), sigue usando **pgAdmin** (http://loca
 
 ## Testing y CI
 
+### Tests (`tests/`)
+
 ```bash
+pip install -r requirements-dev.txt
 pytest tests/ -v --cov=src --cov-report=term
 ```
+
+**Todos los tests están documentados**, y esa regla se hace cumplir en el CI (ver abajo):
+
+- **Esta tabla**: qué cubre cada archivo, y qué *no* cubre la suite.
+- **[`docs/TESTS.md`](docs/TESTS.md)**: el catálogo completo, **una línea por test** (nombre, número de casos y descripción). Es un archivo **generado**: no se edita a mano, se regenera con `python tools/generate_tests_doc.py`.
+
+Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.db`** (usan bases temporales; la API se apunta a una con `MOBILITY_DB_PATH`); `tests/conftest.py` fija el backend `Agg` de matplotlib (con el backend Tk por defecto, los tests de dashboards con `AppTest` hacían caer a pytest al cerrar).
+
+<!-- tests:inicio -->
+| Archivo | Qué cubre |
+|---|---|
+| `test_analytics.py` | `MobilityAnalytics`: inicialización, *consistency score* (ventana móvil de 24 h) y resumen de la base |
+| `test_api.py` | API REST con `TestClient` y una base temporal: **404** en recursos sin datos (antes salía 400), **422** en parámetros inválidos, caminos felices y `predict` de punta a punta |
+| `test_business_type_classifier.py` | Texto libre en español → categoría de Overpass: "barbería" ≠ "bar", sin coincidencia → `None`, las 140 palabras clave sin choques entre categorías |
+| `test_check_collection_gaps.py` | `tools/check_collection_gaps.py`: detección y medición de huecos de recolección, solo lectura |
+| `test_config.py` | `config.py`: selección de la fuente de datos (ORS/TomTom) y configuración de TimescaleDB |
+| `test_database.py` | `RouteDatabase` básico: inicialización, guardado en CSV y SQLite, consulta de mediciones |
+| `test_database_windows.py` | Consultas de ventana completa sin `LIMIT` (promedio diario, ruta × hora, columnas elegidas) y protección contra inyección SQL |
+| `test_demographics.py` | Población por zona: reconciliado a un año común con la tasa nacional, *upserts* con `COALESCE`, historial |
+| `test_ensemble_predictor.py` | `EnsemblePredictor`: features, entrenamiento, predicción con intervalos de confianza, anomalías, guardar y cargar |
+| `test_foursquare_client.py` | Categorización con nombres reales de Foursquare, `build_search_points` (7 zonas + 20 intermedios = 27 llamadas) y los dos formatos de respuesta |
+| `test_hybrid_scheduler.py` | `HybridScheduler`: cada fuente con su propio reloj, primer ciclo inmediato y cierre por señal |
+| `test_location_scoring.py` | Recomendación de ubicación (MCDA): demanda, competencia, accesibilidad, pesos, zonas sin dato como neutrales y caso de punta a punta |
+| `test_locations.py` | Las 7 ubicaciones y las 12 rutas |
+| `test_medallion.py` | Bronze / Silver / Gold: idempotencia, `get_period_metrics`, resumen ejecutivo con base vacía y el pipeline completo |
+| `test_normalize_bronze_timestamps.py` | `tools/normalize_bronze_timestamps.py`: ensayo sin cambios, aplicar con respaldo, base ocupada, *rollback* y que después el pipeline no duplique |
+| `test_operations_status.py` | `get_latest_per_route` y el estado por ruta de Operations (una ruta sin lectura de tráfico nunca sale en verde) |
+| `test_ors_null_fields.py` | Regresión: campos que vienen `NULL` con `DATA_SOURCE=ors` (el ayudante `_safe`) |
+| `test_predictive_modeling_dashboard.py` | Preparación de datos del modelado: clima ausente (no es "lluvia") y exclusión de filas incompletas |
+| `test_predictive_modeling_ondemand.py` | Modelado bajo demanda con `AppTest`: al abrir no se entrena nada, un botón entrena solo su sección, el de "los cuatro" entrena todo |
+| `test_query_measurements_polyline.py` | `include_polyline` en `query_measurements`: sin la columna pesada por defecto y con ella intacta cuando se pide |
+| `test_recommendation_dashboard.py` | Tabla de Recomendación: cada factor crudo y normalizado; el puntaje es la suma ponderada de lo que se muestra |
+| `test_tests_documentation.py` | Esta regla: `docs/TESTS.md` al día y todos los archivos de test en esta tabla |
+| `test_time_series.py` | `TimeSeriesAnalytics`: descomposición estacional, estacionariedad, autocorrelación, patrones, puntos de cambio |
+<!-- tests:fin -->
+
+**Qué NO cubre la suite** (lo que hoy se comprueba solo a mano o con el CI de otro modo):
+
+- **Docker real**: el CI solo valida la sintaxis de `docker-compose.yml` (`docker compose config`); que el stack arranque, el volumen `./models` y los healthchecks se probaron a mano, no hay test automático.
+- **Servicios externos reales**: ORS, TomTom, OpenWeather, Overpass, Foursquare y Data Commons se prueban con datos simulados, nunca contra la API.
+- **Sin tests propios** (los ejercitan indirectamente, o nada): los clientes `ors_client`, `tomtom_client`, `weather_client` y `poi_client` (solo se importa su catálogo `CATEGORY_TAGS`), el `DataCollector` de punta a punta (solo el `HybridScheduler`), `migration` / `timescale_migration`, `causal_analysis`, `predictor` / `travel_time_model`, los CLI `poi_extraction*`, y los dashboards **Executive**, **Maps** y **Analyst** como pantallas (de Operations, Recomendación y Modelado Predictivo se prueba su lógica).
+- **Render visual** en un navegador real.
+
+**Añadir un test sin dejar la documentación atrás:** escríbelo con un nombre y un docstring descriptivos; si es un archivo nuevo, añade su fila a la tabla de arriba; y regenera el catálogo con `python tools/generate_tests_doc.py`. Si se te olvida, `tests/test_tests_documentation.py` falla en el CI y dice qué falta.
+
+### CI
 
 `.github/workflows/tests.yml` corre en cada push/PR a `main`/`develop`:
 1. **`test`**: pytest en Python 3.11/3.12 (Python ≥ 3.11, que es lo que exigen los pines de `requirements.txt`) + un chequeo explícito de que `src.analytics` (módulo) y `src.analytics.time_series_analysis`/`causal_analysis` (submódulos) importan correctamente — regresión directa contra un bug de estructura que encontramos durante la fusión (ver `INTEGRATION_NOTES.md`). Incluye calidad de código:
