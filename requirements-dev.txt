@@ -32,6 +32,7 @@ mypy>=1.0
 fastapi>=0.104.0
 uvicorn>=0.24.0
 pydantic>=2.0
+httpx>=0.27          # lo necesita fastapi.testclient.TestClient (tests/test_api.py)
 
 # ML ensemble opcionales (src/models/ensemble_predictor.py los detecta con
 # try/except — sin xgboost, el ensemble usa solo Random Forest + Gradient

@@ -3,6 +3,7 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pathlib import Path
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 import pandas as pd
@@ -22,9 +23,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Initialize resources
-DB_PATH = ROOT_DIR / "data" / "mobility.db"
-CSV_PATH = ROOT_DIR / "data" / "raw" / "route_weather_data.csv"
+# Initialize resources. Las rutas se pueden sobreescribir con variables de
+# entorno (MOBILITY_DB_PATH / MOBILITY_CSV_PATH): sirve para apuntar la API a
+# otra base y, sobre todo, para que los tests no toquen data/mobility.db (esta
+# línea se ejecuta al IMPORTAR el módulo, y GoldLayer crea tablas en la base).
+DB_PATH = Path(os.environ.get("MOBILITY_DB_PATH") or ROOT_DIR / "data" / "mobility.db")
+CSV_PATH = Path(os.environ.get("MOBILITY_CSV_PATH") or ROOT_DIR / "data" / "raw" / "route_weather_data.csv")
 
 db = RouteDatabase(CSV_PATH, DB_PATH)
 gold = GoldLayer(DB_PATH)
@@ -99,6 +103,10 @@ async def predict_route(
             "timestamp": end_date.isoformat(),
             "models_used": [name for name, model in predictor.models.items() if model is not None]
         }
+    except HTTPException:
+        # Re-lanzar tal cual: sin esto, el 404 que lanza el propio endpoint lo capturaba
+        # el except Exception de abajo y salia como 400 con detail="404: ...".
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -122,6 +130,10 @@ async def get_route_rankings(days: int = Query(30, ge=1, le=90)):
                 "reliability_score": summary.get('system_reliability')
             }
         }
+    except HTTPException:
+        # Re-lanzar tal cual: sin esto, el 404 que lanza el propio endpoint lo capturaba
+        # el except Exception de abajo y salia como 400 con detail="404: ...".
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -157,6 +169,10 @@ async def forecast_week_ahead(origin: str, destination: str):
             "forecast": forecast,
             "generated_at": datetime.now(timezone.utc).isoformat()
         }
+    except HTTPException:
+        # Re-lanzar tal cual: sin esto, el 404 que lanza el propio endpoint lo capturaba
+        # el except Exception de abajo y salia como 400 con detail="404: ...".
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -192,6 +208,10 @@ async def detect_anomalies(
             "period_days": days,
             "anomalies": anomalies
         }
+    except HTTPException:
+        # Re-lanzar tal cual: sin esto, el 404 que lanza el propio endpoint lo capturaba
+        # el except Exception de abajo y salia como 400 con detail="404: ...".
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -214,6 +234,10 @@ async def get_route_statistics(
             "period_hours": hours,
             "statistics": stats
         }
+    except HTTPException:
+        # Re-lanzar tal cual: sin esto, el 404 que lanza el propio endpoint lo capturaba
+        # el except Exception de abajo y salia como 400 con detail="404: ...".
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -258,6 +282,10 @@ async def time_series_analysis(
             "period_days": days,
             "result": result
         }
+    except HTTPException:
+        # Re-lanzar tal cual: sin esto, el 404 que lanza el propio endpoint lo capturaba
+        # el except Exception de abajo y salia como 400 con detail="404: ...".
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -271,6 +299,10 @@ async def list_routes():
             "total_routes": len(routes),
             "routes": [{"origin": r[0], "destination": r[1]} for r in routes]
         }
+    except HTTPException:
+        # Re-lanzar tal cual: sin esto, el 404 que lanza el propio endpoint lo capturaba
+        # el except Exception de abajo y salia como 400 con detail="404: ...".
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
