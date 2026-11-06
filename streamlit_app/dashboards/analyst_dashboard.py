@@ -448,6 +448,18 @@ def render_full_export():
             disabled=not limit_dates
         )
 
+    include_polyline = st.checkbox(
+        "Incluir la columna `polyline` (geometría de la ruta)",
+        value=True,
+        help=(
+            "Es el 93% del tamaño: con ella el CSV pesa cientos de MB y construirlo necesita "
+            "~14× más memoria (el contenedor del dashboard tiene un límite de 1 GiB). "
+            "Se deja marcada por defecto para que el archivo siga siendo idéntico al de siempre; "
+            "el notebook de la Asignatura 7 hace `select(-polyline)` y la espera. Desmárcala para "
+            "una exportación ligera (en ese caso usa `select(-any_of(\"polyline\"))` en R)."
+        ),
+    )
+
     if st.button("🔄 Generar exportación completa", type="primary"):
         with st.spinner("Consultando la base de datos..."):
             if limit_dates:
@@ -456,10 +468,11 @@ def render_full_export():
                 full_df = db.query_measurements(
                     start_timestamp=start_date.isoformat(),
                     end_timestamp=end_date.isoformat(),
-                    limit=1_000_000
+                    limit=1_000_000,
+                    include_polyline=include_polyline,
                 )
             else:
-                full_df = db.query_measurements(limit=1_000_000)
+                full_df = db.query_measurements(limit=1_000_000, include_polyline=include_polyline)
 
         if full_df.empty:
             st.warning("No hay datos disponibles para el rango seleccionado.")
