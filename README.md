@@ -97,6 +97,8 @@ BD_BI_TFM/
 │   ├── poi_extraction_foursquare.py ← CLI del recolector de Foursquare (opcional, requiere FOURSQUARE_API_KEY)
 │   ├── demographics_client.py       ← cliente Google Data Commons — población por zona, resuelve por NOMBRE (transición a otras ciudades sin tocar código)
 │   ├── demographics_extraction.py   ← CLI del recolector de demografía (opcional, requiere DATACOMMONS_API_KEY; sin servicio Docker propio — correr a mano, la población casi no cambia)
+│   ├── business_type_classifier.py  ← texto libre en español -> categoría de Overpass (para el sistema de recomendación)
+│   ├── location_scoring.py          ← motor de puntuación (MCDA) de zonas para dónde abrir un negocio
 │   ├── database.py               ← capa CSV + SQLite + TimescaleDB (esquema con bug de clima corregido)
 │   ├── collector.py               ← orquestador: recolecta y guarda en las 3 capas + dispara medallion
 │   ├── route_extraction.py       ← CLI del collector (--interval, --source, --hybrid, --no-timescale, --no-medallion)
@@ -132,8 +134,7 @@ BD_BI_TFM/
 │   ├── normalize_bronze_timestamps.py ← (ensayo por defecto; `--apply` con respaldo) normaliza los timestamps antiguos de Bronze al formato ISO — ver Troubleshooting
 ├── docs/                         ← documentación heredada de urban-mobility-analytics1 (API, research paper)
 ├── .github/workflows/tests.yml   ← CI: tests + lint + validación de docker-compose.yml
-├── collect.py                    ← wrapper de conveniencia: `python collect.py` == `python -m src.route_extraction`├── business_type_classifier.py ← (src/) texto libre en español -> categoría de Overpass (para el sistema de recomendación)
-├── location_scoring.py       ← (src/) motor de puntuación (MCDA) de zonas para dónde abrir un negocio
+├── collect.py                    ← wrapper de conveniencia: `python collect.py` == `python -m src.route_extraction`
 ├── docker-compose.yml            ← TimescaleDB + pgAdmin + collector + poi-collector + dashboard + sqlite-web
 ├── Dockerfile                    ← imagen compartida por collector, poi-collector y dashboard
 ├── requirements.txt / requirements-dev.txt
