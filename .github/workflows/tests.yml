@@ -110,6 +110,13 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # docker-compose.yml declara `env_file: .env`, y .env está en .gitignore
+    # (contiene claves reales), así que en el runner no existe y `docker
+    # compose config` fallaba con "env file ... .env not found" antes de
+    # validar nada. Se usa la plantilla, que no tiene secretos.
+    - name: Crear .env desde la plantilla
+      run: cp .env.example .env
+
     - name: Validate docker-compose.yml
       run: docker compose config --quiet
 

@@ -1,6 +1,7 @@
 """Pruebas para el módulo de análisis."""
 
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
 
@@ -27,42 +28,21 @@ def test_consistency_score():
         db = RouteDatabase(csv_path, db_path)
         analytics = MobilityAnalytics(db_path)
 
+        # Timestamps RELATIVOS a "ahora": get_consistency_score(hours=24)
+        # filtra por una ventana móvil, así que con fechas fijas (el test
+        # original usaba 2026-07-19) pasaba solo el día en que se escribió y
+        # fallaba (score 0.0) en cuanto esas fechas quedaban fuera de las 24 h.
+        now = datetime.now(timezone.utc)
+        times = [5.0, 5.1, 5.05, 4.95, 5.15]
         records = [
             {
-                "timestamp": "2026-07-19T00:00:00+00:00",
+                "timestamp": (now - timedelta(minutes=5 * (len(times) - i))).isoformat(),
                 "origin": "Msida",
                 "destination": "Gzira",
-                "travel_time_min": 5.0,
+                "travel_time_min": value,
                 "distance_km": 1.5,
-            },
-            {
-                "timestamp": "2026-07-19T00:05:00+00:00",
-                "origin": "Msida",
-                "destination": "Gzira",
-                "travel_time_min": 5.1,
-                "distance_km": 1.5,
-            },
-            {
-                "timestamp": "2026-07-19T00:10:00+00:00",
-                "origin": "Msida",
-                "destination": "Gzira",
-                "travel_time_min": 5.05,
-                "distance_km": 1.5,
-            },
-            {
-                "timestamp": "2026-07-19T00:15:00+00:00",
-                "origin": "Msida",
-                "destination": "Gzira",
-                "travel_time_min": 4.95,
-                "distance_km": 1.5,
-            },
-            {
-                "timestamp": "2026-07-19T00:20:00+00:00",
-                "origin": "Msida",
-                "destination": "Gzira",
-                "travel_time_min": 5.15,
-                "distance_km": 1.5,
-            },
+            }
+            for i, value in enumerate(times)
         ]
 
         db.save_records_to_sqlite(records)
