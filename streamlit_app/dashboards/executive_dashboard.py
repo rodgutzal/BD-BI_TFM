@@ -43,23 +43,22 @@ def get_gold_layer():
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
-def _fetch_recent_measurements(_db, days: int):
-    """Trae las mediciones de los últimos `days` días.
+def _fetch_daily_average(_db, days: int):
+    """Promedio diario de tiempo de viaje de los últimos `days` días,
+    agregado en SQL.
 
-    FIX (rendimiento): antes, render_trend_chart y render_distribution_chart
-    ejecutaban esta MISMA consulta por separado (dos round-trips idénticos a
-    SQLite en cada render). Al compartir este helper cacheado, la segunda
-    llamada con los mismos argumentos devuelve el resultado ya cacheado sin
-    volver a tocar la base — y ninguna de las dos vuelve a consultar en cada
-    clic/interacción dentro de la ventana de `_CACHE_TTL` segundos.
+    FIX: antes se traían las mediciones con `query_measurements(limit=10000)`
+    —que devuelve las 10.000 MÁS RECIENTES— y se agrupaban por día en pandas.
+    Con ~1.800 filas/día eso eran ~5 días, no los 30 que decía el gráfico.
     """
-    end_date = datetime.now(timezone.utc)
-    start_date = end_date - timedelta(days=days)
-    return _db.query_measurements(
-        start_timestamp=start_date.isoformat(),
-        end_timestamp=end_date.isoformat(),
-        limit=10000,
-    )
+    return _db.get_daily_average(days)
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_travel_times(_db, days: int):
+    """Todos los tiempos de viaje de los últimos `days` días (solo esa
+    columna, sin LIMIT) para el histograma."""
+    return _db.query_columns(["travel_time_min"], days)
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
@@ -160,14 +159,13 @@ def render_trend_chart(days: int = 30):
     """Render 30-day trend chart."""
     db = get_database()
 
-    df = _fetch_recent_measurements(db, days)
+    daily = _fetch_daily_average(db, days)
 
-    if df.empty:
+    if daily.empty:
         st.warning("No data available for trend analysis")
         return
 
-    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
-    daily_avg = df.groupby(df['timestamp'].dt.date)['travel_time_min'].mean()
+    daily_avg = daily.set_index('date')['avg_travel_time']
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -207,7 +205,7 @@ def render_distribution_chart():
     """Render travel time distribution."""
     db = get_database()
 
-    df = _fetch_recent_measurements(db, days=30)
+    df = _fetch_travel_times(db, days=30)
 
     if df.empty:
         st.warning("No data available")

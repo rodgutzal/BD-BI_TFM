@@ -796,6 +796,105 @@ class RouteDatabase:
 
         return df
 
+    # ------------------------------------------------------------------
+    # Consultas de ventana completa (sin LIMIT)
+    #
+    # query_measurements() ordena de la más reciente a la más antigua y corta
+    # en `limit` filas. Los dashboards lo usaban con limit=10000 para
+    # gráficos de "30 días" y "7 días", pero con recolección continua (~1.800
+    # filas/día) 10.000 filas son ~5 días: el gráfico decía cubrir 30 días
+    # y mostraba solo los más recientes, sin avisar. Estos métodos agregan en
+    # SQL (devuelven una fila por día / por ruta-hora, no por medición) o
+    # traen solo las columnas necesarias, así la ventana pedida se cubre
+    # entera sin importar cuántas filas haya.
+    # ------------------------------------------------------------------
+
+    def _window_start(self, days: int) -> str:
+        return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+    def get_daily_average(self, days: int = 30) -> pd.DataFrame:
+        """Tiempo de viaje promedio por día (UTC) de las últimas `days` días,
+        sobre todas las rutas. Columnas: date, avg_travel_time, measurements."""
+        self.init_sqlite()
+        conn = self._connect()
+        try:
+            return pd.read_sql_query(
+                """
+                SELECT substr(timestamp, 1, 10) AS date,
+                       AVG(travel_time_min)     AS avg_travel_time,
+                       COUNT(travel_time_min)   AS measurements
+                FROM route_measurements
+                WHERE timestamp >= ? AND travel_time_min IS NOT NULL
+                GROUP BY substr(timestamp, 1, 10)
+                ORDER BY date
+                """,
+                conn, params=[self._window_start(days)],
+            )
+        except pd.errors.DatabaseError as e:
+            logger.error(f"Daily average query error: {e}")
+            return pd.DataFrame()
+        finally:
+            conn.close()
+
+    def get_route_hour_average(self, days: int = 7) -> pd.DataFrame:
+        """Tiempo de viaje promedio por ruta y hora del día (UTC) en las
+        últimas `days` días. Columnas: origin, destination, hour (0-23),
+        avg_travel_time, measurements."""
+        self.init_sqlite()
+        conn = self._connect()
+        try:
+            return pd.read_sql_query(
+                """
+                SELECT origin, destination,
+                       CAST(strftime('%H', timestamp) AS INTEGER) AS hour,
+                       AVG(travel_time_min)                       AS avg_travel_time,
+                       COUNT(travel_time_min)                     AS measurements
+                FROM route_measurements
+                WHERE timestamp >= ? AND travel_time_min IS NOT NULL
+                GROUP BY origin, destination, strftime('%H', timestamp)
+                ORDER BY origin, destination, hour
+                """,
+                conn, params=[self._window_start(days)],
+            )
+        except pd.errors.DatabaseError as e:
+            logger.error(f"Route-hour average query error: {e}")
+            return pd.DataFrame()
+        finally:
+            conn.close()
+
+    def get_numeric_columns(self) -> List[str]:
+        """Columnas numéricas (REAL/INTEGER) de route_measurements, sin `id`."""
+        self.init_sqlite()
+        conn = self._connect()
+        try:
+            return [
+                row[1] for row in conn.execute("PRAGMA table_info(route_measurements)")
+                if row[2].upper() in ("REAL", "INTEGER") and row[1] != "id"
+            ]
+        finally:
+            conn.close()
+
+    def query_columns(self, columns: List[str], days: int) -> pd.DataFrame:
+        """Solo las `columns` pedidas de TODAS las mediciones de las últimas
+        `days` días (sin LIMIT). Los nombres se validan contra el esquema real
+        antes de armar el SQL."""
+        self.init_sqlite()
+        conn = self._connect()
+        try:
+            valid = {row[1] for row in conn.execute("PRAGMA table_info(route_measurements)")}
+            unknown = [c for c in columns if c not in valid]
+            if unknown:
+                raise ValueError(f"Columnas desconocidas en route_measurements: {unknown}")
+            if not columns:
+                return pd.DataFrame()
+            select = ", ".join(f'"{c}"' for c in columns)
+            return pd.read_sql_query(
+                f"SELECT {select} FROM route_measurements WHERE timestamp >= ?",
+                conn, params=[self._window_start(days)],
+            )
+        finally:
+            conn.close()
+
     def export_route_data(
         self,
         origin: str,
