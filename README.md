@@ -225,6 +225,8 @@ docker compose down
 
 Esto detiene y elimina los contenedores **sin tocar los datos** (los volúmenes de TimescaleDB y `data/mobility.db` persisten). Nunca agregues `-v` a menos que quieras borrar todo el histórico a propósito.
 
+> ⚠️ **Después de un `down` (o de un `stop`) el stack no vuelve solo**, ni siquiera reiniciando el equipo: los servicios tienen `restart: unless-stopped`, y esa política respeta una parada manual. Hay que volver a levantarlo con `docker compose up -d`. Si no, la recolección queda parada sin ningún aviso (ver "Huecos de recolección" en Troubleshooting).
+
 ---
 
 ## Acceso remoto para el equipo (Tailscale)
@@ -715,6 +717,37 @@ La herramienta (solo lectura) indica cuándo llegó el último dato, avisa si ho
 **Solución:** `docker compose up -d`.
 
 **Lo que mostró el historial** (datos hasta el 28-sep, desde que la recolección es continua, el 16-ago): 7 huecos de más de 2 h que suman 9,1 días, el 21% de la ventana. Dos duran varios días (3,4 y 2,8) y cuatro duran entre 12 y 20 h y empiezan entre las 03:00 y las 05:00 UTC, un patrón compatible con que el equipo anfitrión se apague o suspenda de noche.
+
+#### Huecos de recolección: cuánto se pierde, por qué y qué opciones hay
+
+**Medición actualizada (6-nov-2026, 82 días desde el 16-ago):** la recolección corrió el **55%** de los ciclos esperados (6.765 de unos 12.300; ORS cada 15 min + TomTom cada 27 min). Hay 22 huecos de más de 2 h que suman **39 días, el 47,5% de la ventana** (la cifra del 21% de arriba era de finales de septiembre). Por tipo:
+
+| Tipo | Cantidad | Tiempo sin datos | Qué parece |
+|---|---|---|---|
+| Cortos (< 24 h) | 15 | 9,3 días (mediana 16 h) | Equipo apagado por las noches: empiezan sobre las 21–23 h locales (03–05 UTC) y terminan sobre las 10–11 h (16–17 UTC) |
+| Medios (1 a 3 días) | 4 | 6,8 días | Paradas puntuales / fines de semana |
+| Largos (> 3 días) | 3 | 23 días (el mayor, 15,8 días: del 7 al 22 de octubre) | Equipo o stack apagado varios días |
+
+**Por qué ocurre (en el equipo anfitrión actual):** es un sobremesa con Windows en plan *Balanced* y con la suspensión por inactividad, estando enchufado, en **0 (nunca)**: no se duerme solo, así que las noches sin datos son apagados o suspensiones manuales. Docker Desktop sí arranca con Windows (`AutoStart`). Pero el stack solo vuelve si no se detuvo a mano: `restart: unless-stopped` **no** reinicia lo que se paró manualmente, y `docker compose down` además elimina los contenedores. Un `down` o `stop` sin el `up -d` posterior es la explicación más probable de los huecos medios y largos (es una hipótesis: los datos muestran *cuándo* se para la recolección, no *por qué*). Para comprobar la configuración en tu equipo:
+
+```powershell
+powercfg /getactivescheme                                   # plan de energía activo
+powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE        # suspensión por inactividad (0 = nunca)
+docker compose ps                                           # ¿está arriba el collector?
+```
+
+**Lo que NO se puede hacer:** recuperar los datos perdidos. Las APIs de tráfico (ORS, TomTom) y de clima entregan solo el estado *de ahora*; no existe un histórico al que pedir lo que faltó.
+
+**Opciones para reducir los huecos futuros** (de menor a mayor esfuerzo; ninguna está implementada en el repo, es decisión de quien opera el stack):
+
+| Opción | Qué arregla | Qué no arregla |
+|---|---|---|
+| Disciplina: tras cualquier `down`/`stop`, `docker compose up -d` de inmediato; revisar con `docker compose ps` o el aviso del dashboard (lateral) | Huecos medios y largos por olvido | Noches con el equipo apagado |
+| Tarea programada de Windows (al iniciar sesión: esperar a Docker y ejecutar `docker compose up -d` en la carpeta del repo) | Que el stack vuelva solo tras cada arranque aunque se haya hecho `down` | Noches con el equipo apagado |
+| Dejar el equipo encendido 24/7 (y sin suspender/hibernar manualmente) | Los huecos nocturnos | Cortes de luz y reinicios de Windows Update |
+| Mover el stack a una máquina siempre encendida (servidor, Raspberry Pi, VM en la nube): mismo `docker-compose.yml` y `.env`, y copiar `data/` | Todos, es la única que da cobertura continua | Requiere una máquina y migrar la base |
+
+**Cómo saber si está recolectando:** el panel lateral del dashboard muestra la hora del último dato y avisa en amarillo si pasan más de 60 min sin datos nuevos; `docker compose ps`; y `tools/check_collection_gaps.py` para medir los huecos.
 
 **Consecuencia para los análisis:** las horas sin datos **no deben rellenarse** (ni con `ffill` ni interpolando). El notebook de la Asignatura 7 rellenaba con el último valor conocido: eso fabricó 110 de 337 horas (un tercio de la serie) y el RMSE del modelo temporal salía 0,016; sin horas inventadas es 0,025. Corregido en ambos notebooks.
 
