@@ -317,11 +317,21 @@ class GoldLayer:
 
             rankings = pd.read_sql_query(rankings_query, conn)
 
+            # AVG()/SUM() sobre una tabla sin filas en el periodo devuelven
+            # NULL (NaN en pandas), y float(NaN)/int(NaN) revientan: antes, en
+            # una base recién creada (un clon limpio, sin histórico) el
+            # dashboard Executive mostraba "Error loading summary data". Los
+            # valores nulos se leen como 0.
+            def _num(column, cast):
+                if summary_df.empty or pd.isna(summary_df[column].iloc[0]):
+                    return cast(0)
+                return cast(summary_df[column].iloc[0])
+
             return {
-                'system_avg_travel_time': float(summary_df['system_avg_travel_time'].iloc[0]) if not summary_df.empty else 0,
-                'system_reliability': float(summary_df['system_reliability'].iloc[0]) if not summary_df.empty else 0,
-                'total_routes': int(summary_df['route_count'].iloc[0]) if not summary_df.empty else 0,
-                'total_measurements': int(summary_df['total_measurements'].iloc[0]) if not summary_df.empty else 0,
+                'system_avg_travel_time': _num('system_avg_travel_time', float),
+                'system_reliability': _num('system_reliability', float),
+                'total_routes': _num('route_count', int),
+                'total_measurements': _num('total_measurements', int),
                 'best_routes': rankings.head(3).to_dict('records'),
                 'worst_routes': rankings.tail(3).to_dict('records')
             }
