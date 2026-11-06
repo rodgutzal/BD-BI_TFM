@@ -16,6 +16,12 @@ from src.database import RouteDatabase
 from src.analytics import MobilityAnalytics
 from src.data_warehouse.gold_layer import GoldLayer
 
+# TTL corto pero no-cero: el collector escribe cada 15-27 min (modo híbrido),
+# así que no hace falta re-consultar en cada clic/interacción para "sentirse"
+# en vivo — 60s balancea frescura real vs. no golpear SQLite en cada rerun
+# de Streamlit (que re-ejecuta todo el script en cada interacción).
+_CACHE_TTL = 60
+
 
 @st.cache_resource
 def get_database():
@@ -34,6 +40,31 @@ def get_analytics():
 def get_gold_layer():
     DB_PATH = ROOT_DIR / "data" / "mobility.db"
     return GoldLayer(DB_PATH)
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_recent_measurements(_db, days: int):
+    """Trae las mediciones de los últimos `days` días.
+
+    FIX (rendimiento): antes, render_trend_chart y render_distribution_chart
+    ejecutaban esta MISMA consulta por separado (dos round-trips idénticos a
+    SQLite en cada render). Al compartir este helper cacheado, la segunda
+    llamada con los mismos argumentos devuelve el resultado ya cacheado sin
+    volver a tocar la base — y ninguna de las dos vuelve a consultar en cada
+    clic/interacción dentro de la ventana de `_CACHE_TTL` segundos.
+    """
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days)
+    return _db.query_measurements(
+        start_timestamp=start_date.isoformat(),
+        end_timestamp=end_date.isoformat(),
+        limit=10000,
+    )
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_executive_summary(_gold, days: int):
+    return _gold.get_executive_summary(days=days)
 
 
 def render_kpi_cards(summary: dict):
@@ -98,17 +129,8 @@ def render_route_performance(best_routes, worst_routes):
 def render_trend_chart(days: int = 30):
     """Render 30-day trend chart."""
     db = get_database()
-    analytics = get_analytics()
 
-    # Get trend data
-    end_date = datetime.now(timezone.utc)
-    start_date = end_date - timedelta(days=days)
-
-    df = db.query_measurements(
-        start_timestamp=start_date.isoformat(),
-        end_timestamp=end_date.isoformat(),
-        limit=10000
-    )
+    df = _fetch_recent_measurements(db, days)
 
     if df.empty:
         st.warning("No data available for trend analysis")
@@ -155,14 +177,7 @@ def render_distribution_chart():
     """Render travel time distribution."""
     db = get_database()
 
-    end_date = datetime.now(timezone.utc)
-    start_date = end_date - timedelta(days=30)
-
-    df = db.query_measurements(
-        start_timestamp=start_date.isoformat(),
-        end_timestamp=end_date.isoformat(),
-        limit=10000
-    )
+    df = _fetch_recent_measurements(db, days=30)
 
     if df.empty:
         st.warning("No data available")
@@ -206,7 +221,7 @@ def main():
 
     # Get summary
     gold = get_gold_layer()
-    summary = gold.get_executive_summary(days=30)
+    summary = _fetch_executive_summary(gold, days=30)
 
     if 'error' in summary:
         st.error("Error loading summary data")

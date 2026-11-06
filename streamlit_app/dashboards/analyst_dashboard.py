@@ -16,6 +16,13 @@ from src.analytics import MobilityAnalytics
 from src.analytics.time_series_analysis import TimeSeriesAnalytics
 from streamlit_app.dashboards import predictive_modeling_dashboard
 
+# Ver nota en executive_dashboard.py: mismo TTL, misma razón. Especialmente
+# importante aquí: st.tabs() ejecuta el contenido de las 7 pestañas en CADA
+# rerun (Streamlit no salta el código de una pestaña solo porque no esté
+# visible), así que sin caché, cualquier interacción en cualquier pestaña
+# re-dispara las consultas de las 7 a la vez.
+_CACHE_TTL = 60
+
 
 @st.cache_resource
 def get_database():
@@ -28,6 +35,30 @@ def get_database():
 def get_analytics():
     DB_PATH = ROOT_DIR / "data" / "mobility.db"
     return MobilityAnalytics(DB_PATH)
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_measurements(_db, origin=None, destination=None, days=None, limit=10000):
+    """Helper cacheado genérico para query_measurements. `days=None` trae
+    sin filtro de fecha (usa el `limit` como único tope)."""
+    kwargs = {"origin": origin, "destination": destination, "limit": limit}
+    if days is not None:
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=days)
+        kwargs["start_timestamp"] = start_date.isoformat()
+        kwargs["end_timestamp"] = end_date.isoformat()
+    return _db.query_measurements(**kwargs)
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_all_routes_statistics(_db, hours: int = 24 * 365 * 10):
+    """Ver nota equivalente en operations_dashboard.py. Aquí se usa con una
+    ventana de 10 años porque el uso es distinto: no son alertas en tiempo
+    real, es contar cuántas muestras tiene cada ruta en todo el histórico
+    disponible — get_all_routes_statistics() siempre filtra por fecha
+    (no tiene modo "sin filtro"), así que se pasa un número generosamente
+    grande en vez de un valor que pueda quedarse corto según pase el tiempo."""
+    return _db.get_all_routes_statistics(hours=hours)
 
 
 def render_data_explorer():
@@ -51,16 +82,7 @@ def render_data_explorer():
 
     if selected_route:
         origin, destination = selected_route
-        end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=days)
-
-        df = db.query_measurements(
-            origin=origin,
-            destination=destination,
-            start_timestamp=start_date.isoformat(),
-            end_timestamp=end_date.isoformat(),
-            limit=10000
-        )
+        df = _fetch_measurements(db, origin=origin, destination=destination, days=days)
 
         if not df.empty:
             st.dataframe(df, width='stretch', height=400)
@@ -93,16 +115,7 @@ def render_statistical_tests():
 
     if selected_route:
         origin, destination = selected_route
-        end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=30)
-
-        df = db.query_measurements(
-            origin=origin,
-            destination=destination,
-            start_timestamp=start_date.isoformat(),
-            end_timestamp=end_date.isoformat(),
-            limit=10000
-        )
+        df = _fetch_measurements(db, origin=origin, destination=destination, days=30)
 
         if not df.empty and len(df) > 10:
             ts_analysis = TimeSeriesAnalytics(df)
@@ -164,6 +177,18 @@ def render_model_performance():
         st.info("Models directory not found — run train_ensemble_models.py to create it.")
 
     # Model comparison
+    # FIX (rendimiento, antes N+1): antes se hacía, por cada ruta,
+    # len(db.query_measurements(origin=X, destination=Y, limit=1000)) — una
+    # consulta separada por ruta solo para contar filas (y con el límite de
+    # 1000, ni siquiera daba el conteo real si una ruta tenía más). La
+    # columna `measurements` de get_all_routes_statistics() ya trae el
+    # conteo exacto (COUNT(*) real, sin tope) para todas las rutas de una vez.
+    stats_df = _fetch_all_routes_statistics(db)
+    samples_by_route = {
+        (row["origin"], row["destination"]): int(row["measurements"])
+        for _, row in stats_df.iterrows()
+    }
+
     routes = db.get_available_routes()
     if routes:
         st.markdown("**Model Metrics by Route**")
@@ -172,7 +197,7 @@ def render_model_performance():
             model_data.append({
                 'Route': f'{origin} → {destination}',
                 'Model Status': '✅ Trained' if any(m for m in model_files if f"{origin}_{destination}" in m.name) else '❌ Not Trained',
-                'Samples': len(db.query_measurements(origin=origin, destination=destination, limit=1000))
+                'Samples': samples_by_route.get((origin, destination), 0)
             })
 
         if model_data:
@@ -188,15 +213,7 @@ def render_correlation_matrix():
     st.subheader("📊 Feature Correlation Analysis")
 
     db = get_database()
-
-    end_date = datetime.now(timezone.utc)
-    start_date = end_date - timedelta(days=30)
-
-    df = db.query_measurements(
-        start_timestamp=start_date.isoformat(),
-        end_timestamp=end_date.isoformat(),
-        limit=10000
-    )
+    df = _fetch_measurements(db, days=30)
 
     if not df.empty:
         # Select numeric columns
@@ -230,6 +247,33 @@ def render_correlation_matrix():
             st.plotly_chart(fig, width='stretch')
 
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_completeness_by_route(_db):
+    """% de completitud (no-nulos) por ruta.
+
+    NOTA: mismo caso que _fetch_route_status_grid en operations_dashboard.py
+    — sigue siendo una consulta por ruta (N+1), porque no hay una función
+    agregada existente para "% de nulos por columna, por ruta". Cacheado
+    como mejora inmediata; una consulta agregada de verdad queda pendiente
+    para la siguiente pasada (junto con el status grid de Operations).
+    """
+    routes = _db.get_available_routes()
+    completeness_data = []
+
+    for origin, destination in routes:
+        df = _db.query_measurements(origin=origin, destination=destination, limit=1000)
+        if df.empty:
+            continue
+        completeness = (1 - (df.isna().sum().sum() / (len(df) * len(df.columns)))) * 100
+        completeness_data.append({
+            'Route': f'{origin} → {destination}',
+            'Completeness': f"{completeness:.1f}%",
+            'Records': len(df)
+        })
+
+    return pd.DataFrame(completeness_data)
+
+
 def render_data_quality_report():
     """Data quality report."""
     st.subheader("✅ Data Quality Report")
@@ -238,7 +282,7 @@ def render_data_quality_report():
 
     col1, col2, col3, col4 = st.columns(4)
 
-    total_records = db.query_measurements(limit=100000)
+    total_records = _fetch_measurements(db, limit=100000)
     total = len(total_records)
 
     with col1:
@@ -257,20 +301,8 @@ def render_data_quality_report():
 
     # Data completeness by route
     st.markdown("**Completeness by Route**")
-    routes = db.get_available_routes()
-    completeness_data = []
-
-    for origin, destination in routes:
-        df = db.query_measurements(origin=origin, destination=destination, limit=1000)
-        completeness = (1 - (df.isna().sum().sum() / (len(df) * len(df.columns)))) * 100
-        completeness_data.append({
-            'Route': f'{origin} → {destination}',
-            'Completeness': f"{completeness:.1f}%",
-            'Records': len(df)
-        })
-
-    if completeness_data:
-        comp_df = pd.DataFrame(completeness_data)
+    comp_df = _fetch_completeness_by_route(db)
+    if not comp_df.empty:
         st.dataframe(comp_df, width='stretch', hide_index=True)
 
 
@@ -311,6 +343,10 @@ def render_sql_query():
         ),
         "Tablas disponibles": (
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+        ),
+        "POIs de Foursquare por categoría": (
+            "SELECT category, COUNT(*) AS n\nFROM pois_foursquare\n"
+            "GROUP BY category\nORDER BY n DESC;"
         ),
     }
 

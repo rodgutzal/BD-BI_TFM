@@ -175,6 +175,44 @@ services:
     networks:
       - mobility-network
 
+  # Foursquare Places API — COMPLEMENTARIO a poi-collector (Overpass), no un
+  # reemplazo: refina la categoría genérica "business" de Overpass con
+  # categorías más ricas (restaurant, retail, services, entertainment). No
+  # vuelve a pedir escuelas/hospitales/malls, que Overpass ya cubre.
+  #
+  # Usa `profiles` a propósito: sin esto, este servicio arrancaría con un
+  # simple `docker compose up` aunque nadie haya configurado
+  # FOURSQUARE_API_KEY, y entraría en un loop de crash-restart infinito
+  # (poi_extraction_foursquare.py aborta si la key no está). Con el
+  # profile, se queda apagado por defecto y solo corre si se pide
+  # explícitamente:
+  #   docker compose --profile foursquare up -d poi-collector-foursquare
+  poi-collector-foursquare:
+    profiles: ["foursquare"]
+    build: .
+    container_name: movilidad-poi-collector-foursquare
+    command: python -m src.poi_extraction_foursquare --interval-hours 168
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - mobility-network
+
   # Dashboard Streamlit (streamlit_app/app.py: selector Executive /
   # Operations / Analyst). Lee de ./data/mobility.db (SQLite), no de
   # TimescaleDB directamente.
