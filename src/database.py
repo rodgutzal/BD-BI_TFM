@@ -207,13 +207,29 @@ class RouteDatabase:
         destination: Optional[str] = None,
         start_timestamp: Optional[str] = None,
         end_timestamp: Optional[str] = None,
-        limit: int = 1000
+        limit: int = 1000,
+        include_polyline: bool = False,
     ) -> pd.DataFrame:
-        """Consulta mediciones del SQLite con filtros opcionales."""
+        """Consulta mediciones del SQLite con filtros opcionales.
+
+        `include_polyline=False` (por defecto) NO carga la columna `polyline`: es
+        el JSON de la geometría de cada ruta (~4,5 KB por fila) y representa el
+        93% del tamaño en memoria de la tabla (medido sobre la base real: 339 de
+        365 MB con 78.561 filas; sin ella, 25 MB). Ningún dashboard activo la usa,
+        y cargarla era lo que agotaba el límite de 1 GiB del contenedor del
+        dashboard al abrir Analyst. Pasar `include_polyline=True` solo si de
+        verdad se necesita (p. ej. la exportación completa a CSV).
+        """
         self.init_sqlite()
         conn = self._connect()
 
-        query = "SELECT * FROM route_measurements WHERE 1=1"
+        if include_polyline:
+            select_list = "*"
+        else:
+            columns = [row[1] for row in conn.execute("PRAGMA table_info(route_measurements)")]
+            select_list = ", ".join(f'"{c}"' for c in columns if c != "polyline")
+
+        query = f"SELECT {select_list} FROM route_measurements WHERE 1=1"
         params = []
 
         if origin:
@@ -943,7 +959,9 @@ class RouteDatabase:
     ) -> bool:
         """Exporta datos de una ruta a CSV."""
         try:
-            df = self.query_measurements(origin, destination, limit=10000)
+            # include_polyline=True: se conserva lo que exportaba antes (el CSV
+            # completo, con la geometría de la ruta).
+            df = self.query_measurements(origin, destination, limit=10000, include_polyline=True)
 
             if df.empty:
                 logger.warning(f"No data found for {origin} → {destination}")
