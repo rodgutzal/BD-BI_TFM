@@ -1,5 +1,15 @@
 #!/usr/bin/env python
-"""Setup script for Urban Mobility Analytics."""
+"""Setup script for Urban Mobility Analytics.
+
+El proyecto está pensado para ejecutarse DESDE EL CLON del repositorio (o con
+Docker): `src/` calcula sus rutas de datos (`data/`, `logs/`) respecto a la
+raíz del repo. Por eso, para usar los comandos de consola de abajo, instala en
+modo editable:
+
+    pip install -e .
+
+Con una instalación normal (no editable) esas rutas apuntarían a site-packages.
+"""
 
 from setuptools import setup, find_packages
 
@@ -12,18 +22,21 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 setup(
     name="urban-mobility-analytics",
     version="1.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Equipo BD-BI TFM (MBDIB)",
     description="Real-time traffic and weather monitoring dashboard for Malta routes",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/urban-mobility-analytics",
-    packages=find_packages(),
+    url="https://github.com/rodgutzal/BD-BI_TFM",
+    # `tests` no debe instalarse como paquete de nivel superior en site-packages.
+    packages=find_packages(exclude=["tests", "tests.*"]),
+    # train_models.py vive en la raíz (no dentro de un paquete): sin esto el
+    # comando `urban-mobility-train` apuntaba a un módulo que no se instalaba.
+    py_modules=["train_models"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
-        "License :: OSI Approved :: MIT License",
+        # Sin clasificador de licencia a propósito: el repo no tiene archivo LICENSE.
         "Operating System :: OS Independent",
         "Intended Audience :: Developers",
         "Topic :: Scientific/Engineering :: GIS",
