@@ -81,7 +81,7 @@ def render_real_time_alerts(db):
                 'route': f"{row['origin']} → {row['destination']}",
                 'severity': 'HIGH' if avg_time > 45 else 'MEDIUM',
                 'travel_time': f"{avg_time:.1f} min",
-                'delay': f"{_safe(row.get('avg_delay')):.1f} min"
+                'delay': f"{row.get('avg_delay'):.1f} min" if pd.notna(row.get('avg_delay')) else 'sin dato'
             })
 
     if alerts:
@@ -91,46 +91,82 @@ def render_real_time_alerts(db):
         st.info("✅ No critical alerts")
 
 
+# Una lectura de tráfico más vieja que esto ya no sirve para decir "cómo está
+# ahora": TomTom mide cada 27 min, así que 90 min equivalen a ~3 ciclos perdidos.
+STALE_TRAFFIC_MINUTES = 90
+
+
+def _status_label(delay) -> str:
+    """Color de estado según el retraso por tráfico (min)."""
+    if delay <= 1:
+        return '🟢 Free Flow'
+    if delay <= 4:
+        return '🟡 Moderate'
+    return '🔴 Heavy'
+
+
+def _age_text(ts, now) -> str:
+    minutes = (now - pd.to_datetime(ts, utc=True)).total_seconds() / 60
+    if minutes < 90:
+        return f"hace {max(minutes, 0):.0f} min"
+    if minutes < 60 * 48:
+        return f"hace {minutes / 60:.1f} h"
+    return f"hace {minutes / 1440:.1f} días"
+
+
+def build_route_status_grid(latest: pd.DataFrame, latest_traffic: pd.DataFrame, now=None) -> pd.DataFrame:
+    """Estado por ruta. `latest` = última medición de cada ruta (cualquier
+    fuente); `latest_traffic` = última medición CON dato de tráfico.
+
+    Antes el estado salía de `traffic_delay_min` de la última fila, y `_safe()`
+    convertía el NULL en 0: con ORS —que no reporta tráfico— cualquier ruta
+    cuya última medición fuera de ORS aparecía como "🟢 Free Flow" sin ningún
+    dato que lo respaldara. Ahora el estado se calcula con la última lectura
+    que SÍ tiene tráfico (TomTom), se indica de hace cuánto es, y si no existe
+    o está desactualizada (> STALE_TRAFFIC_MINUTES) se dice, en vez de pintar
+    verde. El tiempo de viaje y la velocidad vienen de la última medición.
+    """
+    now = now if now is not None else pd.Timestamp.now(tz="UTC")
+    traffic_by_route = {
+        (r["origin"], r["destination"]): r for _, r in latest_traffic.iterrows()
+    }
+    rows = []
+    for _, row in latest.iterrows():
+        key = (row["origin"], row["destination"])
+        traffic = traffic_by_route.get(key)
+
+        if traffic is None:
+            status, delay_txt, traffic_txt = '⚪ Sin dato de tráfico', 'sin dato', 'nunca'
+        else:
+            minutes = (now - pd.to_datetime(traffic["timestamp"], utc=True)).total_seconds() / 60
+            traffic_txt = f"{_age_text(traffic['timestamp'], now)} ({traffic['data_source']})"
+            delay_txt = f"{traffic['traffic_delay_min']:.1f} min"
+            status = '⚪ Lectura desactualizada' if minutes > STALE_TRAFFIC_MINUTES else _status_label(traffic['traffic_delay_min'])
+
+        travel = row.get('travel_time_min')
+        speed = row.get('average_speed_kmh')
+        rows.append({
+            'Route': f'{key[0]} → {key[1]}',
+            'Status': status,
+            'Travel Time': f"{travel:.1f} min" if pd.notna(travel) else 'sin dato',
+            'Delay': delay_txt,
+            'Speed': f"{speed:.1f} km/h" if pd.notna(speed) else 'sin dato',
+            'Traffic reading': traffic_txt,
+            'Last measurement': f"{_age_text(row['timestamp'], now)} ({row['data_source']})",
+        })
+    return pd.DataFrame(rows)
+
+
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def _fetch_route_status_grid(_db):
-    """Última medición de cada ruta, con su color de estado.
+    """Última medición de cada ruta y última lectura de tráfico de cada ruta.
 
-    NOTA: esto sigue siendo una consulta por ruta (N+1) — a diferencia de
-    los demás fixes de esta pasada, este caso pide la ÚLTIMA FILA completa
-    de cada ruta (travel_time_min, traffic_delay_min, average_speed_kmh),
-    no un agregado, así que get_all_routes_statistics() no sirve aquí tal
-    cual. La solución de fondo (una función nueva en database.py con
-    GROUP BY + MAX(timestamp) para traer la última fila de cada ruta en una
-    sola consulta) queda pendiente para una siguiente pasada. Cachear esto
-    igual es una mejora real mientras tanto: el N+1 ahora corre una vez por
-    ventana de TTL, no en cada interacción del usuario.
+    Dos consultas en total (antes: una por ruta, N+1), con
+    RouteDatabase.get_latest_per_route().
     """
-    routes = _db.get_available_routes()
-    status_data = []
-
-    for origin, destination in routes:
-        latest = _db.query_measurements(origin=origin, destination=destination, limit=1)
-
-        if not latest.empty:
-            row = latest.iloc[-1]
-            delay = _safe(row.get('traffic_delay_min'))
-
-            if delay <= 1:
-                status = '🟢 Free Flow'
-            elif delay <= 4:
-                status = '🟡 Moderate'
-            else:
-                status = '🔴 Heavy'
-
-            status_data.append({
-                'Route': f'{origin} → {destination}',
-                'Status': status,
-                'Travel Time': f"{row.get('travel_time_min', 0):.1f} min",
-                'Delay': f"{delay:.1f} min",
-                'Speed': f"{row.get('average_speed_kmh', 0):.1f} km/h"
-            })
-
-    return pd.DataFrame(status_data)
+    latest = _db.get_latest_per_route()
+    latest_traffic = _db.get_latest_per_route(require_column='traffic_delay_min')
+    return build_route_status_grid(latest, latest_traffic)
 
 
 def render_route_status_grid(db):

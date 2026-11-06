@@ -627,8 +627,15 @@ Agravante en Analyst: `st.tabs()` en Streamlit ejecuta el contenido de **todas**
 - `@st.cache_data(ttl=60)` en las funciones de obtención de datos de los dashboards (60s: el collector escribe cada 15-27 min, así que no hace falta más frescura que esa).
 - 5 de los 6 bucles por ruta se reemplazaron por una sola llamada a `get_all_routes_statistics()` (que ya existía en `database.py`) — validado que da exactamente los mismos números que el bucle que reemplaza, comparado ruta por ruta contra los datos reales.
 - El conteo de muestras por ruta en Analyst, de paso, quedó más preciso: antes topaba en 1000 (`limit=1000`) aunque una ruta tuviera miles de mediciones; ahora usa el conteo real sin tope.
-- **Pendiente (no resuelto en esta pasada):** `render_route_status_grid` (Operations) sigue haciendo una consulta por ruta, porque necesita la última fila completa de cada una (no un agregado) y no existe todavía una función para eso — candidato para una función nueva `get_latest_per_route()` en `database.py`.
+- **Resuelto después:** `render_route_status_grid` (Operations) era el único que seguía haciendo una consulta por ruta, porque necesita la última fila completa de cada una. Ahora usa `RouteDatabase.get_latest_per_route()` (una consulta con `ROW_NUMBER()`; dos en total: la última medición y la última con dato de tráfico).
 
+### Operations mostraba "🟢 Free Flow" para rutas sin dato de tráfico
+
+**Síntoma:** la tabla *Route Status Overview* pintaba de verde (Free Flow, 0.0 min de retraso) rutas de las que no había ninguna lectura de tráfico.
+
+**Causa:** el estado salía de `traffic_delay_min` de la **última fila** de cada ruta, y `_safe()` convertía el `NULL` en `0`. ORS no reporta tráfico en tiempo real (el 100% de sus filas trae `traffic_delay_min` nulo), así que cualquier ruta cuya última medición fuera de ORS —la fuente más frecuente en el modo híbrido— quedaba "libre" sin ningún dato que lo respaldara.
+
+**Solución:** el estado se calcula con la **última lectura que sí trae tráfico** (TomTom) y la tabla indica de hace cuánto es y de qué fuente (`Traffic reading`), además de la última medición (`Last measurement`). Si una ruta nunca tuvo lectura de tráfico aparece como "⚪ Sin dato de tráfico", y si la última tiene más de 90 min (unos 3 ciclos de TomTom perdidos) como "⚪ Lectura desactualizada" — útil también como aviso de que el collector lleva rato parado. El tiempo de viaje y la velocidad siguen saliendo de la última medición de cualquier fuente.
 ### Foursquare: pizzerías, bistros y otros comercios caían en la categoría `other`
 
 **Síntoma:** en `pois_foursquare`, `other` concentraba ~31% de los POIs (215 de 682), y al mirar `subcategory` la mitad eran comercios de comida (Pizzeria, Bistro, Steakhouse, Burger Joint, Trattoria...). Como el objetivo es medir competencia por tipo de negocio, esto subestimaba `restaurant`.
