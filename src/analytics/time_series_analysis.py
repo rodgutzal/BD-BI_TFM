@@ -132,7 +132,7 @@ class TimeSeriesAnalytics:
 
             # Suavizar con media móvil
             window = min(5, len(series) // 3)
-            smoothed = pd.Series(series).rolling(window=window, center=True).mean().fillna(method='bfill').fillna(method='ffill')
+            smoothed = pd.Series(series).rolling(window=window, center=True).mean().bfill().ffill()
 
             # Calcular derivada (cambio)
             derivatives = np.diff(smoothed)
