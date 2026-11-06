@@ -17,7 +17,7 @@ from src.database import RouteDatabase
 @pytest.fixture
 def sample_data():
     """Create sample traffic data for testing."""
-    dates = pd.date_range(start='2026-01-01', periods=100, freq='1H', tz='UTC')
+    dates = pd.date_range(start='2026-01-01', periods=100, freq='1h', tz='UTC')
     data = {
         'timestamp': dates,
         'origin': ['Msida'] * 100,
@@ -95,7 +95,7 @@ def test_anomaly_detection(sample_data):
 def test_insufficient_data():
     """Test handling of insufficient data."""
     small_data = pd.DataFrame({
-        'timestamp': pd.date_range('2026-01-01', periods=10, freq='1H', tz='UTC'),
+        'timestamp': pd.date_range('2026-01-01', periods=10, freq='1h', tz='UTC'),
         'travel_time_min': [20] * 10
     })
 

@@ -100,8 +100,11 @@ def test_day_of_week_patterns(sample_ts_data):
 
 def test_hourly_patterns():
     """Test hourly pattern analysis."""
-    # Create hourly data
-    dates = pd.date_range(start='2026-01-01', periods=240, freq='1H', tz='UTC')
+    # Create hourly data: 3 días x 24 h = 72 puntos, los mismos que genera el
+    # patrón de abajo (antes pedía 240 fechas contra 72 valores, y el test
+    # fallaba con "All arrays must be of the same length", oculto por el
+    # error de la frecuencia '1H').
+    dates = pd.date_range(start='2026-01-01', periods=72, freq='1h', tz='UTC')
     data = {
         'timestamp': dates,
         'travel_time_min': np.concatenate([
@@ -146,7 +149,7 @@ def test_forecast_summary(sample_ts_data):
 def test_insufficient_data():
     """Test handling of insufficient data."""
     small_data = pd.DataFrame({
-        'timestamp': pd.date_range('2026-01-01', periods=5, freq='1H', tz='UTC'),
+        'timestamp': pd.date_range('2026-01-01', periods=5, freq='1h', tz='UTC'),
         'travel_time_min': [20, 21, 22, 23, 24]
     })
 
