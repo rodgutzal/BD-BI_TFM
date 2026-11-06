@@ -237,7 +237,7 @@ class EnsemblePredictor:
             model.fit(prophet_df)
 
             # Forecast
-            future = model.make_future_dataframe(periods=7 * 24, freq='H')  # 7 días de horas
+            future = model.make_future_dataframe(periods=7 * 24, freq='h')  # 7 días de horas
             forecast = model.predict(future)
 
             # Últimas predicciones (7 días)
