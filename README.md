@@ -129,6 +129,7 @@ BD_BI_TFM/
 │   ├── merge_legacy_data.py      ← script (ya ejecutado) que generó el histórico fusionado
 │   ├── compare_overpass_foursquare.py ← (solo lectura) mide qué tan completo es OpenStreetMap frente a Foursquare, emparejando por nombre y distancia
 │   ├── check_collection_gaps.py  ← (solo lectura) detecta y mide huecos en la recolección de tráfico (cuándo estuvo apagado el stack)
+│   ├── normalize_bronze_timestamps.py ← (ensayo por defecto; `--apply` con respaldo) normaliza los timestamps antiguos de Bronze al formato ISO — ver Troubleshooting
 ├── docs/                         ← documentación heredada de urban-mobility-analytics1 (API, research paper)
 ├── .github/workflows/tests.yml   ← CI: tests + lint + validación de docker-compose.yml
 ├── collect.py                    ← wrapper de conveniencia: `python collect.py` == `python -m src.route_extraction`├── business_type_classifier.py ← (src/) texto libre en español -> categoría de Overpass (para el sistema de recomendación)
@@ -600,6 +601,26 @@ echo "/backup*.sql" >> .gitignore
 git commit -m "Quitar backups de Postgres del control de versiones"
 ```
 (Los archivos siguen existiendo en tu disco como respaldo local — esto solo los saca de git, no los borra. Seguirán apareciendo en el historial de commits anteriores; quitarlos de ahí exigiría reescribir el historial.)
+
+### Bronze se "duplica" la primera vez que se corre `run_medallion_pipeline`
+
+**Síntoma:** al correr `python -m src.run_medallion_pipeline` por primera vez sobre una base que ya tenía datos, `bronze_measurements` crece en miles de filas (medido sobre una copia de la base real: +2.761, de 78.541 a 81.302) aunque `route_measurements` no cambió. Silver y Gold no se ven afectadas; solo se infla Bronze.
+
+**Causa:** un bug antiguo de `bronze_layer.py` guardaba `raw_timestamp` con un **espacio** como separador (`2026-05-25 23:54:03…`) en vez de la `T` del resto del proyecto (`2026-05-25T23:54:03…`). Esas filas siguen en la base y el índice único `idx_bronze_unique` compara texto: ve la fila antigua y la misma medición en formato ISO como distintas, así que el pipeline reinserta esas mediciones como "nuevas".
+
+**Solución:** normalizar esos timestamps **una sola vez**, con el stack apagado (`docker compose down`), usando la herramienta de ensayo/aplicación:
+
+```powershell
+# 1. Ensayo: solo lee y muestra qué haría. No modifica nada.
+python tools/normalize_bronze_timestamps.py
+
+# 2. Aplicar: respaldo consistente + bloqueo exclusivo + verificación; ROLLBACK si algo falla.
+python tools/normalize_bronze_timestamps.py --apply
+```
+
+Qué hace con cada fila de Bronze con separador antiguo: si ya existe la misma medición en ISO, **borra** la antigua (es un duplicado); si varias antiguas coinciden, conserva la de menor `id`; en cualquier otro caso la **renombra** a ISO. Sirve igual **antes** de correr el pipeline (solo renombra) que **después** (también limpia los duplicados que ya se hayan generado). No toca otras tablas, es idempotente, y deja un respaldo `mobility.db.bak-AAAAMMDD-HHMMSS` junto a la base (bórralo a mano cuando verifiques que todo está bien).
+
+**Cómo confirmar que quedó resuelto:** `SELECT COUNT(*) FROM bronze_measurements WHERE raw_timestamp LIKE '____-__-__ %'` debe dar 0, y volver a correr `run_medallion_pipeline` no debe cambiar el conteo de Bronze.
 
 ### Archivos que ya no se usan (candidatos a limpiar)
 
