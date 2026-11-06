@@ -619,7 +619,7 @@ python tools/normalize_bronze_timestamps.py
 python tools/normalize_bronze_timestamps.py --apply
 ```
 
-Qué hace con cada fila de Bronze con separador antiguo: si ya existe la misma medición en ISO, **borra** la antigua (es un duplicado); si varias antiguas coinciden, conserva la de menor `id`; en cualquier otro caso la **renombra** a ISO. Sirve igual **antes** de correr el pipeline (solo renombra) que **después** (también limpia los duplicados que ya se hayan generado). No toca otras tablas, es idempotente, y deja un respaldo `mobility.db.bak-AAAAMMDD-HHMMSS` junto a la base (bórralo a mano cuando verifiques que todo está bien).
+Qué hace con cada fila de Bronze con separador antiguo: si ya existe la misma medición en ISO, **borra** la antigua (es un duplicado); si varias antiguas coinciden, conserva la de menor `id`; en cualquier otro caso la **renombra** a ISO. Sirve igual **antes** de correr el pipeline (solo renombra) que **después** (también limpia los duplicados que ya se hayan generado). No toca otras tablas, es idempotente, y deja un respaldo `mobility.db.bak-AAAAMMDD-HHMMSS` junto a la base (git y Docker lo ignoran; bórralo a mano cuando verifiques que todo está bien). Ojo: si el repo está dentro de OneDrive u otro sincronizador, ese archivo de ~400 MB también se sincroniza.
 
 **Cómo confirmar que quedó resuelto:** `SELECT COUNT(*) FROM bronze_measurements WHERE raw_timestamp LIKE '____-__-__ %'` debe dar 0, y volver a correr `run_medallion_pipeline` no debe cambiar el conteo de Bronze.
 
