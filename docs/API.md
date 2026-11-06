@@ -380,9 +380,14 @@ All errors follow this format:
 | Code | Meaning |
 |------|---------|
 | 200 | Success |
-| 400 | Bad request (invalid parameters) |
-| 404 | Resource not found |
-| 500 | Server error |
+| 400 | The request was valid but processing failed with an unexpected error (`detail` carries the exception message) |
+| 404 | No data for that route, or not enough data for the analysis (e.g. an unknown `origin`/`destination`) |
+| 422 | Invalid or out-of-range parameter, validated by FastAPI (e.g. `days=0`, unknown `analysis`) |
+| 500 | `/api/health` only: the database is unreachable |
+
+> Before this was fixed, a 404 raised inside an endpoint was caught by the generic error handler and came out as a **400** with `detail: "404: ..."`. Clients should rely on the status code, not on parsing `detail`.
+
+To point the API at a different database (for tests, or a copy of the data), set `MOBILITY_DB_PATH` (and optionally `MOBILITY_CSV_PATH`) before starting it.
 
 ---
 
