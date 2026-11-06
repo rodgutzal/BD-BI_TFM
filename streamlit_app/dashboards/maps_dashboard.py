@@ -13,6 +13,8 @@ sys.path.insert(0, str(ROOT_DIR))
 from src.database import RouteDatabase
 from src.locations import LOCATIONS, ROUTES
 
+_CACHE_TTL = 60
+
 
 @st.cache_resource
 def get_database():
@@ -21,11 +23,66 @@ def get_database():
     return RouteDatabase(CSV_PATH, DB_PATH)
 
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_all_routes_statistics(_db, hours: int = 1):
+    """Ver nota equivalente en operations_dashboard.py — mismo fix, mismo
+    método reusado. render_route_map y render_route_status_table hacían,
+    cada una por su cuenta, `for origin, destination in selected_routes:
+    db.get_route_statistics(...)` (una consulta por ruta, x2 funciones)."""
+    return _db.get_all_routes_statistics(hours=hours)
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_pois(_db, categories: tuple):
+    """`categories` como tupla (no lista) para que sea hasheable y sirva de
+    clave de caché. FIX: render_poi_layer() y main() llamaban a
+    db.get_pois(categories=...) por separado con los mismos argumentos —
+    con esto, la segunda llamada reusa el resultado cacheado de la primera."""
+    return _db.get_pois(categories=list(categories))
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_pois_foursquare(_db, categories: tuple):
+    """Equivalente a _fetch_pois pero contra pois_foursquare (tabla
+    separada — ver nota en database.py). Solo tiene datos si se corrió
+    `docker compose --profile foursquare up -d poi-collector-foursquare`
+    con FOURSQUARE_API_KEY configurada."""
+    return _db.get_pois_foursquare(categories=list(categories))
+
+
+# Categorías de infraestructura vía Overpass API (OpenStreetMap) — sin API
+# key, siempre disponibles si se corrió poi-collector.
 POI_CATEGORY_STYLE = {
     "school": {"color": "#3498db", "label": "🎓 Escuelas"},
     "hospital": {"color": "#e74c3c", "label": "🏥 Salud"},
     "mall": {"color": "#9b59b6", "label": "🛍️ Centros comerciales"},
-    "business": {"color": "#f39c12", "label": "🏢 Negocios"},
+    "business": {"color": "#f39c12", "label": "🏢 Comercios y oficinas"},
+    "food_drink": {"color": "#d35400", "label": "🍽️ Restauración y bares"},
+    "leisure": {"color": "#c2185b", "label": "🎭 Ocio y cultura"},
+    "sport": {"color": "#27ae60", "label": "🏋️ Deporte"},
+}
+
+# Categorías de Overpass marcadas por defecto. Las tres más nuevas
+# (food_drink/leisure/sport) suman miles de puntos: se ofrecen en el
+# selector pero arrancan apagadas, para no cambiar en silencio lo que se ve
+# ni recargar el mapa sin que el usuario lo pida.
+OVERPASS_DEFAULT_CATEGORIES = ["school", "hospital", "mall", "business"]
+
+# Categorías de negocio vía Foursquare Places API — COMPLEMENTARIAS a las de
+# arriba (misma idea: refinan "business"), opcionales, requieren
+# FOURSQUARE_API_KEY. Se muestran TODAS las que devuelva Foursquare, sin
+# excluir nada — incluye baldes que se solapan a propósito con los de
+# Overpass (school/health/mall), para poder comparar cobertura entre
+# fuentes si se quiere.
+POI_CATEGORY_STYLE_FOURSQUARE = {
+    "restaurant": {"color": "#d35400", "label": "🍽️ Restaurantes"},
+    "retail": {"color": "#16a085", "label": "🛒 Retail"},
+    "services": {"color": "#2c3e50", "label": "💼 Servicios"},
+    "entertainment": {"color": "#c2185b", "label": "🎭 Entretenimiento"},
+    "school": {"color": "#3498db", "label": "🎓 Escuelas"},
+    "health": {"color": "#e74c3c", "label": "🏥 Salud"},
+    "mall": {"color": "#9b59b6", "label": "🛍️ Centros comerciales"},
+    "other": {"color": "#7f8c8d", "label": "📌 Otros"},
 }
 
 
@@ -46,18 +103,24 @@ def render_route_map(db, selected_routes):
     caller pueda añadir capas adicionales (ej. POIs) antes de renderizarlo."""
     fig = go.Figure()
 
+    stats_df = _fetch_all_routes_statistics(db, hours=1)
+    stats_by_route = {
+        (row["origin"], row["destination"]): row
+        for _, row in stats_df.iterrows()
+    }
+
     for origin, destination in selected_routes:
         if origin not in LOCATIONS or destination not in LOCATIONS:
             continue
         o = LOCATIONS[origin]
         d = LOCATIONS[destination]
 
-        stats = db.get_route_statistics(origin, destination, hours=1)
-        delay = stats.get("avg_delay")
-        travel_time = stats.get("avg_travel_time")
+        row = stats_by_route.get((origin, destination))
+        delay = row["avg_delay"] if row is not None else None
+        travel_time = row["avg_travel_time"] if row is not None else None
         color = _delay_color(delay)
-        delay_txt = f"{delay:.1f} min" if delay is not None else "sin dato"
-        time_txt = f"{travel_time:.1f} min" if travel_time is not None else "sin dato"
+        delay_txt = f"{delay:.1f} min" if delay is not None and not pd.isna(delay) else "sin dato"
+        time_txt = f"{travel_time:.1f} min" if travel_time is not None and not pd.isna(travel_time) else "sin dato"
 
         fig.add_trace(go.Scattermapbox(
             mode="lines",
@@ -103,19 +166,32 @@ def render_route_map(db, selected_routes):
     return fig
 
 
-def render_poi_layer(fig, db, selected_categories):
+def render_poi_layer(fig, db, selected_categories, source):
     """Añade una capa de marcadores de infraestructura (una traza por
     categoría, para que cada una aparezca como entrada independiente en la
-    leyenda y se pueda ocultar/mostrar con un clic)."""
-    if not selected_categories:
+    leyenda y se pueda ocultar/mostrar con un clic).
+
+    `source` ("overpass" o "foursquare") decide de qué tabla se lee, de forma
+    EXPLÍCITA. Antes la fuente se deducía del nombre de la categoría, pero
+    `school` y `mall` existen en los dos catálogos: al elegir una fuente
+    también se dibujaban esas dos categorías de la otra, y el selector "una
+    fuente u otra" no aislaba del todo."""
+    if not selected_categories or source not in ("overpass", "foursquare"):
         return
 
-    pois_df = db.get_pois(categories=selected_categories)
+    categories = tuple(sorted(selected_categories))
+    if source == "overpass":
+        pois_df = _fetch_pois(db, categories)
+        styles = POI_CATEGORY_STYLE
+    else:
+        pois_df = _fetch_pois_foursquare(db, categories)
+        styles = POI_CATEGORY_STYLE_FOURSQUARE
+
     if pois_df.empty:
         return
 
     for category, group in pois_df.groupby("category"):
-        style = POI_CATEGORY_STYLE.get(category, {"color": "#7f8c8d", "label": category})
+        style = styles.get(category, {"color": "#7f8c8d", "label": category})
         fig.add_trace(go.Scattermapbox(
             mode="markers",
             lon=group["longitude"],
@@ -129,13 +205,19 @@ def render_poi_layer(fig, db, selected_categories):
 
 def render_route_status_table(db, selected_routes):
     """Tabla con el estado actual (última hora) de las rutas seleccionadas."""
+    stats_df = _fetch_all_routes_statistics(db, hours=1)
+    stats_by_route = {
+        (row["origin"], row["destination"]): row
+        for _, row in stats_df.iterrows()
+    }
+
     rows = []
     for origin, destination in selected_routes:
-        stats = db.get_route_statistics(origin, destination, hours=1)
-        delay = stats.get("avg_delay")
-        travel_time = stats.get("avg_travel_time")
+        row_stats = stats_by_route.get((origin, destination))
+        delay = row_stats["avg_delay"] if row_stats is not None else None
+        travel_time = row_stats["avg_travel_time"] if row_stats is not None else None
 
-        if delay is None:
+        if delay is None or pd.isna(delay):
             status = "⚪ Sin dato"
         elif delay <= 1:
             status = "🟢 Flujo libre"
@@ -147,8 +229,8 @@ def render_route_status_table(db, selected_routes):
         rows.append({
             "Ruta": f"{origin} → {destination}",
             "Estado": status,
-            "Tiempo de viaje (1h)": f"{travel_time:.1f} min" if travel_time is not None else "Sin dato",
-            "Retraso (1h)": f"{delay:.1f} min" if delay is not None else "Sin dato",
+            "Tiempo de viaje (1h)": f"{travel_time:.1f} min" if travel_time is not None and not pd.isna(travel_time) else "Sin dato",
+            "Retraso (1h)": f"{delay:.1f} min" if delay is not None and not pd.isna(delay) else "Sin dato",
         })
 
     if rows:
@@ -177,15 +259,32 @@ def main():
         selected_routes = [ROUTES[route_labels.index(label)] for label in selected_labels]
 
     with col2:
-        poi_labels = st.multiselect(
-            "Infraestructura a mostrar",
-            list(POI_CATEGORY_STYLE.keys()),
-            default=[],
-            format_func=lambda c: POI_CATEGORY_STYLE[c]["label"],
+        poi_source = st.radio(
+            "Fuente de infraestructura",
+            ["Ninguna", "Overpass (OSM)", "Foursquare"],
+            horizontal=True,
         )
 
+        if poi_source == "Overpass (OSM)":
+            poi_labels = st.multiselect(
+                "Categorías a mostrar",
+                list(POI_CATEGORY_STYLE.keys()),
+                default=OVERPASS_DEFAULT_CATEGORIES,
+                format_func=lambda c: POI_CATEGORY_STYLE[c]["label"],
+            )
+        elif poi_source == "Foursquare":
+            poi_labels = st.multiselect(
+                "Categorías a mostrar",
+                list(POI_CATEGORY_STYLE_FOURSQUARE.keys()),
+                default=list(POI_CATEGORY_STYLE_FOURSQUARE.keys()),
+                format_func=lambda c: POI_CATEGORY_STYLE_FOURSQUARE[c]["label"],
+            )
+        else:
+            poi_labels = []
+
     fig = render_route_map(db, selected_routes)
-    render_poi_layer(fig, db, poi_labels)
+    poi_source_key = {"Overpass (OSM)": "overpass", "Foursquare": "foursquare"}.get(poi_source)
+    render_poi_layer(fig, db, poi_labels, poi_source_key)
     st.plotly_chart(fig, width="stretch")
 
     st.caption(
@@ -193,20 +292,35 @@ def main():
         "🔴 Denso (>4 min) · ⚪ Sin datos en la última hora"
     )
 
-    if poi_labels:
-        pois_df = db.get_pois(categories=poi_labels)
+    if poi_source == "Overpass (OSM)" and poi_labels:
+        pois_df = _fetch_pois(db, tuple(sorted(poi_labels)))
         if pois_df.empty:
             st.info(
-                "No hay datos de infraestructura todavía. Ejecuta "
-                "`python -m src.poi_extraction` para cargarlos desde Overpass API "
-                "(no requiere API key)."
+                "No hay datos de infraestructura (Overpass) todavía. Ejecuta "
+                "`python -m src.poi_extraction` para cargarlos (no requiere API key)."
             )
         else:
             last_update = pd.to_datetime(pois_df["updated_at"]).max()
             st.caption(
-                f"📍 {len(pois_df)} elementos de infraestructura · "
+                f"📍 {len(pois_df)} elementos de Overpass · "
                 f"Última actualización: {last_update.strftime('%Y-%m-%d %H:%M UTC')} "
                 "(se refresca automáticamente cada semana vía `src/poi_extraction.py`)"
+            )
+
+    elif poi_source == "Foursquare" and poi_labels:
+        pois_fsq_df = _fetch_pois_foursquare(db, tuple(sorted(poi_labels)))
+        if pois_fsq_df.empty:
+            st.info(
+                "No hay datos de Foursquare todavía. Requiere `FOURSQUARE_API_KEY` en `.env` "
+                "y correr el servicio opcional: "
+                "`docker compose --profile foursquare up -d poi-collector-foursquare` "
+                "(o `python -m src.poi_extraction_foursquare` fuera de Docker)."
+            )
+        else:
+            last_update_fsq = pd.to_datetime(pois_fsq_df["updated_at"]).max()
+            st.caption(
+                f"🍽️ {len(pois_fsq_df)} POIs de Foursquare (todas las categorías, sin filtrar) · "
+                f"Última actualización: {last_update_fsq.strftime('%Y-%m-%d %H:%M UTC')}"
             )
 
     st.divider()

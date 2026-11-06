@@ -35,6 +35,28 @@ class RouteDatabase:
         self.db_path = db_path
         self.csv_path.parent.mkdir(parents=True, exist_ok=True)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._sqlite_initialized = False
+        self._poi_initialized = False
+        self._poi_foursquare_initialized = False
+        self._demographics_initialized = False
+        self._population_history_initialized = False
+
+    def _connect(self) -> sqlite3.Connection:
+        """Conexión SQLite con WAL activado y timeout de reintento.
+
+        FIX (database is locked): el collector (escritor) y el dashboard
+        (lector, vía RouteDatabase cacheada con @st.cache_resource) tocan
+        el mismo archivo mobility.db en paralelo. Con el modo de journal
+        por defecto (DELETE) y sin timeout, cualquier choque momentáneo
+        fallaba al instante. WAL permite que lectores y un escritor
+        convivan sin bloquearse mutuamente en el caso normal, y el timeout
+        hace que, si de todos modos hay contención puntual, la conexión
+        espere y reintente en vez de lanzar `database is locked` de inmediato.
+        """
+        conn = sqlite3.connect(self.db_path, timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=10000;")
+        return conn
 
     # ------------------------------------------------------------------
     # CSV (histórico crudo, esquema completo)
@@ -60,9 +82,24 @@ class RouteDatabase:
     # SQLite (capa local / analítica, detalle completo)
     # ------------------------------------------------------------------
 
-    def init_sqlite(self) -> None:
-        """Crea la tabla SQLite si no existe."""
-        conn = sqlite3.connect(self.db_path)
+    def init_sqlite(self, force: bool = False) -> None:
+        """Crea la tabla SQLite si no existe.
+
+        FIX (database is locked): antes se ejecutaba el CREATE TABLE/INDEX
+        en CADA llamada a save_records_to_sqlite/query_measurements/etc.
+        — es decir, en cada lectura del dashboard, no solo al arrancar.
+        Cada una de esas sentencias DDL pide un lock de escritura aunque la
+        tabla ya exista (el "IF NOT EXISTS" evita el error, no evita el
+        lock), compitiendo directo con las escrituras reales del collector.
+        Ahora el DDL corre una sola vez por instancia de RouteDatabase
+        (que además ya vive cacheada vía @st.cache_resource en el
+        dashboard), y se puede forzar a re-ejecutar con force=True si algún
+        día hace falta (p. ej. tras borrar el archivo a mano).
+        """
+        if self._sqlite_initialized and not force:
+            return
+
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute(
@@ -112,6 +149,7 @@ class RouteDatabase:
 
         conn.commit()
         conn.close()
+        self._sqlite_initialized = True
 
     def save_records_to_sqlite(self, records: List[dict]) -> None:
         """Guarda registros en SQLite, evitando duplicados exactos."""
@@ -119,7 +157,7 @@ class RouteDatabase:
             return
 
         self.init_sqlite()
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         columns = [
@@ -173,7 +211,7 @@ class RouteDatabase:
     ) -> pd.DataFrame:
         """Consulta mediciones del SQLite con filtros opcionales."""
         self.init_sqlite()
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
 
         query = "SELECT * FROM route_measurements WHERE 1=1"
         params = []
@@ -210,7 +248,7 @@ class RouteDatabase:
     def get_available_routes(self) -> List[tuple]:
         """Obtiene todas las rutas únicas disponibles en la base de datos."""
         self.init_sqlite()
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute(
@@ -225,7 +263,7 @@ class RouteDatabase:
     def get_route_statistics(self, origin: str, destination: str, hours: int = 24) -> dict:
         """Obtiene estadísticas de una ruta en las últimas N horas."""
         self.init_sqlite()
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         start_time = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
@@ -267,9 +305,13 @@ class RouteDatabase:
     # tráfico/clima (cadencia totalmente distinta: esto cambia poco).
     # ------------------------------------------------------------------
 
-    def init_poi_table(self) -> None:
-        """Crea la tabla de POIs si no existe."""
-        conn = sqlite3.connect(self.db_path)
+    def init_poi_table(self, force: bool = False) -> None:
+        """Crea la tabla de POIs si no existe (mismo fix que init_sqlite:
+        solo corre el DDL una vez por instancia, ver nota ahí)."""
+        if self._poi_initialized and not force:
+            return
+
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute(
@@ -294,6 +336,7 @@ class RouteDatabase:
 
         conn.commit()
         conn.close()
+        self._poi_initialized = True
 
     def save_pois(self, pois: List[dict]) -> int:
         """Guarda/actualiza POIs (upsert por osm_type+osm_id), para que
@@ -303,7 +346,7 @@ class RouteDatabase:
             return 0
 
         self.init_poi_table()
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
         cursor = conn.cursor()
         now = datetime.now(timezone.utc).isoformat()
 
@@ -338,7 +381,7 @@ class RouteDatabase:
     def get_pois(self, categories: Optional[List[str]] = None) -> pd.DataFrame:
         """Consulta POIs guardados, opcionalmente filtrados por categoría."""
         self.init_poi_table()
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
 
         query = "SELECT * FROM pois"
         params: list = []
@@ -357,10 +400,295 @@ class RouteDatabase:
 
         return df
 
+    def init_poi_foursquare_table(self, force: bool = False) -> None:
+        """Crea la tabla de POIs de Foursquare si no existe.
+
+        Tabla SEPARADA de `pois` (Overpass) a propósito: `pois` tiene
+        UNIQUE(osm_type, osm_id), específico de OpenStreetMap — forzar ahí
+        filas de Foursquare (que se identifican por fsq_place_id, sin
+        osm_type/osm_id) habría implicado modificar el esquema de una tabla
+        que ya tiene 2.400+ registros reales de Overpass. Mismo patrón de
+        inicialización única por instancia que init_sqlite/init_poi_table
+        (ver nota en init_sqlite): evita repetir el DDL en cada consulta.
+        """
+        if self._poi_foursquare_initialized and not force:
+            return
+
+        conn = self._connect()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pois_foursquare (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fsq_place_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                subcategory TEXT,
+                name TEXT,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(fsq_place_id)
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_poi_fsq_category ON pois_foursquare(category)"
+        )
+
+        conn.commit()
+        conn.close()
+        self._poi_foursquare_initialized = True
+
+    def save_pois_foursquare(self, pois: List[dict]) -> int:
+        """Guarda/actualiza POIs de Foursquare (upsert por fsq_place_id).
+        Mismo patrón que save_pois (Overpass)."""
+        if not pois:
+            return 0
+
+        self.init_poi_foursquare_table()
+        conn = self._connect()
+        cursor = conn.cursor()
+        now = datetime.now(timezone.utc).isoformat()
+
+        for poi in pois:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO pois_foursquare
+                        (fsq_place_id, category, subcategory, name, latitude, longitude, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(fsq_place_id) DO UPDATE SET
+                        category=excluded.category,
+                        subcategory=excluded.subcategory,
+                        name=excluded.name,
+                        latitude=excluded.latitude,
+                        longitude=excluded.longitude,
+                        updated_at=excluded.updated_at
+                    """,
+                    (
+                        poi["fsq_place_id"], poi["category"], poi.get("subcategory"),
+                        poi.get("name"), poi["latitude"], poi["longitude"], now,
+                    ),
+                )
+            except sqlite3.Error as e:
+                logger.error(f"Error upserting Foursquare POI {poi.get('fsq_place_id')}: {e}")
+
+        conn.commit()
+        conn.close()
+        logger.info(f"Saved/updated {len(pois)} Foursquare POIs")
+        return len(pois)
+
+    def get_pois_foursquare(self, categories: Optional[List[str]] = None) -> pd.DataFrame:
+        """Consulta POIs de Foursquare guardados, opcionalmente filtrados
+        por categoría. Mismo patrón que get_pois (Overpass)."""
+        self.init_poi_foursquare_table()
+        conn = self._connect()
+
+        query = "SELECT * FROM pois_foursquare"
+        params: list = []
+        if categories:
+            placeholders = ",".join("?" for _ in categories)
+            query += f" WHERE category IN ({placeholders})"
+            params = list(categories)
+
+        try:
+            df = pd.read_sql_query(query, conn, params=params)
+        except pd.errors.DatabaseError as e:
+            logger.error(f"Foursquare POI query error: {e}")
+            df = pd.DataFrame()
+        finally:
+            conn.close()
+
+        return df
+
+    def init_demographics_table(self, force: bool = False) -> None:
+        """Crea la tabla de demografía por zona si no existe.
+
+        `dcid` (Data Commons ID) se guarda como CACHÉ de la resolución por
+        nombre — resolver un lugar nuevo cuesta una llamada API; una vez
+        resuelto, las corridas siguientes reusan el dcid guardado en vez de
+        volver a resolver. `population`/`observation_date` quedan NULL
+        hasta que llega la primera observación exitosa (una fila puede
+        existir solo con el dcid resuelto, aún sin población).
+        """
+        if self._demographics_initialized and not force:
+            return
+
+        conn = self._connect()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS zone_demographics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                zone_name TEXT NOT NULL,
+                dcid TEXT,
+                population INTEGER,
+                observation_date TEXT,
+                source TEXT,
+                updated_at TEXT NOT NULL,
+                UNIQUE(zone_name)
+            )
+            """
+        )
+
+        # Columnas agregadas después (ALTER TABLE es aditivo — no recrea la
+        # tabla ni toca las filas existentes) para el reconciliado a un año
+        # común: `basis_year`/`basis_population` guardan el dato REAL
+        # (observado) que se usó como ancla; `method` indica si el valor de
+        # `population` es tal cual observado o si se proyectó con la tasa de
+        # crecimiento nacional. SQLite no soporta "ADD COLUMN IF NOT EXISTS",
+        # así que se consulta el esquema actual antes de intentar agregarlas.
+        existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(zone_demographics)")}
+        for col, ddl in (
+            ("basis_year", "ALTER TABLE zone_demographics ADD COLUMN basis_year INTEGER"),
+            ("basis_population", "ALTER TABLE zone_demographics ADD COLUMN basis_population INTEGER"),
+            ("method", "ALTER TABLE zone_demographics ADD COLUMN method TEXT"),
+        ):
+            if col not in existing_cols:
+                cursor.execute(ddl)
+
+        conn.commit()
+        conn.close()
+        self._demographics_initialized = True
+
+    def save_demographics(self, records: List[dict]) -> int:
+        """Guarda/actualiza registros de demografía (upsert por zone_name).
+        Cada `record` puede traer solo `zone_name` + `dcid` (recién
+        resuelto, sin observación todavía) o los cinco campos completos."""
+        if not records:
+            return 0
+
+        self.init_demographics_table()
+        conn = self._connect()
+        cursor = conn.cursor()
+        now = datetime.now(timezone.utc).isoformat()
+
+        for r in records:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO zone_demographics
+                        (zone_name, dcid, population, observation_date, source, updated_at, basis_year, basis_population, method)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(zone_name) DO UPDATE SET
+                        dcid=COALESCE(excluded.dcid, zone_demographics.dcid),
+                        population=COALESCE(excluded.population, zone_demographics.population),
+                        observation_date=COALESCE(excluded.observation_date, zone_demographics.observation_date),
+                        source=COALESCE(excluded.source, zone_demographics.source),
+                        basis_year=COALESCE(excluded.basis_year, zone_demographics.basis_year),
+                        basis_population=COALESCE(excluded.basis_population, zone_demographics.basis_population),
+                        method=COALESCE(excluded.method, zone_demographics.method),
+                        updated_at=excluded.updated_at
+                    """,
+                    (
+                        r["zone_name"], r.get("dcid"), r.get("population"),
+                        r.get("observation_date"), r.get("source"), now,
+                        r.get("basis_year"), r.get("basis_population"), r.get("method"),
+                    ),
+                )
+            except sqlite3.Error as e:
+                logger.error(f"Error upserting demographics for {r.get('zone_name')}: {e}")
+
+        conn.commit()
+        conn.close()
+        logger.info(f"Saved/updated demographics for {len(records)} zones")
+        return len(records)
+
+    def get_demographics(self) -> pd.DataFrame:
+        """Consulta la demografía guardada por zona."""
+        self.init_demographics_table()
+        conn = self._connect()
+        try:
+            df = pd.read_sql_query("SELECT * FROM zone_demographics", conn)
+        except pd.errors.DatabaseError as e:
+            logger.error(f"Demographics query error: {e}")
+            df = pd.DataFrame()
+        finally:
+            conn.close()
+        return df
+
+    def init_population_history_table(self, force: bool = False) -> None:
+        """Serie histórica de población por zona: TODAS las observaciones que
+        Data Commons tiene (varias fechas y fuentes por zona), no solo la más
+        reciente. Permite elegir después un año de referencia común, o ver
+        la tendencia de crecimiento de cada zona. `zone_demographics` sigue
+        siendo la tabla "operativa" (una fila por zona)."""
+        if self._population_history_initialized and not force:
+            return
+
+        conn = self._connect()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS zone_population_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                zone_name TEXT NOT NULL,
+                observation_date TEXT NOT NULL,
+                year INTEGER,
+                population INTEGER NOT NULL,
+                source TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL,
+                UNIQUE(zone_name, observation_date, source)
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+        self._population_history_initialized = True
+
+    def save_population_history(self, records: List[dict]) -> int:
+        """Upsert por (zone_name, observation_date, source)."""
+        if not records:
+            return 0
+
+        self.init_population_history_table()
+        conn = self._connect()
+        cursor = conn.cursor()
+        now = datetime.now(timezone.utc).isoformat()
+
+        for r in records:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO zone_population_history
+                        (zone_name, observation_date, year, population, source, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(zone_name, observation_date, source) DO UPDATE SET
+                        year=excluded.year,
+                        population=excluded.population,
+                        updated_at=excluded.updated_at
+                    """,
+                    (r["zone_name"], r["observation_date"], r.get("year"),
+                     r["population"], r.get("source") or "", now),
+                )
+            except sqlite3.Error as e:
+                logger.error(f"Error upserting population history for {r.get('zone_name')}: {e}")
+
+        conn.commit()
+        conn.close()
+        logger.info(f"Saved/updated {len(records)} population history rows")
+        return len(records)
+
+    def get_population_history(self) -> pd.DataFrame:
+        self.init_population_history_table()
+        conn = self._connect()
+        try:
+            df = pd.read_sql_query(
+                "SELECT * FROM zone_population_history ORDER BY zone_name, observation_date", conn
+            )
+        except pd.errors.DatabaseError as e:
+            logger.error(f"Population history query error: {e}")
+            df = pd.DataFrame()
+        finally:
+            conn.close()
+        return df
+
     def get_all_routes_statistics(self, hours: int = 24) -> pd.DataFrame:
         """Obtiene estadísticas agregadas para todas las rutas."""
         self.init_sqlite()
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
 
         start_time = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
@@ -400,7 +728,7 @@ class RouteDatabase:
     ) -> pd.DataFrame:
         """Obtiene una serie temporal de una métrica para una ruta."""
         self.init_sqlite()
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
 
         start_time = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
@@ -441,7 +769,7 @@ class RouteDatabase:
     ) -> pd.DataFrame:
         """Agrupa estadísticas por hora para identificar patrones."""
         self.init_sqlite()
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
 
         start_time = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
@@ -493,7 +821,7 @@ class RouteDatabase:
     def get_database_summary(self) -> dict:
         """Obtiene un resumen completo de la base de datos."""
         self.init_sqlite()
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
         cursor = conn.cursor()
 
         cursor.execute("SELECT COUNT(*) FROM route_measurements")
