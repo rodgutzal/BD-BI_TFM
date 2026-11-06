@@ -87,9 +87,37 @@ def _engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     d["es_finde"] = d["dia_semana"].isin([6, 7]).astype(int)
     d["hora_sin"] = np.sin(2 * np.pi * d["hora"] / 24)
     d["hora_cos"] = np.cos(2 * np.pi * d["hora"] / 24)
-    d["origin_weather_grp"] = d["origin_weather"].map(WEATHER_GROUPS).fillna("lluvia")
-    d["destination_weather_grp"] = d["destination_weather"].map(WEATHER_GROUPS).fillna("lluvia")
+    for lado in ("origin", "destination"):
+        descripcion = d[f"{lado}_weather"]
+        grupo = descripcion.map(WEATHER_GROUPS)
+        # Una descripción que existe pero no está en WEATHER_GROUPS (rain, mist,
+        # drizzle...) es "lluvia", como en el .Rmd. Pero una descripción AUSENTE
+        # (OpenWeather falló en ese ciclo y el clima quedó NULL) NO es lluvia:
+        # antes `.fillna("lluvia")` las convertía también, etiquetando mal esas
+        # filas. Se dejan en NaN y _complete_cases() las excluye de los modelos
+        # que usan el clima.
+        grupo = grupo.where(~(descripcion.notna() & grupo.isna()), "lluvia")
+        d[f"{lado}_weather_grp"] = grupo
     return d
+
+
+# Columnas que necesitan los modelos de clasificación y regresión. Si alguna es
+# NaN, LogisticRegression/StandardScaler fallan ("Input X contains NaN").
+MODEL_FEATURE_COLS = NUM_COLS + ["origin_weather_grp", "destination_weather_grp"]
+
+
+def _complete_cases(d: pd.DataFrame) -> pd.DataFrame:
+    """Filas sin ningún dato faltante en las variables de los modelos.
+
+    Con datos reales, unas pocas filas (OpenWeather falló en ese ciclo) traen el
+    clima en NULL; una sola basta para que `LogisticRegression` lance
+    `Input X contains NaN`. Esa excepción cortaba toda la vista Analyst: las
+    pestañas posteriores a "Model Performance" (Data Quality, SQL Query,
+    Exportar Todo) no se renderizaban. Solo clasificación y regresión usan el
+    clima: el forecast temporal y el clustering conservan estas filas, porque su
+    tiempo de viaje es válido.
+    """
+    return d.dropna(subset=MODEL_FEATURE_COLS)
 
 
 def _design_matrix(d: pd.DataFrame) -> pd.DataFrame:
@@ -106,6 +134,7 @@ def _design_matrix(d: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data(show_spinner="Entrenando clasificador (regresión logística + Random Forest)...")
 def _fit_classification(d: pd.DataFrame):
+    d = _complete_cases(d)
     X = _design_matrix(d)
     y = (d["mobility_level"] == "Alta demora").astype(int).values
 
@@ -249,6 +278,7 @@ def render_classification(d: pd.DataFrame) -> None:
 
 @st.cache_data(show_spinner="Entrenando regresores (lineal + Gradient Boosting)...")
 def _fit_regression(d: pd.DataFrame):
+    d = _complete_cases(d)
     X = _design_matrix(d)
     y = d["travel_time_min"].values
 
@@ -488,6 +518,14 @@ def render() -> None:
     c2.metric("Corredores", d[["origin", "destination"]].drop_duplicates().shape[0])
     c3.metric("Rango temporal", f"{n_days} días")
     c4.metric("% Alta demora", f"{(d['mobility_level'] == 'Alta demora').mean():.1%}")
+
+    n_sin_clima = len(d) - len(_complete_cases(d))
+    if n_sin_clima:
+        st.caption(
+            f"ℹ️ {n_sin_clima:,} registros sin dato de clima (OpenWeather no respondió en ese ciclo) "
+            "se excluyen de **Clasificación** y **Regresión**, que usan el clima; "
+            "el forecast temporal y el clustering sí los conservan."
+        )
 
     tab_clf, tab_reg, tab_temporal, tab_cluster = st.tabs([
         "Clasificación", "Regresión", "Forecast temporal", "Clustering",
