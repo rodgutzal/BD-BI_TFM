@@ -23,6 +23,14 @@ from streamlit_app.dashboards import predictive_modeling_dashboard
 # re-dispara las consultas de las 7 a la vez.
 _CACHE_TTL = 60
 
+# Tope de filas para consultas de UNA sola ruta. 90 días x ~150 mediciones/día
+# por ruta ≈ 13.500 filas: el tope anterior (10.000) las recortaba.
+_ROUTE_ROW_LIMIT = 100_000
+
+# Filas más recientes sobre las que se calculan "Missing Values" y "Duplicates"
+# en Data Quality (el total real viene de get_database_summary()).
+_QUALITY_SAMPLE_ROWS = 100_000
+
 
 @st.cache_resource
 def get_database():
@@ -48,6 +56,13 @@ def _fetch_measurements(_db, origin=None, destination=None, days=None, limit=100
         kwargs["start_timestamp"] = start_date.isoformat()
         kwargs["end_timestamp"] = end_date.isoformat()
     return _db.query_measurements(**kwargs)
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_columns(_db, columns: tuple, days: int):
+    """Solo `columns` de todas las mediciones de los últimos `days` días
+    (sin LIMIT). `columns` es una tupla para que sirva de clave de caché."""
+    return _db.query_columns(list(columns), days)
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
@@ -87,7 +102,11 @@ def render_data_explorer():
 
     if selected_route:
         origin, destination = selected_route
-        df = _fetch_measurements(db, origin=origin, destination=destination, days=days)
+        # limit=_ROUTE_ROW_LIMIT: query_measurements devuelve las filas MÁS
+        # RECIENTES; con el tope anterior (10.000) una ruta con 90 días de
+        # historia quedaba recortada sin avisar.
+        df = _fetch_measurements(db, origin=origin, destination=destination, days=days,
+                                 limit=_ROUTE_ROW_LIMIT)
 
         if not df.empty:
             st.dataframe(df, width='stretch', height=400)
@@ -120,7 +139,8 @@ def render_statistical_tests():
 
     if selected_route:
         origin, destination = selected_route
-        df = _fetch_measurements(db, origin=origin, destination=destination, days=30)
+        df = _fetch_measurements(db, origin=origin, destination=destination, days=30,
+                                 limit=_ROUTE_ROW_LIMIT)
 
         if not df.empty and len(df) > 10:
             ts_analysis = TimeSeriesAnalytics(df)
@@ -218,19 +238,22 @@ def render_correlation_matrix():
     st.subheader("📊 Feature Correlation Analysis")
 
     db = get_database()
-    df = _fetch_measurements(db, days=30)
+    numeric_cols = db.get_numeric_columns()
 
-    if not df.empty:
-        # Select numeric columns
-        numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
+    if numeric_cols:
+        defaults = [c for c in ('travel_time_min', 'average_speed_kmh', 'origin_temperature')
+                    if c in numeric_cols]
         selected_cols = st.multiselect(
             "Select columns for correlation",
             numeric_cols,
-            default=['travel_time_min', 'average_speed_kmh', 'origin_temperature']
+            default=defaults,
         )
 
         if selected_cols and len(selected_cols) > 1:
-            corr_matrix = df[selected_cols].corr()
+            # Solo las columnas elegidas, de TODAS las mediciones de los
+            # últimos 30 días (antes: las 10.000 más recientes, ~5 días).
+            df = _fetch_columns(db, tuple(selected_cols), days=30)
+            corr_matrix = df.corr()
 
             fig = go.Figure(data=go.Heatmap(
                 z=corr_matrix.values,
@@ -287,14 +310,21 @@ def render_data_quality_report():
 
     col1, col2, col3, col4 = st.columns(4)
 
-    total_records = _fetch_measurements(db, limit=100000)
+    # Muestra: las `_QUALITY_SAMPLE_ROWS` mediciones más recientes. El total
+    # real sale de la base completa (antes "Total Records" era len(muestra) y
+    # se estancaba en el tope de la consulta).
+    total_records = _fetch_measurements(db, limit=_QUALITY_SAMPLE_ROWS)
     total = len(total_records)
+    summary = _fetch_database_summary(db)
 
     with col1:
-        st.metric("Total Records", f"{total:,}")
+        st.metric("Total Records", f"{summary.get('total_records', total):,}")
 
     with col2:
-        missing_pct = (total_records.isna().sum().sum() / (total * len(total_records.columns))) * 100
+        missing_pct = (
+            total_records.isna().sum().sum() / (total * len(total_records.columns)) * 100
+            if total else 0.0
+        )
         st.metric("Missing Values", f"{missing_pct:.1f}%", "✅" if missing_pct < 5 else "⚠️")
 
     with col3:
@@ -303,7 +333,6 @@ def render_data_quality_report():
 
     with col4:
         # Rango real de la base completa (antes: texto fijo "30+ days").
-        summary = _fetch_database_summary(db)
         first_ts, last_ts = summary.get("first_timestamp"), summary.get("last_timestamp")
         if first_ts and last_ts:
             span_days = (pd.to_datetime(last_ts, utc=True) - pd.to_datetime(first_ts, utc=True)).days
