@@ -533,10 +533,12 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 | Archivo | Qué cubre |
 |---|---|
 | `test_analytics.py` | `MobilityAnalytics`: inicialización, *consistency score* (ventana móvil de 24 h) y resumen de la base |
+| `test_analyst_quality.py` | Analyst al abrirse: usa **un** perfil de la base y no las consultas caras de antes (`get_available_routes` ×4, completitud ruta por ruta, 100 mil filas cargadas); las métricas de calidad son las del perfil |
 | `test_api.py` | API REST con `TestClient` y una base temporal: **404** en recursos sin datos (antes salía 400), **422** en parámetros inválidos, caminos felices y `predict` de punta a punta |
 | `test_business_type_classifier.py` | Texto libre en español → categoría de Overpass: "barbería" ≠ "bar", sin coincidencia → `None`, las 140 palabras clave sin choques entre categorías |
 | `test_check_collection_gaps.py` | `tools/check_collection_gaps.py`: detección y medición de huecos de recolección, solo lectura |
 | `test_config.py` | `config.py`: selección de la fuente de datos (ORS/TomTom) y configuración de TimescaleDB |
+| `test_data_profile.py` | `get_data_profile` (calidad de toda la tabla en **una** pasada, contrastado con pandas), `get_last_timestamp` y `get_database_summary(include_routes=False)` |
 | `test_database.py` | `RouteDatabase` básico: inicialización, guardado en CSV y SQLite, consulta de mediciones |
 | `test_database_windows.py` | Consultas de ventana completa sin `LIMIT` (promedio diario, ruta × hora, columnas elegidas) y protección contra inyección SQL |
 | `test_demographics.py` | Población por zona: reconciliado a un año común con la tasa nacional, *upserts* con `COALESCE`, historial |
@@ -727,6 +729,24 @@ Además de lo anterior, al medir **dentro del contenedor** apareció otra causa,
 Con el bind mount, **abrir Analyst dentro del contenedor tardaba 114 s** (resumen de la base 8 s, las 12 consultas del informe de calidad 41 s, la muestra de 78 mil filas 18 s…), aunque ya no entrenara ningún modelo. **Con `data/` en un volumen de Docker tardó 3,3 s.** Dos efectos se suman: el acceso a archivos de Windows desde un contenedor (Docker Desktop) es lento, y `created_at` va *después* de `polyline` en cada fila, por lo que leerla obliga a recorrer las páginas de desbordamiento de la polilínea de todas las filas.
 
 Esto afecta solo a quien ejecuta el stack en **Docker Desktop sobre Windows**; en un servidor Linux el bind mount es nativo. Si la lentitud importa, las opciones son: mover `data/` a un volumen con nombre (**es lo único que se midió**: 3,3 s; a costa de no ver `data/mobility.db` desde el host, de modo que las herramientas de `tools/` y los respaldos tendrían que correr con `docker compose run`), o ejecutar el proyecto desde el sistema de archivos de WSL2 (p. ej. `~/BD-BI_TFM`, no desde `C:\...`), que es la recomendación habitual de Docker pero **no se probó aquí**. **No se cambió el `docker-compose.yml`**: es una decisión de quien opera el stack.
+
+**Qué se corrigió en el código para que importe menos** (medido en el entorno lento: contenedor de 1 CPU y 1 GiB con `./data` en el bind mount de Windows, base real de 78,5 mil filas; mismo hardware, mismos datos):
+
+| Abrir Analyst | Antes | Ahora |
+|---|---|---|
+| Tiempo total | **114,5 s** | **16,0 s** (7× menos) |
+| Rutas únicas (`SELECT DISTINCT`, que recorre toda la tabla) | 4 llamadas, 31,3 s | 0 (salen del perfil) |
+| Completitud por ruta | 12 consultas | 0 (salen del perfil) |
+| Lectura de filas (muestra de 100 mil, completitud, explorador) | 66,7 s | 7,4 s (solo la ruta elegida) |
+| Resumen de la base (`get_database_summary`) | 16,1 s | 0 en Analyst; en el panel lateral, `MAX(timestamp)`: 0,0 s |
+| Recuento de filas por ruta en *Model Performance* (`get_all_routes_statistics`) | 7,9 s | 0 (sale del perfil) |
+| **Perfil de la base en una pasada** (`get_data_profile`) | — | 8,0 s, **una vez** y compartido por todas las pestañas |
+
+Cómo: (1) `RouteDatabase.get_data_profile()` calcula en **una sola consulta agregada** (filas, primera y última fecha, duplicados y nulos de cada columna, por ruta) todo lo que antes salía de más de diez consultas, y `st.cache_data` lo comparte 5 minutos entre las pestañas; (2) `get_last_timestamp()` (`MAX(timestamp)` sobre un índice) reemplaza al resumen completo que el panel lateral pedía en *todas* las pantallas solo para mostrar la hora del último dato; (3) `get_database_summary(include_routes=False)` evita el `DISTINCT` de rutas cuando no hace falta; (4) `query_measurements` ya no lee `created_at` (ningún código la usa) y deja de recorrer las páginas de desbordamiento de la polilínea de todas las filas.
+
+**Lo que no se hizo, a propósito:** los 8,0 s del perfil y los 7,4 s de leer la ruta elegida son recorridos de la tabla que solo desaparecerían con un índice compuesto `(origin, destination)` o separando `polyline` en otra tabla. Ambos son **cambios de esquema sobre una base de 412 MB en producción** (crear un índice bloquea las escrituras del collector mientras dura y, en el bind mount, puede tardar más que su `busy_timeout` de 10 s), por lo que quedan como decisión aparte.
+
+**Cambios en lo que se muestra en "Data Quality"** (la definición cambia, no es un error): *Missing Values* pasa de **13,0 %** (muestra de las 100 mil filas más recientes, contando `id`, `polyline` y `created_at`) a **14,7 %** (toda la base, solo las 21 columnas de medición). *Duplicates* antes contaba filas idénticas **incluyendo `id`**, que es autoincremental, así que daba 0 siempre; ahora cuenta filas repetidas para la misma ruta, instante y fuente (la clave `UNIQUE` debería impedirlas, así que 0 es lo normal y la métrica sirve de comprobación de que la restricción sigue en pie). Un detalle útil: el 99,8 % de esos vacíos (242.685 de 243.151) son 5 columnas que **no existen para ORS** (`no_traffic_time_min`, `traffic_delay_min`, `traffic_length_km`, `departure_time`, `arrival_time`: 48.537 nulos cada una, todas las filas de ORS), así que la métrica mezcla "falta" con "no aplica".
 
 ### Dashboard lento / demasiadas consultas a SQLite por interacción
 

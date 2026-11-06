@@ -6,15 +6,17 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**23 archivos · 209 funciones de test · 249 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**25 archivos · 231 funciones de test · 271 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
+| [`tests/test_analyst_quality.py`](#teststest_analyst_qualitypy) | 6 | 6 |
 | [`tests/test_analytics.py`](#teststest_analyticspy) | 3 | 3 |
 | [`tests/test_api.py`](#teststest_apipy) | 12 | 18 |
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
+| [`tests/test_data_profile.py`](#teststest_data_profilepy) | 15 | 15 |
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
@@ -29,10 +31,28 @@
 | [`tests/test_ors_null_fields.py`](#teststest_ors_null_fieldspy) | 2 | 2 |
 | [`tests/test_predictive_modeling_dashboard.py`](#teststest_predictive_modeling_dashboardpy) | 7 | 7 |
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
-| [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 7 | 7 |
+| [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
+
+## `tests/test_analyst_quality.py`
+
+> Pruebas de Analyst: abrir la pantalla usa UN perfil de la base y no las consultas caras de antes.
+>
+> Regresión (medido en el bind mount de Windows de Docker, donde cada recorrido de la tabla cuesta ~8 s):
+>   - `get_available_routes()` (un SELECT DISTINCT que recorre toda la tabla) se llamaba 4 veces;
+>   - la completitud por ruta hacía 12 consultas (33 s);
+>   - "Missing Values" cargaba 100 mil filas en un DataFrame (15 s);
+>   - `get_all_routes_statistics()` recorría la tabla otra vez solo para contar filas por ruta.
+> Todo eso sale ahora de `get_data_profile()`, una sola pasada.
+
+- `test_abrir_analyst_no_usa_las_consultas_caras`
+- `test_ninguna_consulta_carga_la_base_entera` — 'Missing Values' ya no carga 100 mil filas: toda lectura de filas es de UNA ruta.
+- `test_las_metricas_de_calidad_son_las_del_perfil`
+- `test_la_completitud_por_ruta_sale_del_perfil_y_cubre_todas_las_rutas`
+- `test_las_muestras_por_ruta_de_model_performance_son_las_filas_reales`
+- `test_el_panel_lateral_usa_el_ultimo_timestamp_y_no_el_resumen_completo` — app.py pedía get_database_summary() (con el DISTINCT de rutas) solo para la hora del último dato.
 
 ## `tests/test_analytics.py`
 
@@ -103,6 +123,31 @@
 - `test_get_data_source_tomtom` — Con DATA_SOURCE=tomtom en el entorno, debe respetarlo.
 - `test_get_data_source_invalid` — Un valor inválido debe lanzar RuntimeError.
 - `test_get_timescale_config_defaults` — Sin variables PG* definidas, deben usarse los valores de docker-compose.yml.
+
+## `tests/test_data_profile.py`
+
+> Pruebas del perfil de calidad de la base en UNA pasada (RouteDatabase.get_data_profile).
+>
+> Regresión: Analyst hacía más de diez consultas al abrirse (rutas únicas ×4, una consulta por ruta
+> para la completitud, un resumen completo, 100 mil filas cargadas...). Cada recorrido de la tabla
+> cuesta ~8 s en el bind mount de Windows de Docker (décimas de segundo en el host), así que sumaban
+> ~87 s. Un único perfil agregado da todo eso en un recorrido.
+
+- `test_totales_y_rutas`
+- `test_fechas_primera_y_ultima`
+- `test_los_nulos_coinciden_con_un_calculo_independiente_en_pandas`
+- `test_completitud_por_ruta`
+- `test_id_polyline_y_created_at_no_son_columnas_de_medicion`
+- `test_una_polilinea_nula_no_cuenta_como_dato_faltante` — Las filas históricas de TomTom no tienen polyline: eso no debe bajar la completitud.
+- `test_base_vacia`
+- `test_cuenta_duplicados_de_ruta_instante_y_fuente` — La clave UNIQUE de la tabla real los impide; se prueba con una tabla SIN la restricción.
+- `test_en_la_tabla_real_no_hay_duplicados`
+- `test_el_perfil_hace_una_sola_consulta_sobre_la_tabla`
+- `test_ultimo_timestamp`
+- `test_ultimo_timestamp_de_base_vacia`
+- `test_resumen_sin_rutas_omite_solo_las_rutas_unicas`
+- `test_el_resumen_por_defecto_sigue_igual` — Compatibilidad: quien lo llame sin argumentos sigue obteniendo unique_routes.
+- `test_ultimo_timestamp_no_recorre_la_tabla` — MAX(timestamp) se resuelve con el índice: una sola consulta, sin DISTINCT.
 
 ## `tests/test_database.py`
 
@@ -365,7 +410,8 @@
 
 - `test_por_defecto_no_carga_la_polilinea`
 - `test_include_polyline_la_devuelve_intacta`
-- `test_las_demas_columnas_son_exactamente_las_mismas`
+- `test_las_demas_columnas_son_exactamente_las_mismas` — Sin polyline tampoco se lee created_at (va después de polyline y leerla recorre las páginas de desbordamiento de todas las filas); el resto de columnas no cambia.
+- `test_por_defecto_tampoco_lee_created_at_pero_con_include_polyline_si`
 - `test_los_filtros_y_el_orden_no_cambian`
 - `test_sin_la_polilinea_la_memoria_baja_mucho` — No es una cifra mágica: con polilíneas de ~12 KB, cargarlas pesa >10× lo que pesa el resto.
 - `test_base_vacia_no_falla`

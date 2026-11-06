@@ -32,7 +32,10 @@ def _get_database():
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _last_measurement_timestamp(_db):
-    return _db.get_database_summary().get("last_timestamp")
+    # get_last_timestamp() = MAX(timestamp) sobre un índice (instantáneo). Antes se usaba
+    # get_database_summary() solo para esto, con su recorrido completo de la tabla para
+    # contar rutas: ~8 s en cada pantalla dentro de Docker sobre Windows.
+    return _db.get_last_timestamp()
 
 
 def render_system_status() -> None:
