@@ -22,7 +22,7 @@ Este repo integra dos proyectos que analizaban movilidad urbana en Malta por sep
 - **Pipeline Bronze → Silver → Gold automático** en cada ciclo de recolección, alimentando un dashboard Executive con KPIs reales
 - **POIs de infraestructura urbana** (escuelas, hospitales, restauración y bares, ocio, deporte, centros comerciales y comercios) vía Overpass API (OpenStreetMap, sin key), refrescados semanalmente y visualizados en el dashboard **Maps** — con **Foursquare Places API como fuente opcional complementaria** (categorización de negocio más rica, y búsqueda a lo largo de cada ruta, no solo en sus 7 extremos; requiere `FOURSQUARE_API_KEY`, ver `poi-collector-foursquare`)
 - **Demografía por zona** (población) vía **Google Data Commons** (opcional, requiere `DATACOMMONS_API_KEY`) — pensada para transicionar a otras ciudades sin tocar código: resuelve cada lugar **por nombre** la primera vez y cachea el DCID resultante, ver `src/demographics_extraction.py`
-- **47.500+ registros históricos y creciendo** (28.695 vía ORS + 18.841 vía TomTom al momento de escribir esto — ver `data/mobility.db` para el conteo actual), con varios bugs de los repos originales corregidos en el proceso (ver `INTEGRATION_NOTES.md`)
+- **78.500+ registros históricos y creciendo** (48.513 vía ORS + 30.012 vía TomTom al 6-nov-2026 — ver `data/mobility.db` para el conteo actual), con varios bugs de los repos originales corregidos en el proceso (ver `INTEGRATION_NOTES.md`)
 
 ---
 
@@ -53,7 +53,7 @@ Este repo integra dos proyectos que analizaban movilidad urbana en Malta por sep
               │              gold_route_kpis / gold_route_rankings
               │                         │
               ▼                         ▼
-   src/analytics.py, src/models/*   streamlit_app/app.py
+   src/analytics/, src/models/*     streamlit_app/app.py
    (tendencias, ML, predicción)     (Executive / Operations / Analyst / Maps / Recomendación)
 
               ┌───────────────────────────────────────────────────┐
@@ -77,7 +77,7 @@ Este repo integra dos proyectos que analizaban movilidad urbana en Malta por sep
 BD_BI_TFM/
 ├── data/
 │   ├── raw/
-│   │   ├── route_weather_data.csv              ← histórico fusionado (esquema unificado), ~47.500+ filas y creciendo
+│   │   ├── route_weather_data.csv              ← histórico fusionado (esquema unificado), ~78.500 filas al 6-nov-2026 y creciendo
 │   │   ├── legacy_ors_traffic_weather_data.csv  ← CSV original de BD_BI_TFM, sin tocar
 │   │   ├── legacy_tomtom_route_weather_data.csv ← CSV original de urban-mobility, sin tocar
 │   │   └── traffic_weather_data.csv             ← ⚠️ huérfano: solo lo generaba api_extraction.py (no usado, ver abajo)
@@ -119,8 +119,8 @@ BD_BI_TFM/
 │   ├── dashboards/
 │   │   ├── executive_dashboard.py
 │   │   ├── operations_dashboard.py
-│   │   ├── analyst_dashboard.py            ← incluye, al final, predictive_modeling_dashboard (ver abajo)
-│   │   ├── predictive_modeling_dashboard.py ← NO es un dashboard aparte: se renderiza dentro de Analyst
+│   │   ├── analyst_dashboard.py            ← incluye, en su pestaña Model Performance, predictive_modeling_dashboard (ver abajo)
+│   │   ├── predictive_modeling_dashboard.py ← NO es un dashboard aparte: se renderiza dentro de la pestaña Model Performance de Analyst
 │   │   ├── maps_dashboard.py               ← mapa de rutas (Plotly Scattermapbox) + overlay de POIs
 │   │   └── recommendation_dashboard.py     ← ¿dónde abrir un negocio? — interfaz de src/location_scoring.py para el usuario final
 │   └── legacy_reference/          ← dashboards de los repos originales, NO activos (ver más abajo)
@@ -205,7 +205,7 @@ http://localhost:8501 — si ya tienes el histórico en `data/mobility.db` (ver 
 
 Desde la versión endurecida para servidor real (ver `PRODUCTION.md`), `timescaledb`/`pgadmin`/`sqlite-web` solo escuchan en `127.0.0.1` — alcanzables desde tu propia máquina, no desde el resto de la red. Solo `dashboard` se expone hacia afuera.
 
-**El histórico NO viene en el repositorio.** `data/mobility.db` y `data/raw/route_weather_data.csv` están en `.gitignore` (crecen con cada ciclo del collector y pesan cientos de MB), así que un clon limpio los **no trae**: el dashboard arranca vacío y se llena a medida que el collector guarda datos. En la máquina donde se ha venido recolectando, esos archivos sí existen (47.500+ registros cuando se escribió esto y creciendo — `SELECT COUNT(*) FROM route_measurements` para el número exacto).
+**El histórico NO viene en el repositorio.** `data/mobility.db` y `data/raw/route_weather_data.csv` están en `.gitignore` (crecen con cada ciclo del collector y pesan cientos de MB), así que un clon limpio los **no trae**: el dashboard arranca vacío y se llena a medida que el collector guarda datos. En la máquina donde se ha venido recolectando, esos archivos sí existen (78.500+ registros al 6-nov-2026 y creciendo — `SELECT COUNT(*) FROM route_measurements` para el número exacto).
 
 Para trabajar con el histórico existente en otra máquina, copia a mano `data/mobility.db` (y, si lo necesitas, `data/raw/route_weather_data.csv`) desde la máquina que lo recolectó, con el stack apagado (`docker compose down`) para no copiar la base a mitad de una escritura. Lo único del histórico que sí está versionado son los CSV `data/raw/legacy_*` (snapshots fijos de los repos originales).
 
@@ -318,7 +318,7 @@ streamlit run streamlit_app/app.py
 | Intervalo mínimo viable (12 rutas) | ~13 min | ~26 min |
 | Integrado en el proyecto ahora mismo | ✅ `ORSClient` | ✅ `TomTomClient` |
 | Rol actual en el híbrido | Línea base cada 15 min | Foto real cada 27 min |
-| Filas en el histórico ya recolectado | 28.695+ | 18.841+ |
+| Filas en el histórico ya recolectado (al 6-nov-2026) | 48.513+ | 30.012+ |
 
 Ambas escriben al mismo esquema unificado (`src/database.py`), así que agregar o cambiar de fuente no rompe nada aguas abajo (analytics, ML, dashboards).
 
@@ -402,7 +402,7 @@ Esquema simplificado pensado para BI: `datetime, origin, destination, distance_k
 
 ### SQLite — capa local / analítica / ML (`data/mobility.db`)
 
-Esquema con **todo** el detalle (clima separado por origen/destino, tráfico, velocidad, polyline). Usado por `src/analytics.py`, los modelos de ML, y los 4 dashboards.
+Esquema con **todo** el detalle (clima separado por origen/destino, tráfico, velocidad, polyline). Usado por el paquete `src/analytics/`, los modelos de ML y los dashboards.
 
 Incluye también la tabla **`pois`** (7 categorías vía Overpass API/OpenStreetMap, `src/poi_client.py`: `school`, `hospital`, `food_drink`, `leisure`, `sport`, `mall`, `business`; la columna `subcategory` guarda el valor del tag de OpenStreetMap que la definió, ej. `restaurant`, `cafe`, `hairdresser`), poblada por el servicio `poi-collector` y consumida por el dashboard **Maps**. A diferencia de `route_measurements`, se actualiza (upsert) en vez de solo insertar, y a un ritmo mucho menor (semanal, no cada minutos).
 
@@ -462,18 +462,35 @@ El script es **idempotente**: Bronze y Silver ignoran las filas que ya tienen (�
 
 Ver `INTEGRATION_NOTES.md` para el detalle de los bugs que tenía este pipeline en el repo original (mezcla de nombres de columnas, funciones SQL no soportadas por SQLite, restricciones `UNIQUE` faltantes) y cómo se corrigieron.
 
+### Modelos entrenados (dónde viven los `.pkl`)
+
+Hay dos familias de modelos, cada una con su script y su carpeta. **Ninguna se versiona** (`*.pkl` está en `.gitignore` y en `.dockerignore`): se regeneran entrenando.
+
+| Modelo | Se entrena con | Se guarda en | Quién lo usa |
+|---|---|---|---|
+| Ensemble por ruta (`EnsemblePredictor`) | `python train_ensemble_models.py` | `models/<Origen>_<Destino>_ensemble.pkl` | pestaña **Model Performance** de Analyst y la API (`src/api.py`) |
+| Modelo simple por ruta (`TravelTimePredictor`) | `python train_models.py` | `src/models/trained/<Origen>_<Destino>_model.pkl` | `src/predictor.py` |
+
+**En Docker:** como los `.pkl` no entran en la imagen, `docker-compose.yml` monta `./models` en el servicio `dashboard` (`./models:/app/models`). Así, lo que entrenes en tu máquina —o dentro del contenedor— lo ve la pestaña Model Performance. Para entrenar dentro del contenedor y que quede en tu carpeta `./models`:
+
+```bash
+docker compose run --rm dashboard python train_ensemble_models.py
+```
+
+Sin ningún modelo entrenado, esa pestaña muestra "No trained models yet" y los modelos de cada ruta aparecen como "Not Trained"; el resto del dashboard funciona igual.
+
 ---
 
 ## Dashboards disponibles
 
 **`streamlit_app/app.py`** (activo, arranca con `docker compose up` / `streamlit run streamlit_app/app.py`):
-selector lateral entre 4 vistas —
+selector lateral entre 5 vistas —
 
 - **Executive**: KPIs del sistema (con su variación frente al periodo anterior) y mejores/peores rutas, que leen de `gold_route_kpis`; la tendencia y el histograma de 30 días se agregan en SQL directamente desde `route_measurements` (`RouteDatabase.get_daily_average` / `query_columns`), cubriendo la ventana completa y no solo las últimas N filas
 - **Operations**: monitoreo en tiempo real y alertas
-- **Analyst**: exploración de datos, correlaciones y análisis de series de tiempo (incluye un tab **SQL Query** de solo lectura sobre `data/mobility.db`). Al final de esta vista se renderiza **`predictive_modeling_dashboard`** — clasificación (Random Forest / regresión logística) y regresión de tiempo de viaje, con curva ROC y comparación de modelos; no es una vista aparte del selector, vive dentro de Analyst
+- **Analyst**: exploración de datos, correlaciones y análisis de series de tiempo (incluye un tab **SQL Query** de solo lectura sobre `data/mobility.db`). La pestaña **Model Performance** muestra el estado de los modelos entrenados por ruta y, debajo, renderiza **`predictive_modeling_dashboard`** — clasificación (Random Forest / regresión logística) y regresión de tiempo de viaje, con curva ROC y comparación de modelos; no es una vista aparte del selector, vive dentro de esa pestaña de Analyst
 - **Maps**: rutas monitorizadas sobre un mapa (`plotly.graph_objects.Scattermapbox`, estilo `open-street-map` — sin token), coloreadas por retraso reciente, con overlay opcional de POIs. Selector de fuente (Ninguna / Overpass / Foursquare — una a la vez, no combinadas) y, debajo, un multiselect con las categorías de esa fuente (en Foursquare todas marcadas por defecto; en Overpass arrancan marcadas solo las 4 clásicas — `food_drink`, `leisure` y `sport` suman miles de puntos y se activan a pedido)
-- **Recomendación**: para el usuario final — describe el negocio en texto libre ("quiero abrir una pizzería"), el sistema lo interpreta y puntúa las 7 zonas (`src/location_scoring.py`), con mapa de calor por puntaje, tabla con el desglose completo (nunca solo el número final) y pesos ajustables por el usuario
+- **Recomendación**: para el usuario final — describe el negocio en texto libre ("quiero abrir una pizzería"), el sistema lo interpreta y puntúa las 7 zonas (`src/location_scoring.py`), con un mapa de las zonas (marcadores coloreados por puntaje), tabla con el desglose completo (nunca solo el número final) y pesos ajustables por el usuario
 
 ## Consultar la base de datos con SQL
 
@@ -607,7 +624,7 @@ No se borraron en esta pasada (por si algún commit reciente todavía los necesi
 Agravante en Analyst: `st.tabs()` en Streamlit ejecuta el contenido de **todas** las pestañas en cada rerun (no solo la visible), así que las 7 pestañas —con sus consultas y bucles— se disparaban aunque el usuario solo tocara la primera.
 
 **Solución aplicada:**
-- `@st.cache_data(ttl=60)` en las funciones de obtención de datos de los 4 dashboards (60s: el collector escribe cada 15-27 min, así que no hace falta más frescura que esa).
+- `@st.cache_data(ttl=60)` en las funciones de obtención de datos de los dashboards (60s: el collector escribe cada 15-27 min, así que no hace falta más frescura que esa).
 - 5 de los 6 bucles por ruta se reemplazaron por una sola llamada a `get_all_routes_statistics()` (que ya existía en `database.py`) — validado que da exactamente los mismos números que el bucle que reemplaza, comparado ruta por ruta contra los datos reales.
 - El conteo de muestras por ruta en Analyst, de paso, quedó más preciso: antes topaba en 1000 (`limit=1000`) aunque una ruta tuviera miles de mediciones; ahora usa el conteo real sin tope.
 - **Pendiente (no resuelto en esta pasada):** `render_route_status_grid` (Operations) sigue haciendo una consulta por ruta, porque necesita la última fila completa de cada una (no un agregado) y no existe todavía una función para eso — candidato para una función nueva `get_latest_per_route()` en `database.py`.

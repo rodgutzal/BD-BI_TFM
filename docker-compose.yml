@@ -176,9 +176,12 @@ services:
       - mobility-network
 
   # Foursquare Places API — COMPLEMENTARIO a poi-collector (Overpass), no un
-  # reemplazo: refina la categoría genérica "business" de Overpass con
-  # categorías más ricas (restaurant, retail, services, entertainment). No
-  # vuelve a pedir escuelas/hospitales/malls, que Overpass ya cubre.
+  # reemplazo: aporta una taxonomía de negocio más rica que la categoría
+  # genérica "business" de Overpass (restaurant, retail, services,
+  # entertainment...). Trae TODO lo que devuelve Foursquare, sin excluir
+  # ninguna categoría — incluidas school, health y mall, que se solapan a
+  # propósito con Overpass para poder comparar la cobertura entre fuentes.
+  # Se guarda en una tabla aparte (pois_foursquare), no en `pois`.
   #
   # Usa `profiles` a propósito: sin esto, este servicio arrancaría con un
   # simple `docker compose up` aunque nadie haya configurado
@@ -235,6 +238,11 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      # Modelos entrenados (train_ensemble_models.py -> models/*_ensemble.pkl).
+      # Los .pkl están en .gitignore y .dockerignore, así que NO viajan dentro
+      # de la imagen: sin este volumen la pestaña Model Performance de Analyst
+      # nunca los ve dentro del contenedor.
+      - ./models:/app/models
     depends_on:
       timescaledb:
         condition: service_healthy
