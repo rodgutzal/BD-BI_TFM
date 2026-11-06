@@ -80,7 +80,7 @@ curl "http://localhost:8000/api/predict/Msida/Marsaskala?days=30"
     "std": 1.15
   },
   "timestamp": "2026-07-19T01:35:00Z",
-  "models_used": ["random_forest", "gradient_boosting", "exponential_smoothing"]
+  "models_used": ["xgboost", "random_forest", "gradient_boosting"]
 }
 ```
 

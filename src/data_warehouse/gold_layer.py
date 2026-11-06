@@ -253,6 +253,37 @@ class GoldLayer:
         finally:
             conn.close()
 
+    def get_period_metrics(self, start_date: str, end_date: str) -> Dict:
+        """Promedios del sistema en un rango de fechas [start_date, end_date).
+
+        Las fechas son 'YYYY-MM-DD' (así se guarda `gold_route_kpis.date`).
+        Sirve para comparar un periodo con el anterior (los deltas del
+        dashboard Executive). Devuelve None en cada métrica si el rango no
+        tiene filas, para que quien llama pueda omitir el delta en vez de
+        mostrar uno inventado.
+        """
+        conn = sqlite3.connect(self.db_path)
+        try:
+            row = conn.execute(
+                """
+                SELECT AVG(avg_travel_time), AVG(reliability_score), COUNT(*)
+                FROM gold_route_kpis
+                WHERE date >= ? AND date < ?
+                """,
+                (start_date, end_date),
+            ).fetchone()
+        except Exception as e:
+            return {'error': str(e)}
+        finally:
+            conn.close()
+
+        n = row[2] if row else 0
+        return {
+            'avg_travel_time': float(row[0]) if n and row[0] is not None else None,
+            'reliability': float(row[1]) if n and row[1] is not None else None,
+            'rows': int(n or 0),
+        }
+
     def get_executive_summary(self, days: int = 30) -> Dict:
         """Get executive summary for dashboard."""
         conn = sqlite3.connect(self.db_path)

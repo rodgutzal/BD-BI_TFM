@@ -16,7 +16,7 @@ This paper presents a comprehensive system for real-time traffic prediction and 
 
 We propose a multi-layered analytics system for urban traffic prediction combining:
 
-1. **Ensemble Machine Learning** - XGBoost, Random Forest, Gradient Boosting, and Exponential Smoothing models with automated stacking
+1. **Ensemble Machine Learning** - XGBoost, Random Forest and Gradient Boosting models with weighted averaging (Exponential Smoothing was evaluated in the original design but is not part of the implemented ensemble; see `src/models/ensemble_predictor.py`)
 2. **Time Series Analysis** - Seasonal decomposition, stationarity testing, and anomaly detection using rigorous statistical methods
 3. **Causal Inference** - Moving beyond correlation to understand if weather truly CAUSES traffic delays
 4. **Data Warehouse Architecture** - Medallion pattern (Bronze/Silver/Gold layers) for scalability
@@ -89,15 +89,14 @@ Urban traffic congestion costs economies billions annually:
 |-------|--------|-----------------|
 | Random Forest | Robust, handles non-linearity | n_estimators=100, max_depth=15 |
 | Gradient Boosting | Precise, sequential learning | n_estimators=100, learning_rate=0.1 |
-| Exponential Smoothing | Time series patterns | Seasonal period=12 |
+| ~~Exponential Smoothing~~ | Time series patterns | *Removed from the implementation: it was trained but never contributed to `predict()`* |
 
-**Level 2: Ensemble Stacking**
+**Level 2: Ensemble Weighting**
 
-Weights optimized via cross-validation:
+Fixed weights (normalized over the models that are available at prediction time; they are not optimized via cross-validation in the code):
+- XGBoost: 40% (optional depending on environment)
 - Random Forest: 25%
 - Gradient Boosting: 25%
-- Exponential Smoothing: 10%
-- (XGBoost: 40% - optional depending on environment)
 
 **Level 3: Uncertainty**
 

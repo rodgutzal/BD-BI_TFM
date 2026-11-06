@@ -61,6 +61,11 @@ def _fetch_all_routes_statistics(_db, hours: int = 24 * 365 * 10):
     return _db.get_all_routes_statistics(hours=hours)
 
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_database_summary(_db):
+    return _db.get_database_summary()
+
+
 def render_data_explorer():
     """Interactive data explorer."""
     st.subheader("📊 Raw Data Explorer")
@@ -297,7 +302,14 @@ def render_data_quality_report():
         st.metric("Duplicates", duplicates, "✅" if duplicates == 0 else "⚠️")
 
     with col4:
-        st.metric("Date Range", "30+ days")
+        # Rango real de la base completa (antes: texto fijo "30+ days").
+        summary = _fetch_database_summary(db)
+        first_ts, last_ts = summary.get("first_timestamp"), summary.get("last_timestamp")
+        if first_ts and last_ts:
+            span_days = (pd.to_datetime(last_ts, utc=True) - pd.to_datetime(first_ts, utc=True)).days
+            st.metric("Date Range", f"{span_days} days", f"{str(first_ts)[:10]} → {str(last_ts)[:10]}", delta_color="off")
+        else:
+            st.metric("Date Range", "sin datos")
 
     # Data completeness by route
     st.markdown("**Completeness by Route**")

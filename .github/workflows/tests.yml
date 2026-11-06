@@ -19,7 +19,11 @@ jobs:
         # de esas versiones cumplía su propio requisito). Se alinearon
         # ambos a ">=3.10", que es lo que realmente usa el código (p.ej.
         # `str | None` en src/config.py, sintaxis de PEP 604).
-        python-version: [ '3.10', '3.11', '3.12' ]
+        #
+        # Sin 3.10: requirements.txt fija pandas==3.0.3 y numpy==2.4.6, y el
+        # Dockerfile ya usa 3.11. Las dos versiones de arriba son las que
+        # realmente se pueden instalar con esos pines.
+        python-version: [ '3.11', '3.12' ]
 
     steps:
     - uses: actions/checkout@v4
@@ -61,10 +65,23 @@ jobs:
         flags: unittests
         name: codecov-umbrella
 
-    - name: Check code quality
+    # BLOQUEANTE: errores que rompen el código de verdad (sintaxis, nombres
+    # sin definir). Antes todo esto terminaba en `|| true`, así que nunca
+    # podía fallar; además `--enable=error,fatal` no es una opción válida de
+    # pylint (ignoraba la orden y no revisaba nada). `E,F` son las categorías
+    # Error y Fatal.
+    - name: Check code quality (blocking)
       run: |
-        flake8 src/ tests/ --max-line-length=120 --ignore=E501,W503 || true
-        pylint src/ --disable=all --enable=error,fatal || true
+        flake8 src/ tests/ --select=E9,F63,F7,F82 --show-source --statistics
+        pylint src/ --disable=all --enable=E,F
+
+    # INFORMATIVO: estilo. Hoy hay avisos pendientes (imports sin usar, E402
+    # por los sys.path.insert de los dashboards...); no bloquea el pipeline
+    # pero queda visible como paso con aviso en vez de ocultarse.
+    - name: Check code style (informational)
+      continue-on-error: true
+      run: |
+        flake8 src/ tests/ --max-line-length=120 --ignore=E501,W503
 
     - name: Data quality checks
       run: |
@@ -110,10 +127,15 @@ jobs:
       run: |
         pip install black isort pylint
 
+    # INFORMATIVOS (continue-on-error en vez de `|| true`): el código actual
+    # no está formateado con black/isort. Cuando se aplique el formato, quitar
+    # `continue-on-error` para volverlos bloqueantes.
     - name: Check code formatting
+      continue-on-error: true
       run: |
-        black src/ tests/ --check --line-length=120 || true
+        black src/ tests/ --check --line-length=120
 
     - name: Check import sorting
+      continue-on-error: true
       run: |
-        isort src/ tests/ --check-only || true
+        isort src/ tests/ --check-only

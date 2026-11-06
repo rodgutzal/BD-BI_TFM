@@ -34,8 +34,8 @@ uvicorn>=0.24.0
 pydantic>=2.0
 
 # ML ensemble opcionales (src/models/ensemble_predictor.py los detecta con
-# try/except — sin ellos, el ensemble usa solo Random Forest + Gradient
-# Boosting; con ellos, suma XGBoost y Exponential Smoothing)
+# try/except — sin xgboost, el ensemble usa solo Random Forest + Gradient
+# Boosting; prophet solo se usa en forecast_week_ahead())
 xgboost>=2.0
 prophet>=1.1
 

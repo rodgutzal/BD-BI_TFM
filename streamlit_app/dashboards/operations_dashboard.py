@@ -13,8 +13,6 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from src.database import RouteDatabase
-from src.analytics import MobilityAnalytics
-from src.locations import LOCATIONS
 
 # Ver nota en executive_dashboard.py: mismo TTL, misma razón.
 _CACHE_TTL = 60
@@ -41,12 +39,6 @@ def get_database():
     DB_PATH = ROOT_DIR / "data" / "mobility.db"
     CSV_PATH = ROOT_DIR / "data" / "raw" / "route_weather_data.csv"
     return RouteDatabase(CSV_PATH, DB_PATH)
-
-
-@st.cache_resource
-def get_analytics():
-    DB_PATH = ROOT_DIR / "data" / "mobility.db"
-    return MobilityAnalytics(DB_PATH)
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
@@ -151,47 +143,31 @@ def render_route_status_grid(db):
         st.dataframe(status_df, width='stretch', hide_index=True)
 
 
-def render_24h_predictions(db, analytics):
-    """Render 24-hour predictions for all routes."""
-    st.subheader("📈 24-Hour Predictions")
+def render_last_24h_summary(db):
+    """Promedio real de las últimas 24 h por ruta (datos medidos, no
+    proyecciones).
 
-    # FIX (rendimiento, antes N+1 x2): la versión anterior hacía, por cada
-    # ruta, una consulta query_measurements(limit=1) para calcular `hour`
-    # (que nunca se usaba más abajo — código muerto) MÁS otra consulta
-    # get_route_statistics(hours=24) — 24 consultas en total con las rutas
-    # actuales. Con get_all_routes_statistics(hours=24) alcanza una sola.
+    Reemplaza a "24-Hour Predictions" e "Incident Impact Analysis": la
+    primera multiplicaba el promedio por 1.1 / 1.05 y mostraba una
+    "Confidence 90%" fija, sin ningún modelo detrás; la segunda mostraba
+    ceros y deltas escritos a mano, porque el proyecto no recolecta
+    incidentes. Ninguna de las dos se calculaba a partir de los datos.
+    """
+    st.subheader("📈 Últimas 24 horas por ruta")
+
     stats_df = _fetch_all_routes_statistics(db, hours=24)
-    predictions_data = []
+    if stats_df.empty:
+        st.info("Sin mediciones en las últimas 24 horas.")
+        return
 
-    for _, row in stats_df.iterrows():
-        predicted_time = _safe(row.get('avg_travel_time'))
-        predictions_data.append({
-            'Route': f"{row['origin']} → {row['destination']}",
-            'Current': f"{predicted_time:.1f} min",
-            'Predicted (4h)': f"{predicted_time * 1.1:.1f} min",
-            'Predicted (12h)': f"{predicted_time * 1.05:.1f} min",
-            'Confidence': '90%'
-        })
-
-    if predictions_data:
-        pred_df = pd.DataFrame(predictions_data)
-        st.dataframe(pred_df, width='stretch', hide_index=True)
-
-
-def render_incident_impact():
-    """Render incident impact analysis."""
-    st.subheader("📊 Incident Impact Analysis")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric("Active Incidents", "0", "-100%")
-
-    with col2:
-        st.metric("Affected Routes", "0", "-50%")
-
-    with col3:
-        st.metric("Avg Delay Impact", "0 min", "-5 min")
+    summary_df = pd.DataFrame({
+        'Ruta': stats_df['origin'] + ' → ' + stats_df['destination'],
+        'Mediciones': stats_df['measurements'],
+        'Tiempo promedio (min)': stats_df['avg_travel_time'],
+        'Mínimo (min)': stats_df['min_travel_time'],
+        'Máximo (min)': stats_df['max_travel_time'],
+    })
+    st.dataframe(summary_df, width='stretch', hide_index=True)
 
 
 def render_performance_heatmap(db):
@@ -240,7 +216,6 @@ def main():
     st.markdown("Real-time monitoring and operational insights")
 
     db = get_database()
-    analytics = get_analytics()
 
     # Real-time alerts
     render_real_time_alerts(db)
@@ -252,13 +227,8 @@ def main():
 
     st.divider()
 
-    # 24-hour predictions
-    render_24h_predictions(db, analytics)
-
-    st.divider()
-
-    # Incident impact
-    render_incident_impact()
+    # Medición real de las últimas 24 h (reemplaza predicciones/incidentes ficticios)
+    render_last_24h_summary(db)
 
     st.divider()
 

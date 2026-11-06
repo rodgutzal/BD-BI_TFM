@@ -1,11 +1,15 @@
 """Bronze layer: Raw data ingestion and validation."""
 
+import logging
+
 import pandas as pd
 import numpy as np
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List
 import sqlite3
+
+logger = logging.getLogger(__name__)
 
 
 class BronzeLayer:
@@ -62,6 +66,25 @@ class BronzeLayer:
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # Idempotencia: sin esto, reingerir las mismas filas (p. ej. al
+        # correr src/run_medallion_pipeline.py más de una vez) las duplicaba
+        # en Bronze, porque la tabla no tenía ninguna restricción UNIQUE.
+        # Se usa un ÍNDICE único (y no una restricción en el CREATE TABLE)
+        # porque funciona también sobre bases que ya existen, donde
+        # `CREATE TABLE IF NOT EXISTS` no modifica la tabla.
+        try:
+            cursor.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_bronze_unique "
+                "ON bronze_measurements(raw_timestamp, origin, destination)"
+            )
+        except sqlite3.IntegrityError as e:
+            # La base ya contiene duplicados: no se puede imponer la unicidad
+            # hasta limpiarlos. No se borra nada automáticamente.
+            logger.warning(
+                f"No se pudo crear idx_bronze_unique (hay filas duplicadas en "
+                f"bronze_measurements): {e}"
+            )
 
         conn.commit()
         conn.close()
@@ -158,9 +181,24 @@ class BronzeLayer:
 
         conn = sqlite3.connect(self.db_path)
         try:
-            df_to_insert.to_sql('bronze_measurements', conn, if_exists='append', index=False)
+            # INSERT OR IGNORE respeta idx_bronze_unique: reingerir filas ya
+            # vistas no las duplica. `inserted` cuenta solo las realmente nuevas.
+            cursor = conn.cursor()
+            changes_before = conn.total_changes
+            col_list = ','.join(bronze_columns)
+            placeholders = ','.join(['?'] * len(bronze_columns))
+            # NaN -> None: sqlite3 bindea float('nan') como NULL de forma
+            # inconsistente según la versión; None es explícito.
+            rows = [
+                tuple(None if pd.isna(v) else v for v in r)
+                for r in df_to_insert.itertuples(index=False, name=None)
+            ]
+            cursor.executemany(
+                f"INSERT OR IGNORE INTO bronze_measurements ({col_list}) VALUES ({placeholders})",
+                rows,
+            )
             conn.commit()
-            inserted = len(df_to_insert)
+            inserted = conn.total_changes - changes_before
         except Exception as e:
             issues.append(f"Database error: {str(e)}")
             inserted = 0
