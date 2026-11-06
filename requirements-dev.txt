@@ -39,6 +39,10 @@ pydantic>=2.0
 xgboost>=2.0
 prophet>=1.1
 
+# Demografía por zona (src/demographics_client.py, opcional — solo hace
+# falta si se corre src/demographics_extraction.py)
+datacommons-client[Pandas]
+
 # Documentation
 sphinx>=6.0
 sphinx-rtd-theme>=1.3

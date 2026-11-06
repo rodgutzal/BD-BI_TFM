@@ -16,6 +16,9 @@ from src.database import RouteDatabase
 from src.analytics import MobilityAnalytics
 from src.locations import LOCATIONS
 
+# Ver nota en executive_dashboard.py: mismo TTL, misma razón.
+_CACHE_TTL = 60
+
 
 def _safe(value, default=0.0):
     """
@@ -46,21 +49,48 @@ def get_analytics():
     return MobilityAnalytics(DB_PATH)
 
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_all_routes_statistics(_db, hours: int):
+    """Estadísticas agregadas de TODAS las rutas en una sola consulta.
+
+    FIX (rendimiento, antes N+1): render_real_time_alerts y
+    render_24h_predictions hacían `for origin, destination in routes:
+    db.get_route_statistics(origin, destination, hours=X)` — una consulta
+    SQLite por ruta (12 consultas separadas con las rutas actuales) en
+    CADA rerun de Streamlit. get_all_routes_statistics() ya existía en
+    database.py y calcula exactamente lo mismo con un solo GROUP BY; solo
+    hacía falta usarla aquí. Cacheado además, para no repetir ni siquiera
+    esa única consulta en cada clic dentro de la ventana de TTL.
+    """
+    return _db.get_all_routes_statistics(hours=hours)
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_recent_measurements(_db, days: int):
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days)
+    return _db.query_measurements(
+        start_timestamp=start_date.isoformat(),
+        end_timestamp=end_date.isoformat(),
+        limit=10000,
+    )
+
+
 def render_real_time_alerts(db):
     """Render real-time alerts for operations."""
     st.subheader("🚨 Real-Time Alerts")
 
-    routes = db.get_available_routes()
+    stats_df = _fetch_all_routes_statistics(db, hours=1)
     alerts = []
 
-    for origin, destination in routes:
-        stats = db.get_route_statistics(origin, destination, hours=1)
-        if stats and _safe(stats.get('avg_travel_time')) > 30:
+    for _, row in stats_df.iterrows():
+        avg_time = _safe(row.get('avg_travel_time'))
+        if avg_time > 30:
             alerts.append({
-                'route': f'{origin} → {destination}',
-                'severity': 'HIGH' if _safe(stats.get('avg_travel_time')) > 45 else 'MEDIUM',
-                'travel_time': f"{_safe(stats.get('avg_travel_time')):.1f} min",
-                'delay': f"{_safe(stats.get('avg_delay')):.1f} min"
+                'route': f"{row['origin']} → {row['destination']}",
+                'severity': 'HIGH' if avg_time > 45 else 'MEDIUM',
+                'travel_time': f"{avg_time:.1f} min",
+                'delay': f"{_safe(row.get('avg_delay')):.1f} min"
             })
 
     if alerts:
@@ -70,25 +100,30 @@ def render_real_time_alerts(db):
         st.info("✅ No critical alerts")
 
 
-def render_route_status_grid(db):
-    """Render route status grid with color coding."""
-    st.subheader("📍 Route Status Overview")
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _fetch_route_status_grid(_db):
+    """Última medición de cada ruta, con su color de estado.
 
-    routes = db.get_available_routes()
+    NOTA: esto sigue siendo una consulta por ruta (N+1) — a diferencia de
+    los demás fixes de esta pasada, este caso pide la ÚLTIMA FILA completa
+    de cada ruta (travel_time_min, traffic_delay_min, average_speed_kmh),
+    no un agregado, así que get_all_routes_statistics() no sirve aquí tal
+    cual. La solución de fondo (una función nueva en database.py con
+    GROUP BY + MAX(timestamp) para traer la última fila de cada ruta en una
+    sola consulta) queda pendiente para una siguiente pasada. Cachear esto
+    igual es una mejora real mientras tanto: el N+1 ahora corre una vez por
+    ventana de TTL, no en cada interacción del usuario.
+    """
+    routes = _db.get_available_routes()
     status_data = []
 
     for origin, destination in routes:
-        latest = db.query_measurements(
-            origin=origin,
-            destination=destination,
-            limit=1
-        )
+        latest = _db.query_measurements(origin=origin, destination=destination, limit=1)
 
         if not latest.empty:
             row = latest.iloc[-1]
             delay = _safe(row.get('traffic_delay_min'))
 
-            # Color coding
             if delay <= 1:
                 status = '🟢 Free Flow'
             elif delay <= 4:
@@ -104,8 +139,15 @@ def render_route_status_grid(db):
                 'Speed': f"{row.get('average_speed_kmh', 0):.1f} km/h"
             })
 
-    if status_data:
-        status_df = pd.DataFrame(status_data)
+    return pd.DataFrame(status_data)
+
+
+def render_route_status_grid(db):
+    """Render route status grid with color coding."""
+    st.subheader("📍 Route Status Overview")
+
+    status_df = _fetch_route_status_grid(db)
+    if not status_df.empty:
         st.dataframe(status_df, width='stretch', hide_index=True)
 
 
@@ -113,32 +155,23 @@ def render_24h_predictions(db, analytics):
     """Render 24-hour predictions for all routes."""
     st.subheader("📈 24-Hour Predictions")
 
-    routes = db.get_available_routes()
+    # FIX (rendimiento, antes N+1 x2): la versión anterior hacía, por cada
+    # ruta, una consulta query_measurements(limit=1) para calcular `hour`
+    # (que nunca se usaba más abajo — código muerto) MÁS otra consulta
+    # get_route_statistics(hours=24) — 24 consultas en total con las rutas
+    # actuales. Con get_all_routes_statistics(hours=24) alcanza una sola.
+    stats_df = _fetch_all_routes_statistics(db, hours=24)
     predictions_data = []
 
-    for origin, destination in routes:
-        # Get latest data point
-        latest = db.query_measurements(
-            origin=origin,
-            destination=destination,
-            limit=1
-        )
-
-        if not latest.empty:
-            current_time = pd.to_datetime(latest.iloc[0]['timestamp'], utc=True)
-            hour = current_time.hour
-
-            # Simulated prediction based on historical patterns
-            stats = db.get_route_statistics(origin, destination, hours=24)
-            predicted_time = _safe(stats.get('avg_travel_time'))
-
-            predictions_data.append({
-                'Route': f'{origin} → {destination}',
-                'Current': f"{predicted_time:.1f} min",
-                'Predicted (4h)': f"{predicted_time * 1.1:.1f} min",
-                'Predicted (12h)': f"{predicted_time * 1.05:.1f} min",
-                'Confidence': '90%'
-            })
+    for _, row in stats_df.iterrows():
+        predicted_time = _safe(row.get('avg_travel_time'))
+        predictions_data.append({
+            'Route': f"{row['origin']} → {row['destination']}",
+            'Current': f"{predicted_time:.1f} min",
+            'Predicted (4h)': f"{predicted_time * 1.1:.1f} min",
+            'Predicted (12h)': f"{predicted_time * 1.05:.1f} min",
+            'Confidence': '90%'
+        })
 
     if predictions_data:
         pred_df = pd.DataFrame(predictions_data)
@@ -165,14 +198,7 @@ def render_performance_heatmap(db):
     """Render route performance heatmap by hour."""
     st.subheader("🔥 Performance Heatmap (24-hour)")
 
-    end_date = datetime.now(timezone.utc)
-    start_date = end_date - timedelta(days=7)
-
-    df = db.query_measurements(
-        start_timestamp=start_date.isoformat(),
-        end_timestamp=end_date.isoformat(),
-        limit=10000
-    )
+    df = _fetch_recent_measurements(db, days=7)
 
     if df.empty:
         st.warning("No data available")

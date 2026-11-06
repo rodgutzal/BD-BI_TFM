@@ -129,7 +129,8 @@ de 2 minutos) frente a un bloque denso entre el 16 y el 30 de agosto de 2026.
 Dentro de ese bloque de agosto existe además una interrupción de captura de
 ~4 días (16-20 de agosto, caída del scheduler no registrada como incidencia
 en su momento) que se retoma con normalidad el día 20; el resto del periodo
-(20-30 de agosto) sí es continuo en ciclos de ~2 minutos. Para no introducir
+(20-30 de agosto) es continuo en ciclos de ~2 minutos salvo dos pausas más cortas
+el 21 y 22 de agosto (~11 y ~17 h sin datos). Para no introducir
 ruido por un periodo no representativo del funcionamiento normal del
 pipeline, se excluyen esos registros de mayo del modelado (decisión de
 calidad de datos, documentada explícitamente):
@@ -597,29 +598,53 @@ serie_horaria <- df %>%
   group_by(fecha_hora) %>%
   summarise(pct_alta_demora = mean(alta), n_viajes = n(), .groups = "drop") %>%
   arrange(fecha_hora) %>%
-  complete(fecha_hora = seq(min(fecha_hora), max(fecha_hora), by = "hour")) %>%
-  fill(pct_alta_demora, n_viajes, .direction = "down")   # huecos puntuales del scheduler
+  complete(fecha_hora = seq(min(fecha_hora), max(fecha_hora), by = "hour"))
+
+# IMPORTANTE: las horas en que el recolector estuvo detenido quedan como NA y
+# NO se rellenan. Rellenar con el último valor conocido (fill()) repetiría ese
+# valor durante horas —el hueco mayor dura ~82 h— y el modelo aprendería de
+# datos que nunca existieron.
+serie_horaria <- serie_horaria %>%
+  mutate(con_dato = !is.na(pct_alta_demora),
+         # id de cada tramo continuo de horas con dato real
+         tramo = cumsum(con_dato & !lag(con_dato, default = FALSE)))
+
+cat("Horas totales:", nrow(serie_horaria),
+    "| con datos:", sum(serie_horaria$con_dato),
+    "| SIN datos:", sum(!serie_horaria$con_dato), "(no se imputan)\n")
 
 ggplot(serie_horaria, aes(x = fecha_hora, y = pct_alta_demora)) +
-  geom_line(color = "#2c7fb8") +
-  labs(title = "Serie horaria de % Alta demora", x = NULL, y = "% Alta demora")
+  geom_line(color = "#2c7fb8", na.rm = FALSE) +   # los NA cortan la línea: los huecos se ven
+  labs(title = "Serie horaria de % Alta demora (los cortes son horas sin datos)",
+       x = NULL, y = "% Alta demora")
 ```
 
-**Nota sobre la interrupción de ~4 días:** `fill(.direction = "down")` rellena
-esas ~96 horas sin datos con el último valor observado antes del corte (16 de
-agosto), lo que se aprecia como un tramo plano en el gráfico anterior. Es una
-simplificación razonable para no descartar el ajuste estacional de todo el
-mes, pero introduce un tramo artificial en la serie; un tratamiento más
-riguroso trataría ese hueco como `NA` (p. ej. `forecast::na.interp()`) en
-lugar de arrastrar el último valor. Dado que el hueco cae fuera de la ventana
-de entrenamiento reciente usada por `auto.arima` para la proyección a 24h,
-no compromete el forecast final, pero si se reutiliza esta serie para otros
-análisis (p. ej. suavizado o descomposición) conviene tenerlo presente.
+**Sobre las horas sin datos:** de las 337 horas del periodo, 110 (un tercio) no
+tienen datos: el hueco de ~82 h del 16 al 20 de agosto y dos pausas más cortas
+(11 y 17 h) el 21 y 22 de agosto. Se dejan como `NA` y **no se imputan**. Una
+versión anterior las rellenaba con `fill(.direction = "down")`, repitiendo el
+último valor observado durante horas; además, `auto.arima` recibe la serie
+completa (no hay ninguna ventana de entrenamiento reciente), de modo que el
+tramo artificial sí influía en el ajuste. Como `auto.arima` necesita una serie
+sin huecos, el modelo se ajusta sobre el tramo continuo más largo de datos
+reales (ver el chunk siguiente).
 
 ## Ajuste del modelo (auto.arima) y proyección a 24h
 
 ```{r temporal-arima}
-ts_congestion <- ts(serie_horaria$pct_alta_demora, frequency = 24)
+# auto.arima necesita una serie sin huecos. En vez de inventar las horas
+# faltantes, se ajusta sobre el tramo CONTINUO más largo de datos reales.
+tramo_largo <- serie_horaria %>%
+  filter(con_dato) %>%
+  count(tramo) %>%
+  slice_max(n, n = 1, with_ties = FALSE) %>%
+  pull(tramo)
+serie_continua <- serie_horaria %>% filter(con_dato, tramo == tramo_largo)
+
+cat("Tramo continuo más largo:", nrow(serie_continua), "horas (",
+    format(min(serie_continua$fecha_hora)), "->", format(max(serie_continua$fecha_hora)), ")\n")
+
+ts_congestion <- ts(serie_continua$pct_alta_demora, frequency = 24)
 
 modelo_arima <- auto.arima(ts_congestion, seasonal = TRUE)
 summary(modelo_arima)
@@ -630,7 +655,8 @@ autoplot(forecast_24h) +
        x = "Horas (frecuencia diaria = 24)", y = "% Alta demora")
 ```
 
-**Valor añadido para el TFM:** este modelo demuestra, sobre R, la viabilidad
+**Valor añadido para el TFM:** este modelo (ajustado sobre el tramo continuo más
+largo, ~7 días; resultado preliminar) muestra, sobre R, la viabilidad
 de anticipar franjas de congestión con varias horas de antelación — la misma
 lógica que, integrada directamente contra `trips_hourly` en TimescaleDB,
 podría alimentar alertas tempranas en el dashboard de Streamlit previsto en
@@ -727,7 +753,7 @@ incentivos a horarios alternativos).
 - El modelo de **regresión** (XGBoost) mejora sobre la línea base lineal al
   capturar la relación no lineal entre distancia, hora del día y tiempo de
   viaje.
-- El modelo **temporal** (auto.arima) demuestra la viabilidad de anticipar
+- El modelo **temporal** (auto.arima, ajustado sobre el mayor tramo continuo de datos, ~7 días; resultado preliminar) muestra la viabilidad de anticipar
   franjas de congestión horaria, coherente con la arquitectura de series
   temporales (TimescaleDB) ya implementada en el TFM.
 - El **clustering** segmenta los 12 corredores en perfiles diferenciados de
@@ -736,7 +762,7 @@ incentivos a horarios alternativos).
 
 ## Limitaciones
 
-- El periodo de datos analizado cubre principalmente dos semanas de agosto de
+- El periodo analizado va del 16 al 30 de agosto de 2026, pero un tercio de sus horas no tiene datos (recolector detenido; el mayor tramo, ~82 h), quedando ~9,5 días con datos. Cubre además solo dos semanas de agosto de
   2026; patrones estacionales (curso escolar, temporada turística) no están
   representados.
 - Las condiciones climáticas registradas son mayoritariamente estables
