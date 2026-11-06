@@ -1,5 +1,6 @@
 """Cliente de Overpass API (OpenStreetMap) para infraestructura urbana
-(escuelas, hospitales, centros comerciales, negocios).
+(escuelas, hospitales, restauración y bares, ocio, deporte, centros
+comerciales y negocios/comercios en general).
 
 A diferencia de ors_client.py/tomtom_client.py, Overpass no requiere API key
 ni cuenta: es un servicio público sobre datos de OpenStreetMap. Se consulta
@@ -9,7 +10,7 @@ sobre varios espejos públicos por si alguno está saturado.
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -17,15 +18,53 @@ from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
-# Categorías de interés y los tags OSM que las identifican. Si el valor de
-# la lista es solo la clave (sin "="), se interpreta como "la clave existe,
-# cualquier valor" (ej. "shop" matchea shop=supermarket, shop=bakery, ...).
+# Categorías de interés y los tags OSM que las identifican.
+#
+# Sintaxis de cada especificación:
+#   "clave"             -> la clave existe, con cualquier valor (ej. "shop"
+#                          matchea shop=supermarket, shop=bakery, ...)
+#   "clave=valor"       -> ese valor exacto
+#   "clave=v1|v2|v3"    -> cualquiera de esos valores (se traduce a una sola
+#                          expresión regular en la query, en vez de una
+#                          cláusula por valor)
+#
+# EL ORDEN IMPORTA: es la prioridad de _classify() — gana la primera
+# categoría cuyo tag matchee. Las específicas van antes que la genérica
+# "business" (["shop", "office"]), para que un elemento con shop=bakery y
+# amenity=cafe cuente como food_drink y shop=mall no caiga en "business"
+# solo por tener también la clave "shop".
+#
+# Este diccionario es la ÚNICA fuente de verdad: tanto la query que se envía
+# a Overpass como la clasificación de cada elemento salen de aquí (antes la
+# clasificación tenía su propia copia de estas listas y podían desalinearse).
+#
+# Deliberadamente excluidos por ser ruido, no competencia: leisure=pitch,
+# playground, park (espacios públicos) y swimming_pool (en OpenStreetMap
+# incluye piscinas privadas de edificios residenciales).
 CATEGORY_TAGS: Dict[str, List[str]] = {
-    "school": ["amenity=school", "amenity=college", "amenity=university", "amenity=kindergarten"],
-    "hospital": ["amenity=hospital", "amenity=clinic", "amenity=doctors", "amenity=pharmacy"],
-    "mall": ["shop=mall", "shop=department_store"],
+    "school": ["amenity=school|college|university|kindergarten"],
+    "hospital": ["amenity=hospital|clinic|doctors|pharmacy"],
+    # Restauración y bares: la competencia más numerosa para casi cualquier
+    # negocio de barrio, y que antes no se recolectaba en absoluto.
+    "food_drink": ["amenity=restaurant|cafe|bar|pub|fast_food|food_court|ice_cream|biergarten"],
+    "leisure": [
+        "amenity=cinema|theatre|nightclub|casino|arts_centre",
+        "leisure=amusement_arcade|bowling_alley|adult_gaming_centre|escape_game|miniature_golf|dance",
+        "tourism=museum|gallery|theme_park|zoo|aquarium",
+    ],
+    "sport": ["leisure=fitness_centre|sports_centre|sports_hall|stadium|ice_rink"],
+    "mall": ["shop=mall|department_store"],
     "business": ["shop", "office"],
 }
+
+
+def _parse_spec(tag_spec: str) -> Tuple[str, Optional[Tuple[str, ...]]]:
+    """'amenity=cafe|bar' -> ('amenity', ('cafe', 'bar')); 'shop' -> ('shop', None)."""
+    if "=" not in tag_spec:
+        return tag_spec, None
+    key, value = tag_spec.split("=", 1)
+    return key, tuple(value.split("|"))
+
 
 # Espejos públicos de Overpass, probados en orden hasta que uno responda.
 DEFAULT_ENDPOINTS = [
@@ -82,11 +121,13 @@ class OverpassClient:
         clauses = []
         for tag_specs in category_tags.values():
             for tag_spec in tag_specs:
-                if "=" in tag_spec:
-                    key, value = tag_spec.split("=", 1)
-                    selector = f'["{key}"="{value}"]'
+                key, values = _parse_spec(tag_spec)
+                if values is None:
+                    selector = f'["{key}"]'
+                elif len(values) == 1:
+                    selector = f'["{key}"="{values[0]}"]'
                 else:
-                    selector = f'["{tag_spec}"]'
+                    selector = f'["{key}"~"^({"|".join(values)})$"]'
                 clauses.append(f"node{selector}({bbox_str});")
                 clauses.append(f"way{selector}({bbox_str});")
 
@@ -94,23 +135,31 @@ class OverpassClient:
         return f"[out:json][timeout:{server_timeout}];\n(\n  {body}\n);\nout center tags;"
 
     @staticmethod
-    def _categorize(tags: dict) -> Optional[str]:
-        """Prioriza categorías específicas (school/hospital/mall) sobre la
-        genérica "business" para que, por ejemplo, shop=mall no caiga en
-        business solo porque también tiene la clave "shop"."""
-        amenity = tags.get("amenity")
-        shop = tags.get("shop")
-        office = tags.get("office")
+    def _classify(tags: dict) -> Optional[Tuple[str, str]]:
+        """Devuelve (categoría, subcategoría) del primer tag de CATEGORY_TAGS
+        que matchee, o None si el elemento no encaja en ninguna categoría.
 
-        if amenity in {"school", "college", "university", "kindergarten"}:
-            return "school"
-        if amenity in {"hospital", "clinic", "doctors", "pharmacy"}:
-            return "hospital"
-        if shop in {"mall", "department_store"}:
-            return "mall"
-        if shop or office:
-            return "business"
+        La subcategoría es el VALOR del tag que definió la categoría (ej.
+        amenity=cafe -> "cafe"; shop=bakery -> "bakery"). Antes se tomaba
+        `amenity or shop or office`, lo que daba subcategorías equivocadas
+        para categorías basadas en otras claves (un museo con tag
+        `shop=gift` habría quedado como "gift" en vez de "museum").
+        """
+        for category, tag_specs in CATEGORY_TAGS.items():
+            for tag_spec in tag_specs:
+                key, values = _parse_spec(tag_spec)
+                value = tags.get(key)
+                if value is None:
+                    continue
+                if values is None or value in values:
+                    return category, value
         return None
+
+    @classmethod
+    def _categorize(cls, tags: dict) -> Optional[str]:
+        """Solo la categoría (ver _classify)."""
+        result = cls._classify(tags)
+        return result[0] if result else None
 
     def fetch_pois(self, locations: dict, margin_deg: float = 0.015) -> List[dict]:
         """Descarga POIs dentro del bbox que cubre `locations` (dict de
@@ -154,9 +203,10 @@ class OverpassClient:
         pois = []
         for element in elements:
             tags = element.get("tags", {})
-            category = self._categorize(tags)
-            if category is None:
+            classified = self._classify(tags)
+            if classified is None:
                 continue
+            category, subcategory = classified
 
             if element.get("type") == "node":
                 lat, lon = element.get("lat"), element.get("lon")
@@ -171,8 +221,8 @@ class OverpassClient:
                 "osm_type": element.get("type"),
                 "osm_id": element.get("id"),
                 "category": category,
-                "subcategory": tags.get("amenity") or tags.get("shop") or tags.get("office"),
-                "name": tags.get("name") or f"{category.capitalize()} (sin nombre)",
+                "subcategory": subcategory,
+                "name": tags.get("name") or f"{category.replace('_', ' ').capitalize()} (sin nombre)",
                 "latitude": lat,
                 "longitude": lon,
             })

@@ -1,6 +1,7 @@
 """
-Recolector de infraestructura urbana (POIs: escuelas, hospitales, centros
-comerciales, negocios) vía Overpass API (OpenStreetMap).
+Recolector de infraestructura urbana (POIs: escuelas, hospitales,
+restauración y bares, ocio, deporte, centros comerciales y comercios) vía
+Overpass API (OpenStreetMap).
 
 A diferencia de route_extraction.py (tráfico/clima, ciclos cada 1-27 min),
 este dato cambia con muy poca frecuencia — por defecto se refresca una vez
@@ -15,6 +16,7 @@ import argparse
 import logging
 import sys
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -74,6 +76,9 @@ def run_once(db: RouteDatabase, client: OverpassClient, margin_deg: float) -> in
     except Exception as e:
         logger.error(f"POI fetch failed: {e}")
         return 0
+
+    breakdown = dict(sorted(Counter(p["category"] for p in pois).items(), key=lambda kv: -kv[1]))
+    logger.info(f"Overpass devolvió {len(pois)} POIs — por categoría: {breakdown}")
 
     count = db.save_pois(pois)
     logger.info(f"POI refresh complete: {count} POIs stored")
