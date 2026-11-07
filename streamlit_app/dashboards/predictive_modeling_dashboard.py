@@ -44,6 +44,7 @@ from sklearn.tree import plot_tree
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
+from src import forecasting  # noqa: E402
 from src.database import RouteDatabase  # noqa: E402
 
 DATE_CUTOFF = "2026-08-01"  # excluye las pruebas iniciales del pipeline (mayo 2026)
@@ -363,50 +364,34 @@ def render_regression(d: pd.DataFrame) -> None:
 
 @st.cache_resource(show_spinner="Ajustando el modelo de series temporales...", **_CACHE_MODELO)
 def _fit_temporal(d: pd.DataFrame, max_gap_hours: int = 3):
-    from statsmodels.tsa.arima.model import ARIMA
-
-    s = (
-        d.assign(alta=(d["mobility_level"] == "Alta demora").astype(int))
-        .set_index("timestamp")["alta"]
-        .resample("1h").mean()
+    s = forecasting.hourly_share(
+        d.assign(alta=(d["mobility_level"] == "Alta demora").astype(int)).set_index("timestamp")["alta"]
     )
 
     # A diferencia del fill(down) del .Rmd (que arrastra el valor plano sobre huecos de varios
     # días), las horas sin dato NO se rellenan más allá de `max_gap_hours` consecutivas: quedan
     # como NaN y el modelo de espacio de estados las trata como datos faltantes.
     #
-    # OJO, lo que realmente hace este código (la versión anterior de este comentario decía otra
-    # cosa): `resample("1h")` crea un índice horario REGULAR, así que la diferencia entre horas
-    # consecutivas es siempre 1 h y `gap > max_gap_hours` nunca se cumple: la serie NUNCA se
-    # parte en bloques, y se modela entera (con los huecos como NaN), no "el bloque continuo más
-    # reciente". Se deja así a propósito: dividir por los huecos reales dejaría, con un equipo que
-    # se apaga cada noche, un bloque de pocas horas, inútil para una estacionalidad de 24 h.
+    # La serie se modela ENTERA (con sus huecos como NaN), no "el bloque continuo más reciente":
+    # `resample("1h")` crea un índice horario REGULAR, así que la diferencia entre horas consecutivas
+    # es siempre 1 h y nunca se parte en bloques. Dividir por los huecos reales dejaría, con un equipo
+    # que se apaga cada noche, un bloque de pocas horas, inútil para una estacionalidad de 24 h.
     gap = s.index.to_series().diff().dt.total_seconds() / 3600
     block_id = (gap > max_gap_hours).cumsum()
     last_block = block_id.iloc[-1]
-    s_block = s[block_id == last_block].interpolate(limit=max_gap_hours)
+    s_block = s[block_id == last_block]
 
-    order_candidates = [(1, 0, 0), (2, 1, 1), (1, 1, 1), (2, 0, 2)]
-    best_aic, best_fit, best_order = np.inf, None, None
-    for order in order_candidates:
-        try:
-            # low_memory=True: mismo AIC y mismo pronóstico (comprobado con la base real: idénticos
-            # a 4 decimales) con un pico de memoria de ~405 MB en vez de ~870 MB; solo cuesta
-            # ~15% más de tiempo. No hay resultados suavizados ni predicción dentro de muestra,
-            # pero aquí solo se usa el pronóstico a futuro y el AIC.
-            fit = ARIMA(s_block, order=order, seasonal_order=(1, 0, 1, 24)).fit(low_memory=True)
-            if fit.aic < best_aic:
-                best_aic, best_fit, best_order = fit.aic, fit, order
-        except Exception:
-            continue
-
-    forecast = best_fit.get_forecast(steps=24)
-    fc_mean = forecast.predicted_mean
-    fc_ci = forecast.conf_int(alpha=0.2)
+    # El modelo (SARIMA con diferenciación estacional, serie en escala 0-100) vive en
+    # src/forecasting.py, que también usa tools/validate_forecast.py: lo que se valida es lo que se muestra.
+    fc = forecasting.forecast_sarima(s_block, steps=forecasting.HORIZON, max_gap_hours=max_gap_hours)
 
     return {
-        "series": s_block, "order": best_order, "aic": best_aic,
-        "forecast_mean": fc_mean, "forecast_ci": fc_ci,
+        "series": s_block.interpolate(limit=max_gap_hours),
+        "order": forecasting.ORDER, "seasonal_order": forecasting.SEASONAL_ORDER,
+        "forecast_mean": fc["mean"], "forecast_ci": fc["ci"],
+        "converged": fc["converged"], "iterations": fc["iterations"],
+        # Referencia: la media de cada hora del día. Es lo que el ARIMA tiene que mejorar.
+        "baseline": forecasting.profile_forecast(s_block, fc["mean"].index),
         "gap_excluded_hours": int((s.index[-1] - s_block.index[0]).total_seconds() / 3600) - len(s_block) + 1,
     }
 
@@ -414,8 +399,8 @@ def _fit_temporal(d: pd.DataFrame, max_gap_hours: int = 3):
 def render_temporal(d: pd.DataFrame) -> None:
     st.subheader("📈 Forecasting horario de congestión (extensión)")
     st.caption(
-        "Serie horaria de % 'Alta demora'. Se ajusta ARIMA estacional (24h) sobre el bloque "
-        "continuo más reciente, sin arrastrar huecos largos de captura del scheduler."
+        "Serie horaria de % 'Alta demora'. Se ajusta un SARIMA con diferenciación estacional de 24 h sobre toda "
+        "la serie: las horas sin dato (equipo apagado) no se rellenan, el modelo las trata como datos faltantes."
     )
 
     res = _fit_temporal(d)
@@ -424,25 +409,32 @@ def render_temporal(d: pd.DataFrame) -> None:
     fig.add_trace(go.Scatter(x=res["series"].index, y=res["series"].values, mode="lines",
                               name="Observado", line=dict(color="#2c7fb8")))
     fig.add_trace(go.Scatter(x=res["forecast_mean"].index, y=res["forecast_mean"].values, mode="lines",
-                              name="Forecast 24h", line=dict(color="#1b9e77")))
+                              name="Forecast 24h (SARIMA)", line=dict(color="#1b9e77")))
+    fig.add_trace(go.Scatter(x=res["baseline"].index, y=res["baseline"].values, mode="lines",
+                              name="Referencia: media por hora del día", line=dict(color="#e6ab02", dash="dash")))
     fig.add_trace(go.Scatter(
         x=list(res["forecast_ci"].index) + list(res["forecast_ci"].index[::-1]),
         y=list(res["forecast_ci"].iloc[:, 1]) + list(res["forecast_ci"].iloc[:, 0][::-1]),
         fill="toself", fillcolor="rgba(27,158,119,0.2)", line=dict(color="rgba(0,0,0,0)"),
         name="IC 80%", showlegend=True,
     ))
-    fig.update_layout(title=f"ARIMA{res['order']} estacional (24h) — AIC={res['aic']:.1f}",
+    p, dd, q = res["order"]
+    fig.update_layout(title=f"SARIMA{(p, dd, q)}x{res['seasonal_order']} — pronóstico a 24 h frente a la referencia",
                        xaxis_title=None, yaxis_title="% Alta demora", template="plotly_dark", height=450)
     st.plotly_chart(fig, width="stretch")
     n_total = len(res["series"])
     n_con_dato = int(res["series"].notna().sum())
+    iteraciones = res["iterations"]
+    estado = "convergió" if res["converged"] else "**NO convergió**"
+    detalle = f" en {iteraciones} iteraciones" if iteraciones else ""
     st.caption(
         f"Modelado sobre {n_total:,} horas de calendario, de las cuales {n_con_dato:,} tienen dato "
-        f"({n_con_dato / n_total:.0%}); el resto son huecos de la recolección (equipo apagado) que el "
-        "modelo trata como datos faltantes, sin rellenarlos. Los ajustes ARIMA pueden terminar con "
-        "avisos de convergencia del optimizador: tómese el pronóstico como orientativo."
+        f"({n_con_dato / n_total:.0%}); el resto son huecos de la recolección que el modelo trata como datos "
+        f"faltantes, sin rellenarlos. El ajuste {estado}{detalle}."
     )
-
+    if not res["converged"]:
+        st.warning("El optimizador no convergió en este ajuste: tómese el pronóstico como orientativo.")
+    st.info(forecasting.VALIDATION_NOTE)
 
 # --------------------------------------------------------------------------
 # Clustering de corredores
@@ -524,7 +516,7 @@ def render_clustering(d: pd.DataFrame) -> None:
 SECCIONES = {
     "clf": ("Clasificación", "regresión logística + Random Forest (300 árboles, búsqueda en rejilla con validación cruzada)", "~25 s con 16 CPUs"),
     "reg": ("Regresión", "regresión lineal + Gradient Boosting", "~20 s con 16 CPUs"),
-    "temporal": ("Forecast temporal", "ARIMA estacional de 24 h (4 candidatos)", "~25 s con 16 CPUs; el que más tarda con 1 CPU"),
+    "temporal": ("Forecast temporal", "SARIMA con diferenciación estacional de 24 h", "unos segundos"),
     "cluster": ("Clustering", "k-means sobre los corredores", "~3 s"),
 }
 
