@@ -533,6 +533,8 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 | Archivo | Qué cubre |
 |---|---|
 | `test_api_clients.py` | Clientes HTTP **sin red** (sesión falsa): TomTom, ORS, OpenWeather y Overpass: parseo y claves comunes (ORS deja el tráfico en `None`, no en 0), petición enviada (ORS usa `[lon, lat]`), reintentos solo en 429/5xx, caché del clima, fallback entre espejos de Overpass, clasificación de POIs y propagación de errores |
+| `test_migrations.py` | Migración del CSV histórico: a SQLite (filas sin campos obligatorios, `data_source` por defecto, números ilegibles → NULL, `--dry-run` sin escribir, idempotencia, CLI) y a TimescaleDB con un `psycopg2` falso (orden de columnas, rollback ante error, celdas vacías como NULL y no como `NaN`) |
+| `test_causal_analysis.py` | `CausalAnalysis` con datos sintéticos de efecto conocido (0,5 min/°C): recupera el efecto y su signo, no ve efecto donde no lo hay, antes/después, confusores (exigen afectar a tratamiento **y** resultado) e interpretaciones. Comprueba los cálculos, **no** que el resultado sea causal |
 | `test_analytics.py` | `MobilityAnalytics`: inicialización, *consistency score* (ventana móvil de 24 h) y resumen de la base |
 | `test_analyst_quality.py` | Analyst al abrirse: usa **un** perfil de la base y no las consultas caras de antes (`get_available_routes` ×4, completitud ruta por ruta, 100 mil filas cargadas); las métricas de calidad son las del perfil |
 | `test_api.py` | API REST con `TestClient` y una base temporal: **404** en recursos sin datos (antes salía 400), **422** en parámetros inválidos, caminos felices y `predict` de punta a punta |
@@ -565,7 +567,8 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 
 - **Docker real**: el CI solo valida la sintaxis de `docker-compose.yml` (`docker compose config`); que el stack arranque, el volumen `./models` y los healthchecks se probaron a mano, no hay test automático.
 - **Servicios externos reales**: ORS, TomTom, OpenWeather, Overpass, Foursquare y Data Commons se prueban con datos simulados, nunca contra la API.
-- **Sin tests propios** (los ejercitan indirectamente, o nada): el `DataCollector` de punta a punta (solo el `HybridScheduler`), `migration` / `timescale_migration`, `causal_analysis`, `predictor` / `travel_time_model`, los CLI `poi_extraction*`, y los dashboards **Executive**, **Maps** y **Analyst** como pantallas (de Operations, Recomendación y Modelado Predictivo se prueba su lógica).
+- **Sin tests propios** (los ejercitan indirectamente, o nada): el `DataCollector` de punta a punta (solo el `HybridScheduler`), `predictor` / `travel_time_model`, los CLI `poi_extraction*`, y los dashboards **Executive**, **Maps** y **Analyst** como pantallas (de Operations, Recomendación y Modelado Predictivo se prueba su lógica).
+- **`causal_analysis` no es inferencia causal rigurosa** (observado al escribir sus tests): el "propensity score matching" calcula los *propensity scores* pero **no los usa**: `_calculate_psm_effect` es la diferencia de medias entre grupo tratado y control, sin emparejar; y los textos ("causes ~X min") presentan como causal una asociación en datos observacionales. Para el TFM conviene llamarlo análisis de asociación estratificada.
 - **Render visual** en un navegador real.
 
 **Añadir un test sin dejar la documentación atrás:** escríbelo con un nombre y un docstring descriptivos; si es un archivo nuevo, añade su fila a la tabla de arriba; y regenera el catálogo con `python tools/generate_tests_doc.py`. Si se te olvida, `tests/test_tests_documentation.py` falla en el CI y dice qué falta.
