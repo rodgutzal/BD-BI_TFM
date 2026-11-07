@@ -6,11 +6,12 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**31 archivos · 357 funciones de test · 409 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**33 archivos · 394 funciones de test · 463 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
 | [`tests/test_analyst_quality.py`](#teststest_analyst_qualitypy) | 6 | 6 |
+| [`tests/test_analyst_tabs.py`](#teststest_analyst_tabspy) | 17 | 25 |
 | [`tests/test_analytics.py`](#teststest_analyticspy) | 3 | 3 |
 | [`tests/test_api.py`](#teststest_apipy) | 14 | 20 |
 | [`tests/test_api_clients.py`](#teststest_api_clientspy) | 22 | 22+ |
@@ -19,6 +20,7 @@
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 29 | 29 |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
+| [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 20 | 29+ |
 | [`tests/test_data_profile.py`](#teststest_data_profilepy) | 15 | 15 |
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
@@ -61,6 +63,32 @@
 - `test_la_completitud_por_ruta_sale_del_perfil_y_cubre_todas_las_rutas`
 - `test_las_muestras_por_ruta_de_model_performance_son_las_filas_reales`
 - `test_el_panel_lateral_usa_el_ultimo_timestamp_y_no_el_resumen_completo` — app.py pedía get_database_summary() (con el DISTINCT de rutas) solo para la hora del último dato.
+
+## `tests/test_analyst_tabs.py`
+
+> Tests de las pestañas de Analyst que no cubría test_analyst_quality.py: editor SQL (solo lectura de verdad),
+> exportación completa, explorador de datos, pruebas estadísticas, correlaciones y base vacía.
+>
+> (test_analyst_quality.py ya prueba que Analyst abre con UN perfil de la base; test_predictive_modeling_*.py,
+> el modelado. Aquí el modelado se sustituye por un no-op.)
+
+- `test_el_editor_sql_ejecuta_selects_y_ofrece_la_descarga`
+- `test_el_editor_sql_acepta_with_recursivo_y_funciones`
+- `test_el_editor_sql_rechaza_escrituras_y_pragmas_sin_tocar_los_datos` ×7
+- `test_el_editor_sql_no_crea_archivos_en_disco` ×2 — Regresión: con solo `mode=ro`, ATTACH y VACUUM INTO se ejecutaban y creaban archivos nuevos (VACUUM INTO vuelca una copia completa de la base a cualquier ruta escribible). El authorizer de SQLite los deniega.
+- `test_el_editor_sql_cierra_la_conexion_aunque_la_consulta_falle` — Si no se cerrara, en Windows el archivo quedaría bloqueado (no se podría borrar/mover).
+- `test_el_editor_sql_con_consulta_vacia_avisa`
+- `test_un_ejemplo_del_editor_rellena_la_consulta`
+- `test_todos_los_ejemplos_del_editor_se_pueden_ejecutar` — Cada consulta de ejemplo debe ser válida y pasar el authorizer (incluida sqlite_master).
+- `test_la_exportacion_incluye_todas_las_rutas_y_la_polyline_por_defecto`
+- `test_la_exportacion_ligera_omite_la_polyline` ×2 — La casilla de la polyline debe respetarse tanto en la exportación total como en la limitada por fechas.
+- `test_la_exportacion_con_rango_de_fechas_filtra`
+- `test_la_exportacion_sin_datos_avisa`
+- `test_el_explorador_muestra_los_datos_de_la_ruta_elegida`
+- `test_las_pruebas_estadisticas_corren_con_datos_suficientes`
+- `test_las_correlaciones_se_dibujan_con_las_columnas_por_defecto`
+- `test_analyst_con_la_base_vacia_no_lanza_excepciones`
+- `test_la_pestana_de_modelos_marca_las_rutas_con_modelo_entrenado`
 
 ## `tests/test_analytics.py`
 
@@ -232,6 +260,34 @@
 - `test_get_data_source_tomtom` — Con DATA_SOURCE=tomtom en el entorno, debe respetarlo.
 - `test_get_data_source_invalid` — Un valor inválido debe lanzar RuntimeError.
 - `test_get_timescale_config_defaults` — Sin variables PG* definidas, deben usarse los valores de docker-compose.yml.
+
+## `tests/test_dashboards_executive_maps.py`
+
+> Tests de las pantallas Executive y Maps (Streamlit AppTest) con una base temporal.
+>
+> Se comprueba que abren sin excepciones con datos y con la base vacía, y que lo que muestran sale de los datos
+> (tarjetas, deltas, alertas, colores y estados de las rutas, capas de POIs). No se prueba el aspecto visual.
+
+- `test_executive_abre_con_datos_y_muestra_las_tarjetas`
+- `test_executive_tablas_de_mejores_y_peores_rutas`
+- `test_executive_sin_periodo_anterior_no_inventa_deltas`
+- `test_executive_con_periodo_anterior_calcula_el_delta_con_los_datos`
+- `test_delta` ×5
+- `test_executive_alertas_segun_los_umbrales` ×6
+- `test_executive_si_el_resumen_falla_muestra_el_error_y_no_sigue`
+- `test_executive_con_la_base_vacia_no_lanza_excepciones`
+- `test_color_segun_el_retraso`
+- `test_el_mapa_dibuja_una_traza_por_ruta_mas_las_ubicaciones_y_colorea_por_retraso`
+- `test_el_mapa_ignora_rutas_con_ubicaciones_desconocidas`
+- `test_maps_abre_con_datos_y_la_tabla_de_estado_cubre_todas_las_rutas`
+- `test_los_limites_de_los_estados_de_la_tabla_son_1_y_4_minutos_de_retraso` — <=1 libre, <=4 moderado, >4 denso (los mismos umbrales que el color del mapa).
+- `test_maps_con_la_base_vacia_marca_todas_las_rutas_sin_dato`
+- `test_maps_sin_rutas_seleccionadas_avisa`
+- `test_maps_sin_pois_explica_como_cargarlos`
+- `test_maps_con_pois_de_overpass_dibuja_la_capa_y_cuenta_los_elementos`
+- `test_las_categorias_de_overpass_por_defecto_excluyen_las_masivas`
+- `test_la_capa_de_pois_usa_la_fuente_indicada_y_no_mezcla_las_dos` — school/mall existen en los dos catálogos: elegir una fuente no debe dibujar los de la otra.
+- `test_la_capa_de_pois_no_hace_nada_sin_categorias_o_con_fuente_invalida`
 
 ## `tests/test_data_profile.py`
 
