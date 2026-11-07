@@ -148,14 +148,17 @@ class TravelTimePredictor:
             return None
 
         try:
+            # Los nombres y el orden de las columnas deben ser EXACTAMENTE los del ajuste
+            # (prepare_features las renombra a temperature/humidity): con otros nombres sklearn rechazaba
+            # la entrada y este método devolvía siempre None.
             X = pd.DataFrame([{
                 "hour_of_day": hour,
                 "day_of_week": day_of_week,
-                "origin_temperature": temperature,
-                "origin_humidity": humidity,
+                "temperature": temperature,
+                "humidity": humidity,
                 "no_traffic_time_min": no_traffic_time,
                 "travel_time_min_lag": historical_avg or no_traffic_time,
-            }])
+            }])[self.feature_names]
 
             X_scaled = self.scaler.transform(X)
             prediction = self.model.predict(X_scaled)[0]
