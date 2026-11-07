@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**25 archivos · 231 funciones de test · 271 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**26 archivos · 240 funciones de test · 280 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -21,6 +21,7 @@
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 7 | 7 |
+| [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_foursquare_client.py`](#teststest_foursquare_clientpy) | 12 | 28 |
 | [`tests/test_hybrid_scheduler.py`](#teststest_hybrid_schedulerpy) | 3 | 3 |
 | [`tests/test_location_scoring.py`](#teststest_location_scoringpy) | 22 | 22 |
@@ -213,6 +214,20 @@
 - `test_insufficient_data` — Test handling of insufficient data.
 - `test_model_save_load` — Test model saving and loading.
 
+## `tests/test_forecasting.py`
+
+> Tests del pronóstico horario (src/forecasting.py) y de su validación (tools/validate_forecast.py).
+
+- `test_el_sarima_converge_y_pronostica_en_escala_original` — El pronóstico a 24 h converge (antes no lo hacía), queda en la escala 0-1 y el IC lo envuelve.
+- `test_el_sarima_aprende_el_ciclo_diario` — Con un ciclo diario claro, el pronóstico sigue el perfil mejor que una media plana.
+- `test_las_horas_sin_dato_no_se_inventan` — hourly_share deja NaN en las horas sin mediciones; solo se interpolan huecos cortos al ajustar.
+- `test_perfil_horario_y_su_pronostico` — La referencia usa la media de cada hora del día; para una hora sin historia cae a la media global.
+- `test_mae_ignora_las_posiciones_sin_dato`
+- `test_los_cortes_exigen_horizonte_y_pasado_con_datos`
+- `test_las_referencias_no_usan_datos_del_futuro` — Cambiar los valores a partir del corte no debe alterar ninguna referencia.
+- `test_la_validacion_compara_con_las_referencias` — evaluate + summarize: con un ciclo diario limpio el perfil y el SARIMA ganan a media y persistencia.
+- `test_la_validacion_lee_la_base_en_solo_lectura` — load_hourly_share abre la base con immutable=1: no crea -wal/-shm ni modifica el archivo.
+
 ## `tests/test_foursquare_client.py`
 
 > Pruebas de la categorización y de los puntos de búsqueda de Foursquare.
@@ -396,7 +411,7 @@
 - `test_pulsar_un_boton_entrena_solo_esa_seccion`
 - `test_lo_pedido_se_mantiene_en_la_sesion`
 - `test_el_boton_de_todos_entrena_las_cuatro_secciones`
-- `test_el_forecast_temporal_funciona_con_low_memory` — El ARIMA usa fit(low_memory=True): se comprueba que el pronóstico y su intervalo se pueden obtener (sin resultados suavizados ni predicción en muestra, que low_memory no ofrece).
+- `test_el_forecast_temporal_funciona_con_low_memory` — El SARIMA usa fit(low_memory=True): se comprueba que el pronóstico y su intervalo se pueden obtener (sin resultados suavizados ni predicción en muestra, que low_memory no ofrece), y que la pantalla muestra la referencia y la nota de validación.
 
 ## `tests/test_query_measurements_polyline.py`
 
