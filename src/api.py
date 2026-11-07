@@ -3,9 +3,11 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pathlib import Path
+import math
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+import numpy as np
 import pandas as pd
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -242,6 +244,23 @@ async def get_route_statistics(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def _json_safe(value):
+    """Hace serializable a JSON (recursivamente): NaN/inf -> None y escalares de numpy -> tipos de Python.
+
+    Sin esto el endpoint daba 500: p. ej. la desviación típica de un día con una sola muestra es NaN y el
+    resultado del análisis incluye np.bool_.
+    """
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, np.generic):          # np.bool_, np.float64... -> tipos nativos de Python
+        value = value.item()
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
 @app.get("/api/time-series/{origin}/{destination}")
 async def time_series_analysis(
     origin: str,
@@ -280,7 +299,7 @@ async def time_series_analysis(
             "route": f"{origin} → {destination}",
             "analysis_type": analysis,
             "period_days": days,
-            "result": result
+            "result": _json_safe(result)
         }
     except HTTPException:
         # Re-lanzar tal cual: sin esto, el 404 que lanza el propio endpoint lo capturaba

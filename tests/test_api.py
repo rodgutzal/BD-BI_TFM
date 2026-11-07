@@ -15,6 +15,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 pytest.importorskip("fastapi")
@@ -131,6 +132,37 @@ def test_anomalies(client):
     r = client.get("/api/anomalies/Msida/Gzira")
     assert r.status_code == 200
     assert r.json()["route"] == "Msida → Gzira" and "anomalies" in r.json()
+
+
+def test_json_safe_sustituye_nan_e_infinito_por_none(api):
+    """JSON no admite NaN/inf: se convierten en None, también dentro de dicts y listas anidados.
+    Los escalares de numpy (np.bool_, np.float64) pasan a tipos nativos de Python."""
+    entrada = {"a": float("nan"), "b": [1.0, float("inf"), {"c": -float("inf")}], "d": 2, "e": "x"}
+    assert api._json_safe(entrada) == {"a": None, "b": [1.0, None, {"c": None}], "d": 2, "e": "x"}
+    salida = api._json_safe({"s": np.bool_(True), "f": np.float64("nan"), "g": np.float64(1.5)})
+    assert salida == {"s": True, "f": None, "g": 1.5}
+    assert type(salida["s"]) is bool and type(salida["g"]) is float
+
+
+def test_time_series_patrones_con_un_dia_de_una_sola_muestra(tmp_path, monkeypatch):
+    """Regresión: un día con 1 muestra tiene desviación típica NaN y el endpoint devolvía 500
+    (dependía de la hora a la que se ejecutaba: justo tras la medianoche UTC)."""
+    # 80 horas terminando a las 00:30 de ayer (UTC): ese último día queda con exactamente 1 muestra.
+    fin =datetime.now(timezone.utc).replace(hour=0, minute=30, second=0, microsecond=0) - timedelta(days=1)
+    registros = [{**r, "timestamp": (fin - timedelta(hours=i)).isoformat()} for i, r in enumerate(_registros(80))]
+    db_path = tmp_path / "t.db"
+    monkeypatch.setenv("MOBILITY_DB_PATH", str(db_path))
+    monkeypatch.setenv("MOBILITY_CSV_PATH", str(tmp_path / "t.csv"))
+    RouteDatabase(tmp_path / "t.csv", db_path).save_records_to_sqlite(registros)
+    sys.modules.pop("src.api", None)
+    try:
+        modulo = importlib.import_module("src.api")
+        r = TestClient(modulo.app, raise_server_exceptions=False).get("/api/time-series/Msida/Gzira?analysis=patterns")
+    finally:
+        sys.modules.pop("src.api", None)
+    assert r.status_code == 200
+    por_dia = r.json()["result"]["by_day"]
+    assert any(v["std"] is None and v["count"] == 1 for v in por_dia.values())
 
 
 def test_time_series_patrones(client):
