@@ -1,7 +1,11 @@
 # Diseño: machine learning y redes neuronales para el asistente de recomendación de ubicación
 
 **Estado:** borrador para discusión (6-nov-2026). Nada de esto está implementado todavía.
-**Decisiones ya tomadas:** el asistente pasa a recomendar por **celdas de ~250 m** (no solo las 7 zonas), y la ampliación de datos con Overpass se hace **primero con una prueba pequeña** (hecha, resultados en la sección 2).
+**Decisiones ya tomadas:**
+- El asistente pasa a recomendar por **celdas de ~250 m** (no solo las 7 zonas).
+- La ampliación de datos con Overpass se hace **primero con una prueba pequeña** (hecha, resultados en la sección 2).
+- El producto es un **panorama de tres lentes por celda** (competencia, mercado consumidor y proveedores), y "lo más positivo para el usuario" significa **lo más útil y accionable**, no un puntaje inflado (confirmado el 6-nov-2026).
+- Los **perfiles de negocio son ajustables por el usuario** sobre valores por defecto revisados (sección E, 7-nov-2026).
 
 ## 1. Qué problema se quiere resolver, y qué NO se puede afirmar
 
@@ -106,7 +110,7 @@ Todo el entrenamiento se hace **fuera del dashboard** (scripts en `tools/`), y e
 
 ### E. Perfiles de negocio: qué cuenta como competencia, mercado y proveedor
 
-Una tabla de conocimiento (`src/ml/business_profiles.py`, revisable por una persona) que, para cada tipo de negocio, dice qué etiquetas de OSM son cada cosa. Sin ella no se puede calcular ninguna lente. Ejemplo (borrador, **a validar**):
+Una tabla de conocimiento (`src/ml/business_profiles.py`) que, para cada tipo de negocio, dice qué etiquetas de OSM son cada cosa. Sin ella no se puede calcular ninguna lente. Esta información **no se deduce de los datos** (ningún dato dice si un supermercado compite con una panadería): es conocimiento de negocio. Por eso la tabla es un **perfil por defecto** que el usuario puede ajustar (ver más abajo), y no una verdad fija. Ejemplo de los valores por defecto (borrador, **a revisar**):
 
 | Tipo | Competencia directa | Competencia indirecta (sustitutos) | Generadores de mercado | Proveedores típicos |
 |---|---|---|---|---|
@@ -117,6 +121,26 @@ Una tabla de conocimiento (`src/ml/business_profiles.py`, revisable por una pers
 | Comercio (`business`, por subcategoría) | misma subcategoría | subcategorías afines | residentes, oficinas, ocio, turismo | mayoristas del sector |
 
 Lo que ya hay **no basta** para todos los tipos: donde los proveedores casi no están cartografiados (mayoristas, distribuidores sanitarios) el lente se marca como "sin datos suficientes" y no se inventa.
+
+#### Perfiles ajustables por el usuario
+
+Los valores por defecto no se imponen: el usuario conoce su negocio mejor que el sistema (una pizzería artesanal no compite igual que un local de comida rápida; sabe si vende a turistas, a oficinistas o al barrio; sabe qué proveedores usaría). Pero **tampoco se deja la definición en blanco**: la mayoría de usuarios no sabe qué es una etiqueta de OSM, y sin valores por defecto razonables un perfil mal definido produciría un panorama engañoso que se atribuiría al modelo.
+
+**Controles, en lenguaje de negocio (no en etiquetas técnicas):**
+
+| Pregunta al usuario | Control | Por defecto |
+|---|---|---|
+| ¿A quién le vendes? | casillas: residentes, oficinistas, estudiantes, turistas, vida nocturna | las del perfil del tipo de negocio |
+| ¿Qué consideras competencia? | lista de tipos de negocio con opción de quitar o añadir | competencia directa e indirecta del perfil |
+| ¿Qué proveedores te importan? | casillas con los tipos de proveedor | los habituales del perfil |
+| (opcional) modo avanzado | edición de las etiquetas de OSM de cada grupo | — |
+
+**Reglas que se mantienen:**
+1. El panorama **indica qué perfil se usó** (por defecto o modificado y cómo), porque los resultados dependen de esas elecciones.
+2. Un perfil **no puede dejar una lente sin ningún elemento**: se avisa y se vuelve al valor por defecto de esa lente.
+3. **Lo que el usuario cambia solo afecta a las lentes explícitas.** Son conteos sobre una tabla precalculada de celda × subcategoría de OSM, y recalcularlos al momento es barato. En cambio **el modelo de brecha de oferta aprendido (sección B) no se reentrena** con cada cambio: sigue usando las categorías estándar, y la pantalla lo dice. Mezclar ambas cosas sin avisar haría creer que el modelo aprendido entiende la definición personal de competencia.
+4. Los **valores por defecto se revisan** una vez (los revisa quien decida el autor: él mismo, su tutor o alguien con experiencia en el sector) y quedan documentados como criterio del autor si no hay revisión externa.
+5. La comparabilidad entre recomendaciones se conserva porque siempre existe el perfil por defecto como punto de referencia.
 
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
@@ -134,10 +158,10 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 
 | Fase | Entregable | Depende de |
 |---|---|---|
-| 0 | Rejilla y variables (`src/ml/`), con tests y control de fuga; **perfiles de negocio** (sección E) y los indicadores de las tres lentes con los datos que ya hay; medición de cuánto varía cada lente entre celdas | — |
+| 0 | Rejilla y variables (`src/ml/`), con tests y control de fuga; **perfiles de negocio por defecto** (sección E) y los indicadores de las tres lentes con los datos que ya hay; **tabla precalculada celda × subcategoría de OSM** (base del recálculo al ajustar el perfil); medición de cuánto varía cada lente entre celdas | — |
 | 1 | Modelos de oferta (boosting y MLP) + `tools/validate_location_model.py` (validación espacial reproducible, como `validate_forecast.py`) y resultados en el README | 0 |
 | 1b | Edificios residenciales, paradas de transporte, **hoteles y alojamiento turístico**, mayoristas y zonas industriales/logísticas (mercado y proveedores finos) | **autorización de descarga a Overpass** |
-| 2 | Tabla precalculada de **panoramas por celda** (tres lentes + confianza) + mapa de calor y ficha por celda en Recomendación; el MCDA se conserva como respaldo y para las otras 5 categorías | 1 |
+| 2 | Tabla precalculada de **panoramas por celda** (tres lentes + confianza) + mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 1 |
 | 3 | Clasificador de texto, comparado con las palabras clave | — |
 | 4 | Riesgo de cierre exploratorio (etiquetas de Overpass histórico de toda el área) | 0, **autorización de descarga** |
 
@@ -148,6 +172,7 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 - **Demanda débil:** población estimada y solo por zona hasta que haya señal de edificios (fase 1b).
 - **Muestra pequeña:** 560 celdas y dos categorías con datos suficientes. Los intervalos serán anchos; hay que mostrarlos.
 - **Etiquetas de cierre ruidosas:** 26 % de los "cierres plausibles" parece seguir abierto en la prueba.
+- **Perfiles personalizados:** si el usuario redefine la competencia o los proveedores, el panorama cambia pero el modelo aprendido no; y un perfil muy sesgado (por ejemplo, quitar casi toda la competencia) produce un panorama más optimista sin que los datos lo respalden. Por eso el perfil usado se muestra siempre en el panorama y se avisa cuando se aparta mucho del valor por defecto.
 
 ## 7. Decisiones pendientes
 
@@ -155,5 +180,5 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 2. ¿Se añade **`torch`** (solo para entrenar, no en el dashboard) si el MLP de scikit-learn se queda corto, o se limita el trabajo a scikit-learn?
 3. ¿Se acepta el **criterio de éxito** de la sección 4 (publicar el ML solo si gana en validación espacial)?
 4. ¿Quién escribe las **~200 frases de evaluación** del clasificador de texto? Idealmente alguien que conozca el lenguaje real de los usuarios; yo puedo proponer un borrador.
-5. ¿Quién **valida la tabla de perfiles de negocio** (sección E): qué es competencia, mercado y proveedor para cada tipo? Es conocimiento del dominio, no se deduce de los datos; yo propongo un borrador y alguien con criterio de negocio lo corrige.
-6. ¿Se acepta la interpretación de **"lo más positivo"** como "lo más útil y accionable" (empezar por lo favorable y mostrar siempre los riesgos), y no como un puntaje inflado?
+5. ¿Quién **revisa los valores por defecto de los perfiles de negocio** (sección E)? Ya no es crítico, porque el usuario puede corregirlos; basta con que alguien con criterio de negocio los repase una vez: el propio autor, su tutor o una persona con experiencia en el sector. Yo preparo el borrador completo. Si no hay revisión externa, el TFM debe decir que son criterio del autor.
+6. ¿Qué **umbral** de desviación del perfil por defecto activa el aviso al usuario (por ejemplo, quitar más de la mitad de los elementos de competencia)? Propongo empezar en la mitad y ajustarlo con las primeras pruebas.
