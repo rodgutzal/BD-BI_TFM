@@ -35,7 +35,9 @@ class RoutePredictor:
         if key in self.models:
             return self.models[key]
 
-        model = TravelTimePredictor(self._get_model_path(origin, destination))
+        # min_samples también al modelo: antes se comprobaba aquí pero el modelo usaba su propio mínimo
+        # (50), así que con min_samples=30 (train_models.py) las rutas de 30-49 muestras fallaban al entrenar.
+        model = TravelTimePredictor(self._get_model_path(origin, destination), min_samples=self.min_samples)
         self.models[key] = model
         return model
 

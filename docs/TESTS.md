@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**29 archivos · 303 funciones de test · 352 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**30 archivos · 328 funciones de test · 380 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -39,6 +39,7 @@
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
+| [`tests/test_travel_time_predictor.py`](#teststest_travel_time_predictorpy) | 25 | 28 |
 
 `+` = hay un `parametrize` con valores no literales; esos tests se cuentan como 1 caso.
 
@@ -574,6 +575,37 @@
 - `test_correlation_analysis` — Test correlation analysis.
 - `test_forecast_summary` — Test forecast summary.
 - `test_insufficient_data` — Test handling of insufficient data.
+
+## `tests/test_travel_time_predictor.py`
+
+> Tests del modelo simple por ruta: src/models/travel_time_model.py (TravelTimePredictor) y src/predictor.py
+> (RoutePredictor, el orquestador que usa train_models.py).
+
+- `test_prepare_features_devuelve_las_seis_variables_y_el_objetivo`
+- `test_prepare_features_acepta_columnas_sin_prefijo_origin`
+- `test_prepare_features_rellena_nulos_con_cero`
+- `test_prepare_features_sin_una_columna_necesaria_devuelve_vacio` ×4
+- `test_prepare_features_con_dataframe_vacio`
+- `test_entrena_y_registra_las_features`
+- `test_no_entrena_con_pocas_muestras_ni_sin_columnas`
+- `test_no_entrena_si_el_objetivo_tiene_nulos` — RandomForest no admite NaN en el objetivo: el error se captura y train() devuelve False.
+- `test_predict_devuelve_tiempo_y_confianza_razonables` — Regresión: predict() devolvía SIEMPRE None, porque se le pasaban al escalador columnas con otro nombre (origin_temperature/origin_humidity) que las del ajuste (temperature/humidity) y sklearn lo rechazaba; el except lo ocultaba. El modelo por ruta que documenta el README no producía ninguna predicción.
+- `test_predict_responde_a_los_datos_de_entrada` — El modelo aprende la relación: con un tiempo sin tráfico mayor, predice más.
+- `test_predict_sin_entrenar_devuelve_none`
+- `test_predict_usa_el_historico_como_lag_y_si_falta_el_tiempo_sin_trafico` — `historical_avg or no_traffic_time`: con histórico se usa como lag; con None o 0 (falsy) se usa el tiempo sin tráfico. Se espía la entrada que recibe el escalador.
+- `test_el_lag_es_la_media_movil_de_5_valores_del_tiempo_de_viaje` — Documenta cómo se construye hoy `travel_time_min_lag`: media móvil de 5 filas que INCLUYE la fila actual (y las filas llegan de la base ordenadas de más reciente a más antigua). Ver README, limitaciones.
+- `test_guardar_y_cargar_reproduce_las_predicciones`
+- `test_no_guarda_un_modelo_sin_entrenar_y_carga_falla_con_gracia`
+- `test_el_nombre_del_archivo_del_modelo_no_tiene_espacios`
+- `test_crea_el_directorio_de_modelos_y_cachea_el_modelo_por_ruta`
+- `test_entrena_una_ruta_con_suficientes_datos_y_guarda_el_modelo`
+- `test_no_entrena_una_ruta_con_pocas_muestras`
+- `test_min_samples_del_predictor_llega_al_modelo` — Regresión: el predictor comprobaba su min_samples pero el modelo usaba su propio mínimo (50), así que con min_samples=30 (como train_models.py) una ruta de 40 muestras fallaba al entrenar.
+- `test_train_all_models_devuelve_un_resultado_por_ruta`
+- `test_predice_el_tiempo_de_viaje_de_una_ruta_entrenada`
+- `test_sin_modelo_entrenado_no_hay_prediccion`
+- `test_un_predictor_nuevo_reutiliza_los_modelos_guardados`
+- `test_el_estado_de_los_modelos`
 
 ## Archivos de apoyo (no contienen tests)
 
