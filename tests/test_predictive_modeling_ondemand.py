@@ -104,11 +104,14 @@ def test_el_boton_de_todos_entrena_las_cuatro_secciones(llamadas):
 
 
 def test_el_forecast_temporal_funciona_con_low_memory(llamadas):
-    """El ARIMA usa fit(low_memory=True): se comprueba que el pronóstico y su intervalo se pueden
-    obtener (sin resultados suavizados ni predicción en muestra, que low_memory no ofrece)."""
+    """El SARIMA usa fit(low_memory=True): se comprueba que el pronóstico y su intervalo se pueden
+    obtener (sin resultados suavizados ni predicción en muestra, que low_memory no ofrece), y que la
+    pantalla muestra la referencia y la nota de validación."""
     at = _app()
     at.button(key="pm_btn_temporal").click().run()
     assert not at.exception, [e.value for e in at.exception]
     assert set(llamadas) == {"temporal"}
     texto = " ".join(c.value for c in at.caption)
     assert "horas de calendario" in texto and "datos faltantes" in texto
+    assert "convergió" in texto
+    assert any("media de cada hora del día" in i.value for i in at.info)
