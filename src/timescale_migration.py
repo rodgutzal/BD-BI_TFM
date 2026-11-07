@@ -54,6 +54,11 @@ def backfill(csv_path: Path) -> int:
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
+    # Las celdas vacías del CSV llegan como NaN (float), también en columnas de texto: psycopg2 lo envía
+    # como 'NaN'::float y Postgres lo rechaza en una columna de texto, abortando todo el backfill. Se
+    # pasan a None (NULL) y los valores a tipos nativos de Python.
+    df = df.astype(object).where(df.notna(), None)
+
     rows = []
     for _, row in df.iterrows():
         rows.append((
@@ -66,7 +71,7 @@ def backfill(csv_path: Path) -> int:
             row.get("origin_humidity"),
             row.get("origin_weather"),
             row.get("mobility_level"),
-            row.get("data_source", "unknown"),
+            row.get("data_source") or "unknown",
             row.get("traffic_delay_min"),
         ))
 
