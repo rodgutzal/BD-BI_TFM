@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**27 archivos · 264 funciones de test · 304 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**29 archivos · 303 funciones de test · 352 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -15,6 +15,7 @@
 | [`tests/test_api.py`](#teststest_apipy) | 14 | 20 |
 | [`tests/test_api_clients.py`](#teststest_api_clientspy) | 22 | 22+ |
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
+| [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 21 | 30 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
 | [`tests/test_data_profile.py`](#teststest_data_profilepy) | 15 | 15 |
@@ -28,6 +29,7 @@
 | [`tests/test_location_scoring.py`](#teststest_location_scoringpy) | 22 | 22 |
 | [`tests/test_locations.py`](#teststest_locationspy) | 5 | 5 |
 | [`tests/test_medallion.py`](#teststest_medallionpy) | 20 | 20 |
+| [`tests/test_migrations.py`](#teststest_migrationspy) | 18 | 18 |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
 | [`tests/test_ors_null_fields.py`](#teststest_ors_null_fieldspy) | 2 | 2 |
@@ -135,6 +137,36 @@
 - `test_todas_las_categorias_existen_en_overpass` — El clasificador solo puede devolver categorías que realmente guarda la tabla `pois` (CATEGORY_TAGS de poi_client.py).
 - `test_ninguna_palabra_clave_choca_con_otra_categoria` — Una misma palabra no puede aparecer en dos categorías (el orden de las reglas decidiría en silencio), y ninguna palabra de una categoría puede estar contenida como palabra completa dentro de una frase de otra.
 - `test_cantidad_de_palabras_clave_documentada` — El README dice 140 palabras clave (únicas).
+
+## `tests/test_causal_analysis.py`
+
+> Tests de src/analytics/causal_analysis.py con datos sintéticos de efecto conocido.
+>
+> Ojo con lo que NO prueban: el módulo estima asociaciones en datos observacionales (no experimentales); estos
+> tests comprueban que los cálculos recuperan un efecto conocido y que los casos límite se manejan, no que el
+> resultado sea causal.
+
+- `test_el_constructor_ordena_por_tiempo_parsea_utc_y_no_modifica_el_original`
+- `test_recupera_un_efecto_positivo_conocido`
+- `test_sin_efecto_no_sale_significativo`
+- `test_un_efecto_negativo_lleva_signo_negativo`
+- `test_sin_variables_de_ajuste_no_hay_propensity_score`
+- `test_usa_otra_columna_de_clima_si_se_pide`
+- `test_ignora_las_filas_con_nulos_y_exige_30_filas`
+- `test_columnas_ausentes_devuelven_error`
+- `test_la_simulacion_recupera_el_coeficiente_y_escenarios_coherentes`
+- `test_la_simulacion_valida_los_datos`
+- `test_mide_una_mejora_antes_despues`
+- `test_una_degradacion_se_marca_como_tal`
+- `test_sin_cambio_no_es_significativo_y_el_efecto_es_despreciable`
+- `test_intervencion_valida_columna_y_tamano_de_los_periodos`
+- `test_serie_constante_no_divide_por_cero`
+- `test_detecta_la_hora_como_confusor_cuando_afecta_a_temperatura_y_trafico`
+- `test_la_hora_no_es_confusor_si_solo_afecta_a_una_de_las_dos_variables` — Un confusor debe afectar al tratamiento Y al resultado: con solo uno de los dos no se marca.
+- `test_detecta_el_dia_de_la_semana_si_el_trafico_varia_mas_de_un_20_por_ciento`
+- `test_sin_confusores_la_lista_esta_vacia_y_hay_recomendaciones`
+- `test_interpretacion_del_p_valor` ×4
+- `test_interpretacion_de_cohen` ×7
 
 ## `tests/test_check_collection_gaps.py`
 
@@ -355,6 +387,31 @@
 - `test_gold_resumen_ejecutivo_en_base_vacia_devuelve_ceros_no_error` — Regresión: AVG()/SUM() sin filas dan NULL y float(NaN) reventaba, así que en un clon limpio (sin histórico) Executive mostraba "Error loading summary data".
 - `test_gold_resumen_ejecutivo_con_datos`
 - `test_pipeline_completo_es_idempotente`
+
+## `tests/test_migrations.py`
+
+> Tests de las migraciones del CSV histórico: a SQLite (src/migration.py) y a TimescaleDB (src/timescale_migration.py).
+>
+> Sin Postgres real: `psycopg2` se sustituye por un módulo falso que guarda las filas que se habrían insertado.
+
+- `test_migra_el_csv_a_sqlite`
+- `test_dry_run_no_crea_la_base`
+- `test_descarta_filas_sin_campos_obligatorios`
+- `test_data_source_vacio_o_ausente_pasa_a_unknown`
+- `test_un_valor_numerico_ilegible_queda_nulo_sin_romper_la_migracion`
+- `test_csv_inexistente_vacio_o_sin_columnas_obligatorias_devuelve_cero`
+- `test_las_lineas_corruptas_del_csv_se_saltan`
+- `test_migrar_dos_veces_no_duplica_filas` — El índice único de Bronze/route_measurements hace idempotente la migración.
+- `test_cli_dry_run_no_pide_confirmacion`
+- `test_cli_cancelada_no_migra`
+- `test_cli_confirmada_o_con_skip_migra_y_usa_las_rutas_del_proyecto`
+- `test_cli_devuelve_error_si_no_se_importa_nada_o_falla`
+- `test_backfill_inserta_las_filas_con_el_orden_de_columnas_de_traffic_trips`
+- `test_backfill_celdas_vacias_van_como_null_y_no_como_nan` — Regresión: una celda vacía llegaba como NaN (float) incluso a columnas de texto (origin_weather), que Postgres rechaza; con ello fallaba y se revertía todo el backfill. Ahora es None (NULL), y data_source vacío pasa a 'unknown' como en la migración a SQLite.
+- `test_backfill_con_error_hace_rollback_y_devuelve_cero`
+- `test_backfill_csv_inexistente_o_vacio_no_se_conecta`
+- `test_backfill_sin_psycopg2_instalado_devuelve_cero`
+- `test_backfill_main_devuelve_el_codigo_segun_las_filas`
 
 ## `tests/test_normalize_bronze_timestamps.py`
 
