@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**30 archivos · 328 funciones de test · 380 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**31 archivos · 357 funciones de test · 409 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -17,6 +17,7 @@
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 21 | 30 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
+| [`tests/test_collector.py`](#teststest_collectorpy) | 29 | 29 |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
 | [`tests/test_data_profile.py`](#teststest_data_profilepy) | 15 | 15 |
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
@@ -183,6 +184,45 @@
 - `test_report_avisa_si_ahora_mismo_no_llega_trafico`
 - `test_report_mide_el_tiempo_total_sin_datos`
 - `test_report_sin_datos`
+
+## `tests/test_collector.py`
+
+> Tests del orquestador de recolección (src/collector.py): DataCollector de punta a punta y el bucle real de
+> HybridScheduler.
+>
+> Sin red ni esperas: los clientes TomTom/ORS/OpenWeather se sustituyen por falsos, `time.sleep` por un contador y
+> `signal.signal` por un registro (para no tocar el manejador de Ctrl+C de pytest). La base es temporal y el
+> heartbeat se redirige (el real vive en logs/heartbeat y lo lee el HEALTHCHECK de Docker).
+
+- `test_rechaza_una_fuente_desconocida`
+- `test_la_fuente_elige_el_cliente`
+- `test_timescale_solo_se_activa_con_configuracion`
+- `test_el_manejador_de_ctrl_c_solo_se_registra_si_se_pide`
+- `test_ctrl_c_cierra_los_clientes_y_sale`
+- `test_un_ciclo_guarda_todas_las_rutas_en_csv_y_sqlite`
+- `test_cada_ruta_lleva_el_clima_de_su_origen_y_destino_y_se_pide_una_vez_por_lugar`
+- `test_el_nivel_de_movilidad_cambia_justo_por_encima_de_20_minutos` — > 20 min es 'Alta demora'; 20 exactos todavía es normal (umbral estricto).
+- `test_si_falla_el_clima_de_un_lugar_la_ruta_se_guarda_sin_clima`
+- `test_si_falla_una_ruta_se_siguen_guardando_las_demas`
+- `test_si_fallan_todas_las_rutas_no_se_guarda_nada_ni_hay_latido`
+- `test_si_falla_el_guardado_devuelve_cero_y_no_hay_latido`
+- `test_con_timescale_activo_se_guarda_tambien_alli_con_su_configuracion`
+- `test_sin_timescale_no_se_intenta_guardar_alli`
+- `test_el_heartbeat_se_escribe_en_logs_del_proyecto_con_la_hora_del_ciclo`
+- `test_un_heartbeat_que_no_se_puede_escribir_no_rompe_el_ciclo`
+- `test_el_ciclo_alimenta_bronze_silver_y_gold_solo_con_sus_registros`
+- `test_cada_ciclo_procesa_solo_sus_propios_registros_en_silver` — El medallón es incremental: el 2º ciclo transforma únicamente las filas de Bronze de ese ciclo, no todo el histórico (sería lento y reprocesaría datos ya vistos).
+- `test_sin_medallon_no_se_crean_las_capas`
+- `test_un_fallo_del_medallon_no_impide_guardar_ni_cambia_el_resultado` — Executive es una vista adicional: si Bronze revienta, CSV/SQLite ya están guardados y el ciclo cuenta.
+- `test_si_bronze_no_responde_success_se_omite_silver_y_gold`
+- `test_run_once_hace_un_solo_ciclo`
+- `test_run_continuous_espera_el_intervalo_segundo_a_segundo_y_se_detiene`
+- `test_run_continuous_termina_si_se_detiene_durante_el_ciclo`
+- `test_el_hibrido_registra_un_unico_manejador_y_guarda_los_intervalos`
+- `test_en_el_primer_tick_corren_las_dos_fuentes_y_despues_ninguna_hasta_su_intervalo`
+- `test_una_fuente_vencida_corre_y_la_otra_no`
+- `test_si_se_detiene_durante_un_ciclo_no_dispara_la_otra_fuente`
+- `test_un_error_en_un_ciclo_se_propaga_porque_collect_cycle_ya_captura_los_suyos` — Documenta el contrato: el hibrido NO captura excepciones de collect_cycle (DataCollector ya las maneja por dentro); si una se escapara, el bucle terminaría.
 
 ## `tests/test_config.py`
 
