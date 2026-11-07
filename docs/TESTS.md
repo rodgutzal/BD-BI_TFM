@@ -6,13 +6,13 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**25 archivos · 231 funciones de test · 271 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**25 archivos · 233 funciones de test · 273 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
 | [`tests/test_analyst_quality.py`](#teststest_analyst_qualitypy) | 6 | 6 |
 | [`tests/test_analytics.py`](#teststest_analyticspy) | 3 | 3 |
-| [`tests/test_api.py`](#teststest_apipy) | 12 | 18 |
+| [`tests/test_api.py`](#teststest_apipy) | 14 | 20 |
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
@@ -85,6 +85,8 @@
 - `test_rankings_con_gold_vacio_no_falla`
 - `test_statistics`
 - `test_anomalies`
+- `test_json_safe_sustituye_nan_e_infinito_por_none` — JSON no admite NaN/inf: se convierten en None, también dentro de dicts y listas anidados. Los escalares de numpy (np.bool_, np.float64) pasan a tipos nativos de Python.
+- `test_time_series_patrones_con_un_dia_de_una_sola_muestra` — Regresión: un día con 1 muestra tiene desviación típica NaN y el endpoint devolvía 500 (dependía de la hora a la que se ejecutaba: justo tras la medianoche UTC).
 - `test_time_series_patrones`
 - `test_predict_devuelve_json_serializable_y_modelos_entrenados` — De punta a punta: entrena el ensemble con los datos y responde. Cubre también que el resultado se serialice (antes `model_predictions` se apuntaba a sí mismo).
 
