@@ -538,6 +538,7 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 | `test_business_type_classifier.py` | Texto libre en español → categoría de Overpass: "barbería" ≠ "bar", sin coincidencia → `None`, las 140 palabras clave sin choques entre categorías |
 | `test_check_collection_gaps.py` | `tools/check_collection_gaps.py`: detección y medición de huecos de recolección, solo lectura |
 | `test_config.py` | `config.py`: selección de la fuente de datos (ORS/TomTom) y configuración de TimescaleDB |
+| `test_forecasting.py` | Pronóstico SARIMA (`src/forecasting.py`): converge sin avisos, aprende el ciclo diario, no inventa horas sin dato; y la validación (`tools/validate_forecast.py`): cortes, referencias sin datos del futuro, comparación pareada y lectura en solo lectura |
 | `test_data_profile.py` | `get_data_profile` (calidad de toda la tabla en **una** pasada, contrastado con pandas), `get_last_timestamp` y `get_database_summary(include_routes=False)` |
 | `test_database.py` | `RouteDatabase` básico: inicialización, guardado en CSV y SQLite, consulta de mediciones |
 | `test_database_windows.py` | Consultas de ventana completa sin `LIMIT` (promedio diario, ruta × hora, columnas elegidas) y protección contra inyección SQL |
@@ -715,7 +716,28 @@ No se borraron en esta pasada (por si algún commit reciente todavía los necesi
 
 Esos 445 s son cómputo puro de una sola CPU: lo que cambió es que ya **no se pagan al abrir la pantalla** y que la memoria deja de acumularse. Si se quiere reducirlos hay que cambiar los modelos (menos árboles, rejilla más pequeña, menos candidatos ARIMA), lo que altera la metodología respecto al `.Rmd` y no se hizo.
 
-**Corrección de un texto engañoso:** el comentario del forecast temporal decía que se modelaba "el bloque continuo más reciente". No es así: `resample("1h")` crea un índice horario *regular*, así que la serie nunca se parte y se modela **entera** (82 días, con el ~46% de las horas vacías tratadas como datos faltantes, sin rellenar). Se dejó el comportamiento y se corrigió el texto: dividir por los huecos reales dejaría, con un equipo que se apaga cada noche, un bloque de pocas horas, inútil para una estacionalidad de 24 h. Además, **los 4 candidatos ARIMA terminan con avisos de convergencia del optimizador**: el pronóstico es orientativo.
+**Corrección de un texto engañoso:** el comentario del forecast temporal decía que se modelaba "el bloque continuo más reciente". No es así: `resample("1h")` crea un índice horario *regular*, así que la serie nunca se parte y se modela **entera** (82 días, con el ~46% de las horas vacías tratadas como datos faltantes, sin rellenar). Se dejó el comportamiento y se corrigió el texto: dividir por los huecos reales dejaría, con un equipo que se apaga cada noche, un bloque de pocas horas, inútil para una estacionalidad de 24 h. Además, **los 4 candidatos ARIMA terminaban con avisos de convergencia del optimizador** (ver la sección siguiente).
+
+#### Forecast temporal: no convergía y no mejora a la referencia
+
+**Diagnóstico (base real, `tools/validate_forecast.py`, solo lectura):**
+- Los 4 candidatos `(p,d,q)x(1,0,1,24)` se detenían en el tope de 50 iteraciones del optimizador (`warnflag=1`), con el AR estacional pegado a ~0,99 (casi raíz unitaria que se cancela con el MA ≈ −0,9) y una serie en escala 0-1 (`sigma2` ≈ 4·10⁻⁴). En la validación convergía en **10 de 35** cortes.
+- La serie es el % de mediciones con `travel_time_min > 20`: tiene un ciclo diario claro (autocorrelación a 24 h = 0,84; media por hora de 0,18 de noche a 0,31 de día), pero su desviación típica es solo 0,061.
+
+**Cambio (aprobado):** SARIMA `(1,0,1)x(0,1,1,24)` (diferenciación estacional) con la serie en escala 0-100, en `src/forecasting.py`. Converge en **35 de 35** cortes y deja de probar 4 candidatos. Se corrigió además un error previo: `fit(low_memory=True)` dejaba el intervalo de confianza del pronóstico en **NaN** (la banda del gráfico nunca se dibujaba); ahora, tras optimizar con poca memoria, una pasada `smooth` con los parámetros ya estimados lo calcula. El dashboard dibuja además la referencia (media por hora del día) y muestra la nota de validación.
+
+**Validación de origen móvil** (35 cortes diarios, 28-ago a 26-oct-2026; se ajusta con el pasado y se pronostican las 24 h siguientes; error sobre las horas con dato; menos es mejor):
+
+| Modelo | MAE | Frente al perfil horario (IC 95%) |
+|---|---|---|
+| Mismo hora de ayer | 0,0208 | −0,0015 ± 0,0044 · indistinguible |
+| **Perfil horario (media por hora del día)** | **0,0222** | referencia |
+| **SARIMA nuevo** | 0,0233 | +0,0011 ± 0,0019 · indistinguible |
+| ARIMA anterior | 0,0247 | +0,0025 ± 0,0030 · indistinguible |
+| Media global | 0,0479 | +0,0256 ± 0,0051 · peor |
+| Último valor | 0,0608 | +0,0386 ± 0,0075 · peor |
+
+**Limitación para el TFM:** el SARIMA captura el ciclo diario (gana a la media global y a la persistencia) pero **no aporta evidencia de mejorar a la media por hora del día**; con estos datos (54% de horas con dato) un pronóstico tan simple rinde igual. Se reproduce con `python tools/validate_forecast.py` (con `--include-legacy` añade el ARIMA anterior).
 
 #### En Windows, `./data` como bind mount de Docker es ~30 veces más lento
 
