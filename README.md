@@ -532,6 +532,7 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 <!-- tests:inicio -->
 | Archivo | Qué cubre |
 |---|---|
+| `test_api_clients.py` | Clientes HTTP **sin red** (sesión falsa): TomTom, ORS, OpenWeather y Overpass: parseo y claves comunes (ORS deja el tráfico en `None`, no en 0), petición enviada (ORS usa `[lon, lat]`), reintentos solo en 429/5xx, caché del clima, fallback entre espejos de Overpass, clasificación de POIs y propagación de errores |
 | `test_analytics.py` | `MobilityAnalytics`: inicialización, *consistency score* (ventana móvil de 24 h) y resumen de la base |
 | `test_analyst_quality.py` | Analyst al abrirse: usa **un** perfil de la base y no las consultas caras de antes (`get_available_routes` ×4, completitud ruta por ruta, 100 mil filas cargadas); las métricas de calidad son las del perfil |
 | `test_api.py` | API REST con `TestClient` y una base temporal: **404** en recursos sin datos (antes salía 400), **422** en parámetros inválidos, caminos felices y `predict` de punta a punta |
@@ -564,7 +565,7 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 
 - **Docker real**: el CI solo valida la sintaxis de `docker-compose.yml` (`docker compose config`); que el stack arranque, el volumen `./models` y los healthchecks se probaron a mano, no hay test automático.
 - **Servicios externos reales**: ORS, TomTom, OpenWeather, Overpass, Foursquare y Data Commons se prueban con datos simulados, nunca contra la API.
-- **Sin tests propios** (los ejercitan indirectamente, o nada): los clientes `ors_client`, `tomtom_client`, `weather_client` y `poi_client` (solo se importa su catálogo `CATEGORY_TAGS`), el `DataCollector` de punta a punta (solo el `HybridScheduler`), `migration` / `timescale_migration`, `causal_analysis`, `predictor` / `travel_time_model`, los CLI `poi_extraction*`, y los dashboards **Executive**, **Maps** y **Analyst** como pantallas (de Operations, Recomendación y Modelado Predictivo se prueba su lógica).
+- **Sin tests propios** (los ejercitan indirectamente, o nada): el `DataCollector` de punta a punta (solo el `HybridScheduler`), `migration` / `timescale_migration`, `causal_analysis`, `predictor` / `travel_time_model`, los CLI `poi_extraction*`, y los dashboards **Executive**, **Maps** y **Analyst** como pantallas (de Operations, Recomendación y Modelado Predictivo se prueba su lógica).
 - **Render visual** en un navegador real.
 
 **Añadir un test sin dejar la documentación atrás:** escríbelo con un nombre y un docstring descriptivos; si es un archivo nuevo, añade su fila a la tabla de arriba; y regenera el catálogo con `python tools/generate_tests_doc.py`. Si se te olvida, `tests/test_tests_documentation.py` falla en el CI y dice qué falta.

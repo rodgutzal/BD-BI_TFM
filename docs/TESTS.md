@@ -6,13 +6,14 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**26 archivos · 242 funciones de test · 282 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**27 archivos · 264 funciones de test · 304 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
 | [`tests/test_analyst_quality.py`](#teststest_analyst_qualitypy) | 6 | 6 |
 | [`tests/test_analytics.py`](#teststest_analyticspy) | 3 | 3 |
 | [`tests/test_api.py`](#teststest_apipy) | 14 | 20 |
+| [`tests/test_api_clients.py`](#teststest_api_clientspy) | 22 | 22+ |
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
@@ -36,6 +37,8 @@
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
+
+`+` = hay un `parametrize` con valores no literales; esos tests se cuentan como 1 caso.
 
 ## `tests/test_analyst_quality.py`
 
@@ -90,6 +93,36 @@
 - `test_time_series_patrones_con_un_dia_de_una_sola_muestra` — Regresión: un día con 1 muestra tiene desviación típica NaN y el endpoint devolvía 500 (dependía de la hora a la que se ejecutaba: justo tras la medianoche UTC).
 - `test_time_series_patrones`
 - `test_predict_devuelve_json_serializable_y_modelos_entrenados` — De punta a punta: entrena el ensemble con los datos y responde. Cubre también que el resultado se serialice (antes `model_predictions` se apuntaba a sí mismo).
+
+## `tests/test_api_clients.py`
+
+> Tests de los clientes HTTP (TomTom, OpenRouteService, OpenWeather, Overpass).
+>
+> Sin red: se sustituye `client.session` por una sesión falsa que devuelve respuestas fijas o lanza
+> excepciones de `requests`, y se comprueba la petición que se habría enviado y el parseo del resultado.
+
+- `test_la_sesion_reintenta_solo_errores_transitorios` — Cada cliente monta reintentos sobre https: 4 intentos, solo para 429/5xx y solo para su método HTTP.
+- `test_close_cierra_la_sesion`
+- `test_tomtom_parsea_la_ruta_y_envia_la_peticion_correcta`
+- `test_tomtom_sin_campos_opcionales_deduce_el_tiempo_sin_trafico` — Sin trafico ni noTrafficTravelTime: retraso 0 y tiempo sin tráfico = tiempo de viaje; sin polyline.
+- `test_tomtom_con_tiempo_cero_no_divide_por_cero`
+- `test_tomtom_propaga_los_errores`
+- `test_ors_parsea_la_ruta_con_las_mismas_claves_que_tomtom`
+- `test_ors_envia_longitud_antes_que_latitud_y_la_clave_en_la_cabecera`
+- `test_ors_propaga_los_errores`
+- `test_weather_parsea_y_pide_unidades_metricas`
+- `test_weather_respuesta_incompleta_da_none_y_unknown`
+- `test_weather_usa_la_cache_por_ubicacion_y_caduca`
+- `test_weather_un_error_no_se_guarda_en_cache`
+- `test_weather_propaga_los_errores`
+- `test_overpass_clasifica_por_prioridad_y_toma_el_valor_como_subcategoria`
+- `test_overpass_la_query_cubre_todas_las_categorias`
+- `test_overpass_parsea_nodos_y_ways_y_descarta_lo_inutil`
+- `test_overpass_fetch_calcula_el_bbox_con_margen_y_el_timeout_del_servidor`
+- `test_overpass_prueba_el_siguiente_espejo_si_uno_falla`
+- `test_overpass_json_invalido_cuenta_como_fallo_del_espejo`
+- `test_overpass_si_todos_los_espejos_fallan_lanza_runtimeerror`
+- `test_overpass_envia_un_user_agent_descriptivo`
 
 ## `tests/test_business_type_classifier.py`
 
