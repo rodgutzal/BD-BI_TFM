@@ -936,4 +936,5 @@ Expuesto al usuario final en el dashboard **Recomendación** (`streamlit_app/das
 - **`INTEGRATION_NOTES.md`** — qué se fusionó de cada repo, y el detalle completo de cada bug encontrado y corregido durante la integración
 - **`PRODUCTION.md`** — endurecimiento para servidor real: usuarios no-root, healthchecks, límites de recursos, contraseñas, puertos, y el checklist si esto sale a internet público
 - **`docs/API.md`** — documentación de la API REST opcional (`src/api.py`)
+- **`docs/DISENO_ML_RECOMENDACION.md`** — diseño (borrador) del machine learning y las redes neuronales para el asistente de recomendación: qué se puede y qué no se puede afirmar, auditoría de datos, arquitectura, protocolo de validación y fases
 - **`docs/research_paper/README.md`** — paper de investigación heredado de urban-mobility-analytics1 (ensemble ML, causal inference, arquitectura medallion)
