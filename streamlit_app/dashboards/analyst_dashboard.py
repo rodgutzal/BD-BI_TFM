@@ -333,17 +333,39 @@ def render_data_quality_report():
         st.dataframe(comp_df, width='stretch', hide_index=True)
 
 
-def render_sql_query():
-    """Editor de SQL de solo lectura sobre data/mobility.db."""
+def _read_only_query(db_path, query: str) -> pd.DataFrame:
+    """Ejecuta `query` sobre la base en solo lectura REAL.
+
+    `mode=ro` impide modificar los datos (INSERT/UPDATE/DELETE/DROP/CREATE fallan), pero NO impide que
+    `ATTACH DATABASE 'x'` ni `VACUUM INTO 'x'` creen archivos nuevos en disco (medido): con `VACUUM INTO`
+    se vuelca una copia completa de la base a cualquier ruta escribible. Por eso, además, se instala un
+    *authorizer* que solo deja pasar SELECT/WITH y funciones, y deniega el resto (ATTACH, VACUUM, PRAGMA,
+    escrituras, `load_extension`...). La conexión se cierra siempre, también si la consulta falla.
+    """
     import sqlite3
 
+    allowed = {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_READ, sqlite3.SQLITE_FUNCTION, sqlite3.SQLITE_RECURSIVE}
+
+    def authorizer(action, arg1, arg2, db_name, source):
+        return sqlite3.SQLITE_OK if action in allowed else sqlite3.SQLITE_DENY
+
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        conn.set_authorizer(authorizer)
+        return pd.read_sql_query(query, conn)
+    finally:
+        conn.close()
+
+
+def render_sql_query():
+    """Editor de SQL de solo lectura sobre data/mobility.db."""
     st.subheader("🗄️ SQL Query")
     st.caption(
         "Consultas de solo lectura sobre `data/mobility.db` (SQLite). "
-        "La conexión se abre en modo `mode=ro`: cualquier intento de "
-        "INSERT/UPDATE/DELETE/DROP falla a nivel del propio SQLite, no solo "
-        "por un chequeo de texto — no puede corromper los datos que el "
-        "collector está escribiendo en paralelo."
+        "La conexión se abre en modo `mode=ro` y solo se permiten `SELECT`/`WITH`: "
+        "INSERT/UPDATE/DELETE/DROP, `ATTACH`, `VACUUM` y `PRAGMA` los rechaza el propio "
+        "SQLite, no un chequeo de texto — no puede corromper los datos que el "
+        "collector está escribiendo en paralelo ni crear archivos en disco."
     )
 
     db_path = ROOT_DIR / "data" / "mobility.db"
@@ -389,13 +411,7 @@ def render_sql_query():
             return
 
         try:
-            # mode=ro: SQLite rechaza cualquier escritura a nivel de motor,
-            # no solo por parsear el texto (que se puede burlar con
-            # comentarios, subqueries, PRAGMAs, etc.)
-            uri = f"file:{db_path}?mode=ro"
-            conn = sqlite3.connect(uri, uri=True)
-            result_df = pd.read_sql_query(query, conn)
-            conn.close()
+            result_df = _read_only_query(db_path, query)
 
             st.success(f"{len(result_df)} filas")
             st.dataframe(result_df, width='stretch', hide_index=True)
