@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from src.ml import grid
+from src.ml.osm_context import CONTEXTO
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,13 @@ class CellCounts:
 
     def total_grid(self) -> np.ndarray:
         return self.grid([Selector(c) for c in {cat for cat, _ in self.arrays}])
+
+    def active_mask(self, anillo: int = 1) -> np.ndarray:
+        """Celdas activas: con algún POI de Overpass en la celda o su vecindad. NO cuentan las categorías de contexto
+        (edificio, alojamiento, transporte, industria): así el conjunto de celdas es el mismo con o sin ese contexto y
+        los resultados de antes y después son comparables."""
+        pois = CellCounts({k: v for k, v in self.arrays.items() if k[0] not in CONTEXTO})
+        return grid.active_mask(pois.total_grid(), anillo)
 
     def count_in_area(self, selectors: Iterable[Selector], exclude: Sequence[Selector] = ()) -> int:
         """Cuántos POIs hay en toda la rejilla que cumplan los selectores (y ninguno de `exclude`), para saber si

@@ -36,14 +36,15 @@ def compute_lenses(counts: CellCounts, profile: BusinessProfile, mask: Optional[
 
     Columnas:
       competencia_directa, competencia_indirecta                  conteos ponderados
-      mercado_<segmento> (NaN si el segmento no tiene POIs que lo midan), mercado_total (suma de los segmentos con datos)
+      mercado_<segmento> (conteo ponderado; NaN si el segmento no tiene POIs que lo midan),
+      mercado_total (ÍNDICE 0-1: media de los segmentos con datos, cada uno escalado por su máximo en la rejilla)
       proveedores_<tipo> (NaN si no hay datos), proveedores_total, proveedores_diversidad (fracción de tipos presentes)
       apoyo_competencia, apoyo_mercado, apoyo_proveedores          POIs (sin ponderar) en la celda y sus 8 vecinas
       datos_competencia / datos_mercado / datos_proveedores        True si la lente se puede calcular
       lentes_con_datos                                             0-3
     """
     if mask is None:
-        mask = grid.active_mask(counts.total_grid())
+        mask = counts.active_mask()
     filas, cols = np.nonzero(mask)
     ids = [grid.cell_id(f, c) for f, c in zip(filas, cols)]
     columnas: Dict[str, np.ndarray] = {}
@@ -64,19 +65,23 @@ def compute_lenses(counts: CellCounts, profile: BusinessProfile, mask: Optional[
     datos_comp = np.full(len(ids), len(todos_comp) > 0)
 
     # --- mercado ---
-    total_mercado = np.zeros(len(ids))
+    # `mercado_total` es un ÍNDICE 0-1: la media de los segmentos con datos, cada uno escalado por su máximo en TODA la
+    # rejilla. Sumar los conteos en bruto no sirve: con el contexto de la fase 1b los edificios (~90 por celda) aplastarían
+    # a colegios u oficinas (~1) solo por la unidad de medida. Las columnas `mercado_<segmento>` siguen siendo conteos.
+    suma_escalada = np.zeros(len(ids))
     selectores_mercado = []
     segmentos_con_datos = 0
     for segmento, sels in segment_selectors(profile).items():
         if sels and counts.count_in_area(sels, competidores) > 0:
-            valores = tomar(_vecindad(counts.grid(sels, competidores)))
-            total_mercado = total_mercado + valores
+            matriz = _vecindad(counts.grid(sels, competidores))
+            valores = tomar(matriz)
+            suma_escalada = suma_escalada + (valores / matriz.max() if matriz.max() > 0 else 0.0)
             selectores_mercado.extend(sels)
             segmentos_con_datos += 1
         else:
             valores = np.full(len(ids), np.nan)          # 'sin datos': no es lo mismo que 0 personas
         columnas[f"mercado_{segmento}"] = valores
-    columnas["mercado_total"] = total_mercado if segmentos_con_datos else np.full(len(ids), np.nan)
+    columnas["mercado_total"] = suma_escalada / segmentos_con_datos if segmentos_con_datos else np.full(len(ids), np.nan)
     columnas["apoyo_mercado"] = apoyo(selectores_mercado, competidores) if selectores_mercado else np.zeros(len(ids))
     datos_mercado = np.full(len(ids), segmentos_con_datos > 0)
 
