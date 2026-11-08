@@ -26,14 +26,14 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.ml import grid  # noqa: E402
+from src.ml import grid, osm_context  # noqa: E402
 from src.ml.business_profiles import DEFAULT_PROFILES  # noqa: E402
 from src.ml.cell_counts import CellCounts  # noqa: E402
 from src.ml.lenses import compute_lenses, lens_coverage  # noqa: E402
 
 DEFAULT_DB = ROOT / "data" / "mobility.db"
-INDICADORES = ["competencia_directa", "competencia_indirecta", "mercado_total", "proveedores_total",
-               "proveedores_diversidad"]
+INDICADORES = ["competencia_directa", "competencia_indirecta", "mercado_total", "mercado_residentes", "mercado_turistas",
+               "proveedores_total", "proveedores_diversidad"]
 
 
 def load_pois(db_path: Path) -> pd.DataFrame:
@@ -79,12 +79,20 @@ def opportunity_share(lentes: pd.DataFrame) -> float:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--db", default=str(DEFAULT_DB), help=f"ruta de la base (default: {DEFAULT_DB})")
+    ap.add_argument("--contexto", default=None,
+                    help="directorio con el contexto de OSM de tools/download_osm_context.py (fase 1b): da datos a residentes y turistas")
     args = ap.parse_args(argv)
 
     pois = load_pois(Path(args.db))
-    counts = CellCounts.from_pois(pois)
-    activas = grid.active_mask(counts.total_grid())
-    print(f"POIs leídos: {len(pois)} | dentro de la rejilla: {counts.n_total - counts.n_fuera} (fuera: {counts.n_fuera}) | "
+    if args.contexto:
+        contexto = osm_context.load_context(args.contexto)
+        print(f"Contexto de OSM cargado: {contexto.groupby('category').size().to_dict() if not contexto.empty else 'sin datos'}")
+        counts = CellCounts.from_pois(pd.concat([pois, contexto], ignore_index=True))
+    else:
+        counts = CellCounts.from_pois(pois)
+    activas = counts.active_mask()
+    print(f"POIs leídos: {len(pois)} | elementos dentro de la rejilla (POIs{' + contexto' if args.contexto else ''}): "
+          f"{counts.n_total - counts.n_fuera} (fuera: {counts.n_fuera}) | "
           f"celdas totales: {grid.N_ROWS * grid.N_COLS} | celdas activas (algún POI en la celda o su vecindad): {int(activas.sum())}")
 
     for clave, perfil in DEFAULT_PROFILES.items():

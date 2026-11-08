@@ -116,6 +116,14 @@ def test_las_predicciones_son_positivas_y_tienen_una_por_fila(nombre):
     assert p.shape == (len(X) - 80,) and (p >= models.MIN_ESPERADO).all() and np.isfinite(p).all()
 
 
+def test_una_linea_base_sin_su_unica_variable_degrada_a_la_media():
+    """Regresión: sin demografía cargada la población llega toda NaN, se descarta y solo_poblacion fallaba con KeyError."""
+    X, y = datos_sinteticos(10, 12)
+    X["pob_suavizada"] = np.nan
+    p = models.fit_predict("solo_poblacion", X.iloc[:80], y[:80], X.iloc[80:])
+    np.testing.assert_allclose(p, models.fit_predict("media", X.iloc[:80], y[:80], X.iloc[80:]))
+
+
 def test_la_media_es_el_promedio_de_entrenamiento():
     X, y = datos_sinteticos(8, 8)
     assert models.fit_predict("media", X, y, X)[0] == pytest.approx(y.mean())

@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**36 archivos · 481 funciones de test · 555 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**37 archivos · 515 funciones de test · 589 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -33,9 +33,10 @@
 | [`tests/test_locations.py`](#teststest_locationspy) | 5 | 5 |
 | [`tests/test_medallion.py`](#teststest_medallionpy) | 20 | 20 |
 | [`tests/test_migrations.py`](#teststest_migrationspy) | 18 | 18 |
+| [`tests/test_ml_context.py`](#teststest_ml_contextpy) | 33 | 33+ |
 | [`tests/test_ml_grid.py`](#teststest_ml_gridpy) | 19 | 22 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
-| [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 30 | 32+ |
+| [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
 | [`tests/test_ors_null_fields.py`](#teststest_ors_null_fieldspy) | 2 | 2 |
@@ -513,6 +514,45 @@
 - `test_backfill_sin_psycopg2_instalado_devuelve_cero`
 - `test_backfill_main_devuelve_el_codigo_segun_las_filas`
 
+## `tests/test_ml_context.py`
+
+> Tests de la fase 1b: contexto de OpenStreetMap (src/ml/osm_context.py) y su efecto en las lentes, las variables y los
+> modelos, y la herramienta de descarga tools/download_osm_context.py (sin red: cliente falso).
+
+- `test_edificios_se_convierten_con_su_tipo_y_yes_por_defecto`
+- `test_los_elementos_sin_coordenadas_se_descartan`
+- `test_transporte_conserva_paradas_y_descarta_las_posiciones_duplicadas`
+- `test_alojamiento_e_industria`
+- `test_un_tema_desconocido_o_sin_uso_da_un_dataframe_vacio_con_las_columnas`
+- `test_load_context_lee_los_json_ignora_los_corruptos_y_un_directorio_vacio_da_vacio`
+- `test_no_residenciales_excluye_lo_que_no_es_vivienda`
+- `test_las_celdas_activas_no_cambian_al_cargar_el_contexto` — Un edificio lejos de cualquier POI no activa una celda: así el conjunto de celdas es el mismo con y sin contexto.
+- `test_residentes_cuenta_edificios_pero_no_los_industriales`
+- `test_los_hoteles_cuentan_como_turistas_aunque_no_haya_atracciones`
+- `test_sin_contexto_residentes_y_turistas_siguen_sin_datos`
+- `test_el_indice_de_mercado_va_de_0_a_1_y_los_edificios_no_aplastan_a_los_demas_segmentos` — Regresión: mercado_total sumaba conteos en bruto, y con ~90 edificios por celda frente a ~1 colegio el índice era solo 'cuántos edificios hay'. Ahora cada segmento se escala por su máximo antes de promediar.
+- `test_el_indice_de_mercado_es_una_media_y_no_una_suma` — Una celda que es el máximo en TODOS los segmentos con datos vale exactamente 1 (con una suma valdría 2).
+- `test_las_variables_incluyen_el_contexto_solo_si_se_piden`
+- `test_boosting_poi_no_usa_las_variables_de_contexto_y_solo_edificios_solo_esas`
+- `test_los_modelos_opcionales_predicen_valores_positivos`
+- `test_el_boosting_con_contexto_gana_al_que_no_lo_tiene_cuando_la_senal_esta_en_el_contexto`
+- `test_compare_models_con_el_mismo_modelo_es_indistinguible`
+- `test_validate_location_model_con_contexto_informa_si_el_contexto_aporta`
+- `test_validate_location_model_sin_contexto_no_evalua_los_modelos_opcionales`
+- `test_validate_location_model_con_un_directorio_de_contexto_vacio_valida_sin_contexto`
+- `test_measure_lens_variance_con_contexto_da_datos_a_residentes`
+- `test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes`
+- `test_la_consulta_lleva_el_bbox_el_timeout_del_servidor_y_pide_centro_y_etiquetas`
+- `test_el_plan_pide_siete_trozos_y_el_edificado_va_en_franjas`
+- `test_descargar_guarda_un_archivo_por_trozo_y_resume`
+- `test_se_espera_entre_peticiones_pero_no_despues_de_la_ultima` — Cortesía con el servicio público: pausa entre peticiones, y ninguna espera inútil al terminar.
+- `test_si_un_espejo_falla_se_prueba_el_siguiente`
+- `test_si_todos_los_espejos_fallan_lanza_runtimeerror`
+- `test_un_trozo_fallido_se_anota_y_el_resto_se_descarga`
+- `test_dry_run_no_hace_llamadas_de_red_ni_crea_la_carpeta`
+- `test_main_descarga_con_un_cliente_falso_y_devuelve_el_codigo_segun_los_fallos`
+- `test_la_descarga_no_escribe_fuera_del_directorio_indicado`
+
 ## `tests/test_ml_grid.py`
 
 > Tests de la rejilla de ~250 m (src/ml/grid.py) y de los conteos por celda (src/ml/cell_counts.py).
@@ -545,7 +585,7 @@
 - `test_hay_un_perfil_por_cada_categoria_de_overpass`
 - `test_cada_perfil_es_coherente`
 - `test_los_selectores_de_segmentos_y_proveedores_usan_categorias_reales`
-- `test_residentes_y_distribuidores_sanitarios_no_tienen_proxy_y_lo_declaran_vacio`
+- `test_residentes_usan_edificios_y_los_distribuidores_sanitarios_siguen_sin_proxy`
 - `test_perfil_inexistente_lanza_error`
 - `test_el_comercio_generico_no_cuenta_las_oficinas_como_competencia`
 - `test_ajustar_no_modifica_el_perfil_por_defecto`
@@ -592,6 +632,7 @@
 - `test_la_densidad_suma_las_categorias_en_log`
 - `test_cada_modelo_usa_solo_sus_variables`
 - `test_las_predicciones_son_positivas_y_tienen_una_por_fila`
+- `test_una_linea_base_sin_su_unica_variable_degrada_a_la_media` — Regresión: sin demografía cargada la población llega toda NaN, se descarta y solo_poblacion fallaba con KeyError.
 - `test_la_media_es_el_promedio_de_entrenamiento`
 - `test_fit_predict_es_determinista_con_la_misma_semilla`
 - `test_modelo_desconocido_lanza_error`

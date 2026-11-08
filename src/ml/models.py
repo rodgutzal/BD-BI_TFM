@@ -31,12 +31,18 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from src.ml.features import CATEGORIAS
+from src.ml.osm_context import CONTEXTO
 
 MIN_ESPERADO = 1e-3
 BASELINES = ("media", "solo_distancia", "solo_poblacion", "solo_densidad")
 CANDIDATOS = ("boosting", "mlp")
 TODOS = BASELINES + CANDIDATOS
+# Solo con el contexto de la fase 1b (edificios, alojamiento, transporte, industria):
+#   solo_edificios  línea base: regresión de Poisson con la densidad de edificios (proxy de superficie construida).
+#   boosting_poi    el mismo boosting SIN las variables de contexto: permite medir si el contexto aporta algo.
+OPCIONALES = ("solo_edificios", "boosting_poi")
 MLP_SEMILLAS = 3
+_PREFIJOS_CONTEXTO = tuple(f"{c}_" for c in CONTEXTO)
 
 
 def densidad(X: pd.DataFrame) -> pd.DataFrame:
@@ -56,9 +62,13 @@ def columnas_de(nombre: str, X: pd.DataFrame) -> pd.DataFrame:
         return X[["pob_suavizada"]]
     if nombre == "solo_densidad":
         return densidad(X)
+    if nombre == "solo_edificios":
+        return pd.DataFrame({f"edificios_{z}": np.log1p(X[f"edificio_{z}"]) for z in ("celda", "anillo1", "anillo2")}, index=X.index)
+    if nombre == "boosting_poi":
+        return X[[c for c in X.columns if not c.startswith(_PREFIJOS_CONTEXTO)]]
     if nombre in CANDIDATOS:
         return X
-    raise ValueError(f"Modelo desconocido: {nombre!r}. Disponibles: {list(TODOS)}")
+    raise ValueError(f"Modelo desconocido: {nombre!r}. Disponibles: {list(TODOS + OPCIONALES)}")
 
 
 def _poisson_lineal(Xa: pd.DataFrame, y, Xb: pd.DataFrame) -> np.ndarray:
@@ -102,16 +112,21 @@ def fit_predict(nombre: str, X_train: pd.DataFrame, y_train, X_test: pd.DataFram
     if len(vacias):
         X_train, X_test = X_train.drop(columns=vacias), X_test.drop(columns=vacias, errors="ignore")
     y = np.asarray(y_train, dtype=float)
+    if nombre in ("solo_distancia", "solo_poblacion", "solo_densidad", "solo_edificios"):
+        try:
+            A, B = columnas_de(nombre, X_train), columnas_de(nombre, X_test)
+        except KeyError:
+            nombre = "media"            # su única variable no tiene datos (p. ej. sin demografía cargada): sin información
     if nombre == "media":
         esperado = np.full(len(X_test), y.mean())
-    elif nombre in ("solo_distancia", "solo_poblacion", "solo_densidad"):
-        esperado = _poisson_lineal(columnas_de(nombre, X_train), y, columnas_de(nombre, X_test))
-    elif nombre == "boosting":
-        esperado = _boosting(X_train, y, X_test, seed)
+    elif nombre in ("solo_distancia", "solo_poblacion", "solo_densidad", "solo_edificios"):
+        esperado = _poisson_lineal(A, y, B)
+    elif nombre in ("boosting", "boosting_poi"):
+        esperado = _boosting(columnas_de(nombre, X_train), y, columnas_de(nombre, X_test), seed)
     elif nombre == "mlp":
         esperado = _mlp(X_train, y, X_test, seed)
     else:
-        raise ValueError(f"Modelo desconocido: {nombre!r}. Disponibles: {list(TODOS)}")
+        raise ValueError(f"Modelo desconocido: {nombre!r}. Disponibles: {list(TODOS + OPCIONALES)}")
     return np.clip(np.asarray(esperado, dtype=float), MIN_ESPERADO, None)
 
 

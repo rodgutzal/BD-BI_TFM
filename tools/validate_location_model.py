@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.locations import LOCATIONS  # noqa: E402
-from src.ml import business_profiles, data_access, features, grid, models, validation  # noqa: E402
+from src.ml import business_profiles, data_access, features, grid, models, osm_context, validation  # noqa: E402
 from src.ml.cell_counts import CellCounts  # noqa: E402
 
 DEFAULT_DB = ROOT / "data" / "mobility.db"
@@ -40,9 +40,9 @@ TARGETS = ("food_drink", "business")
 FSQ_MAP = {"food_drink": ("restaurant",), "business": ("retail", "services")}
 
 
-def prepare(counts: CellCounts, target, zonas: pd.DataFrame):
+def prepare(counts: CellCounts, target, zonas: pd.DataFrame, categorias=features.CATEGORIAS):
     """(X, y) sobre las celdas activas: variables SIN el objetivo y conteo real del objetivo en cada celda."""
-    X = features.build_features(counts, target, zonas)
+    X = features.build_features(counts, target, zonas, categorias=categorias)
     y = features.target_counts(counts, target).reindex(X.index).to_numpy()
     return X, y
 
@@ -57,13 +57,21 @@ def fsq_cell_counts(fsq: pd.DataFrame, categorias, index) -> np.ndarray:
 
 
 def run_target(clave: str, counts: CellCounts, zonas: pd.DataFrame, fsq: pd.DataFrame, repeats: int, n_folds: int,
-               n_boot: int, seed: int, k_top: int, progress=None) -> dict:
-    """Valida un objetivo y devuelve todo lo que luego se imprime (y se puede probar)."""
+               n_boot: int, seed: int, k_top: int, progress=None, con_contexto: bool = False) -> dict:
+    """Valida un objetivo y devuelve todo lo que luego se imprime (y se puede probar).
+
+    `con_contexto`: `counts` incluye el contexto de la fase 1b. Entonces las variables añaden edificios, alojamiento,
+    transporte e industria, se suma la línea base `solo_edificios` y se evalúa `boosting_poi` (sin contexto) para medir
+    si el contexto aporta algo."""
     perfil = business_profiles.get_default_profile(clave)
     objetivo = list(perfil.competencia_directa)
-    X, y = prepare(counts, objetivo, zonas)
-    ev = validation.evaluate(X, y, repeats=repeats, n_folds=n_folds, seed=seed, k_top=k_top, progress=progress)
-    decision = validation.decide(ev, n_boot=n_boot, seed=seed)
+    categorias = features.CATEGORIAS + osm_context.CONTEXTO if con_contexto else features.CATEGORIAS
+    nombres = models.TODOS + models.OPCIONALES if con_contexto else models.TODOS
+    baselines = models.BASELINES + (("solo_edificios",) if con_contexto else ())
+    X, y = prepare(counts, objetivo, zonas, categorias)
+    ev = validation.evaluate(X, y, nombres=nombres, repeats=repeats, n_folds=n_folds, seed=seed, k_top=k_top, progress=progress)
+    decision = validation.decide(ev, baselines=baselines, n_boot=n_boot, seed=seed)
+    aporte = validation.compare_models(ev, "boosting", "boosting_poi", n_boot, seed) if con_contexto else None
     # La brecha usa el candidato ganador; si ninguno gana, el mejor de los candidatos solo como referencia informativa.
     resumen = validation.summarize(ev)
     referencia = decision["ganador"] or min(models.CANDIDATOS, key=lambda m: resumen.loc[m, "desviacion"])
@@ -72,6 +80,7 @@ def run_target(clave: str, counts: CellCounts, zonas: pd.DataFrame, fsq: pd.Data
     fsq_n = fsq_cell_counts(fsq, FSQ_MAP[clave], X.index)
     return {
         "clave": clave, "perfil": perfil, "X": X, "y": ev.y, "evaluacion": ev, "resumen": resumen, "decision": decision,
+        "aporte_contexto": aporte, "con_contexto": con_contexto,
         "modelo_brecha": referencia, "esperado": esperado, "brecha": brecha, "fsq": fsq_n,
         "auc": {m: validation.auc_presence(ev.oof[m].mean(axis=0), fsq_n > 0) for m in ev.nombres} if len(fsq) else {},
         "artefacto": validation.gap_artifact_share(brecha, ev.y, fsq_n, k_top) if len(fsq) else None,
@@ -90,7 +99,7 @@ def imprimir(r: dict, repeats: int, k_top: int) -> None:
     print(f"Validación espacial: {repeats} repeticiones, bloques de {validation.BLOCK_CELLS}x{validation.BLOCK_CELLS} celdas (~1 km).")
     print(f"   {'modelo':16} {'desviación':>11} {'± sd':>7} {'Spearman':>9} {'precisión@' + str(k_top):>13}")
     for modelo, f in r["resumen"].iterrows():
-        marca = "  <- candidato" if modelo in models.CANDIDATOS else ""
+        marca = "  <- candidato" if modelo in models.CANDIDATOS else ("  (referencia sin contexto)" if modelo == "boosting_poi" else "")
         print(f"   {modelo:16} {f['desviacion']:>11.3f} {f['desviacion_sd']:>7.3f} {f['spearman']:>9.3f} {f['precision_k']:>13.2f}{marca}")
     d = r["decision"]
     print(f"\nMejor línea base: {d['mejor_baseline']}. Diferencia de desviación por celda (candidato − línea base; "
@@ -101,6 +110,10 @@ def imprimir(r: dict, repeats: int, k_top: int) -> None:
         print(f"\nDECISIÓN: se puede publicar «{d['ganador']}» (mejora a la mejor línea base con el intervalo por debajo de 0).")
     else:
         print("\nDECISIÓN: NINGÚN candidato mejora a la mejor línea base con claridad -> NO se publica puntaje de ML; se queda el MCDA.")
+    if r["aporte_contexto"]:
+        a = r["aporte_contexto"]
+        print(f"\n¿Aporta el contexto (edificios, alojamiento, transporte, industria)? boosting con contexto − boosting solo con POIs: "
+              f"{a['diferencia']:+.3f}  [{a['ic_inf']:+.3f}, {a['ic_sup']:+.3f}]  -> {a['veredicto']}")
     if r["auc"]:
         print("\nContraste con Foursquare (fuente independiente). AUC de la oferta esperada fuera de muestra para las celdas "
               "con locales en Foursquare:")
@@ -134,17 +147,26 @@ def main(argv=None) -> int:
     ap.add_argument("--boot", type=int, default=2000, help="remuestreos del bootstrap de bloques")
     ap.add_argument("--k", type=int, default=50, help="k de la precisión@k y del análisis de la brecha")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--contexto", default=None,
+                    help="directorio con el contexto de OSM descargado con tools/download_osm_context.py (fase 1b)")
     args = ap.parse_args(argv)
 
     pois = data_access.load_pois(args.db)
     zonas = data_access.load_zone_table(args.db)
     fsq = data_access.load_pois_foursquare(args.db)
-    counts = CellCounts.from_pois(pois)
+    contexto = osm_context.load_context(args.contexto) if args.contexto else None
+    todos = pd.concat([pois, contexto], ignore_index=True) if contexto is not None and not contexto.empty else pois
+    counts = CellCounts.from_pois(todos)
     print(f"POIs de Overpass: {len(pois)} | Foursquare: {len(fsq)} | zonas con población: {int(zonas['demanda'].notna().sum())}/{len(zonas)}")
+    con_contexto = contexto is not None and not contexto.empty
+    if args.contexto:
+        resumen_ctx = contexto.groupby("category").size().to_dict() if con_contexto else {}
+        print(f"Contexto de OSM (fase 1b): {resumen_ctx if con_contexto else 'directorio sin datos válidos: se valida sin contexto'}")
     for clave in (TARGETS if args.target == "all" else (args.target,)):
         t0 = time.perf_counter()
         r = run_target(clave, counts, zonas, fsq, args.repeats, args.folds, args.boot, args.seed, args.k,
-                       progress=lambda i, n: print(f"\r   {clave}: repetición {i}/{n}", end="", flush=True))
+                       progress=lambda i, n: print(f"\r   {clave}: repetición {i}/{n}", end="", flush=True),
+                       con_contexto=con_contexto)
         print(f"\r   {clave}: {time.perf_counter() - t0:.0f} s{' ' * 20}")
         imprimir(r, args.repeats, args.k)
     return 0
