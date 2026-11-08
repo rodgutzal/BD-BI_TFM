@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**33 archivos · 394 funciones de test · 463 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**35 archivos · 451 funciones de test · 523 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -33,6 +33,8 @@
 | [`tests/test_locations.py`](#teststest_locationspy) | 5 | 5 |
 | [`tests/test_medallion.py`](#teststest_medallionpy) | 20 | 20 |
 | [`tests/test_migrations.py`](#teststest_migrationspy) | 18 | 18 |
+| [`tests/test_ml_grid.py`](#teststest_ml_gridpy) | 19 | 22 |
+| [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
 | [`tests/test_ors_null_fields.py`](#teststest_ors_null_fieldspy) | 2 | 2 |
@@ -509,6 +511,74 @@
 - `test_backfill_csv_inexistente_o_vacio_no_se_conecta`
 - `test_backfill_sin_psycopg2_instalado_devuelve_cero`
 - `test_backfill_main_devuelve_el_codigo_segun_las_filas`
+
+## `tests/test_ml_grid.py`
+
+> Tests de la rejilla de ~250 m (src/ml/grid.py) y de los conteos por celda (src/ml/cell_counts.py).
+
+- `test_la_rejilla_es_fija_y_cubre_el_area`
+- `test_las_celdas_miden_unos_250_m_en_las_dos_direcciones`
+- `test_un_punto_cae_en_la_celda_cuyo_centro_esta_cerca`
+- `test_puntos_fuera_de_la_rejilla_o_sin_coordenadas_dan_menos_uno`
+- `test_los_bordes_de_la_rejilla`
+- `test_identificadores_de_celda`
+- `test_cells_frame_tiene_todas_las_celdas_y_cada_centro_cae_en_su_celda`
+- `test_count_grid_cuenta_por_celda_e_ignora_lo_de_fuera`
+- `test_los_anillos_tienen_las_celdas_esperadas` ×4
+- `test_la_suma_por_anillos_pondera_la_vecindad`
+- `test_los_bordes_no_dan_la_vuelta`
+- `test_activas_son_las_celdas_con_algun_poi_en_ella_o_en_su_vecindad`
+- `test_selector_toda_la_categoria_un_subconjunto_o_todo_menos_algo`
+- `test_los_conteos_se_separan_por_categoria_y_subcategoria`
+- `test_subcategoria_vacia_o_nula_se_cuenta_como_cadena_vacia`
+- `test_los_pois_fuera_de_la_rejilla_se_cuentan_aparte`
+- `test_sin_pois_los_conteos_estan_vacios_pero_las_consultas_funcionan`
+- `test_exclude_quita_del_conteo_lo_que_cumple_el_objetivo`
+- `test_la_tabla_celda_por_subcategoria`
+
+## `tests/test_ml_lenses.py`
+
+> Tests de los perfiles de negocio, las tres lentes y las variables con control de fuga (src/ml/*)
+> y de la herramienta tools/measure_lens_variance.py.
+
+- `test_hay_un_perfil_por_cada_categoria_de_overpass`
+- `test_cada_perfil_es_coherente`
+- `test_los_selectores_de_segmentos_y_proveedores_usan_categorias_reales`
+- `test_residentes_y_distribuidores_sanitarios_no_tienen_proxy_y_lo_declaran_vacio`
+- `test_perfil_inexistente_lanza_error`
+- `test_el_comercio_generico_no_cuenta_las_oficinas_como_competencia`
+- `test_ajustar_no_modifica_el_perfil_por_defecto`
+- `test_una_lente_no_puede_quedar_vacia_y_se_conserva_el_valor_por_defecto`
+- `test_una_lente_que_ya_estaba_vacia_por_defecto_puede_seguir_vacia`
+- `test_los_nombres_desconocidos_se_descartan_con_aviso`
+- `test_quitar_mas_de_la_mitad_de_la_competencia_avisa_de_optimismo`
+- `test_anadir_competencia_no_cuenta_como_desviacion`
+- `test_el_perfil_por_defecto_tiene_desviacion_cero_y_cambiarlo_todo_da_uno`
+- `test_el_umbral_de_aviso_es_la_mitad`
+- `test_la_competencia_se_pondera_por_vecindad`
+- `test_solo_salen_las_celdas_activas_y_el_indice_es_cell_id`
+- `test_segmento_sin_pois_es_nan_y_no_cero`
+- `test_cero_y_sin_datos_son_cosas_distintas`
+- `test_proveedores_total_y_diversidad`
+- `test_el_apoyo_cuenta_pois_sin_ponderar_en_la_celda_y_sus_8_vecinas`
+- `test_un_poi_cuenta_en_una_sola_lente_la_competencia_manda` — Precedencia: un bar es competencia de un restaurante y NO también 'vida nocturna'; una panadería, aquí proveedor, tampoco es competencia.
+- `test_los_museos_no_son_a_la_vez_competencia_y_turistas_en_ocio`
+- `test_lentes_con_datos_cuenta_cuantas_lentes_se_pueden_calcular`
+- `test_ajustar_el_perfil_cambia_la_lente_sin_tocar_los_datos`
+- `test_con_cero_pois_las_lentes_no_fallan`
+- `test_cobertura_de_las_lentes`
+- `test_las_variables_no_incluyen_el_objetivo_ni_en_la_celda_ni_en_la_vecindad` — Control de fuga: mover o añadir restaurantes NO cambia ninguna variable (si cambiara, el modelo de oferta esperada copiaría su propia etiqueta).
+- `test_las_otras_categorias_si_entran_en_la_celda_y_en_los_anillos`
+- `test_nombres_y_numero_de_variables`
+- `test_el_objetivo_cuenta_solo_la_propia_celda`
+- `test_distancia_al_centro_de_zona_mas_cercano`
+- `test_poblacion_y_accesibilidad_suavizadas_con_las_zonas`
+- `test_una_zona_sin_dato_se_omite_y_los_pesos_se_renormalizan`
+- `test_la_herramienta_lee_en_solo_lectura`
+- `test_describe_lens_excluye_nan_y_los_cuenta_aparte`
+- `test_la_serie_constante_no_da_cv_infinito`
+- `test_cuadrante_de_oportunidad`
+- `test_la_herramienta_imprime_un_informe_por_perfil`
 
 ## `tests/test_normalize_bronze_timestamps.py`
 
