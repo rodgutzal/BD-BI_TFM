@@ -17,6 +17,7 @@ from dataclasses import dataclass, replace
 from typing import Dict, List, Optional, Tuple
 
 from src.ml.cell_counts import Selector, selector, selector_except
+from src.ml.osm_context import NO_RESIDENCIALES
 
 # Umbral de aviso (decisión pendiente nº 6 del diseño: se empieza en la mitad y se ajusta con las pruebas).
 UMBRAL_DESVIACION = 0.5
@@ -28,14 +29,18 @@ _OFICINAS = ("company", "government", "insurance", "estate_agent", "lawyer", "ac
              "consulting", "coworking", "it", "architect", "notary", "employment_agency", "property_management",
              "telecommunication", "engineer")
 
-# Segmentos de mercado → qué POIs los generan. `residentes` queda VACÍO a propósito: sin edificios residenciales
-# cartografiados (fase 1b) no hay un proxy honesto, y la lente lo marca como 'sin datos' en vez de inventarlo.
-# `turistas` es PARCIAL: hoy solo museos, galerías, teatros, casinos, zoo y parques; faltan hoteles (fase 1b).
+# Segmentos de mercado → qué POIs los generan.
+# `residentes` se aproxima con los EDIFICIOS que no son claramente no residenciales (categoría `edificio`, que solo
+# existe si se cargó el contexto de la fase 1b: tools/download_osm_context.py). Es un proxy de superficie construida,
+# no población (78 % de los edificios de Malta son `building=yes`). Sin ese contexto la lente da 'sin datos'.
+# `turistas`: museos, galerías, teatros, casinos, zoo y parques + alojamiento turístico (categoría `alojamiento`, también
+# de la fase 1b; sin ella solo cuentan los atractivos).
 SEGMENTOS_POI: Dict[str, Tuple[Selector, ...]] = {
-    "residentes": (),
+    "residentes": (selector_except("edificio", *NO_RESIDENCIALES),),
     "oficinistas": (selector("business", *_OFICINAS),),
     "estudiantes": (selector("school"),),
-    "turistas": (selector("leisure", "museum", "gallery", "theatre", "casino", "zoo", "aquarium", "theme_park"),),
+    "turistas": (selector("leisure", "museum", "gallery", "theatre", "casino", "zoo", "aquarium", "theme_park"),
+                 selector("alojamiento")),
     "vida_nocturna": (selector("leisure", "nightclub", "casino"), selector("food_drink", "bar", "pub", "biergarten")),
 }
 

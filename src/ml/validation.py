@@ -144,6 +144,20 @@ def block_bootstrap_mean(d, bloques, n_boot: int = 2000, seed: int = 0, nivel: f
             "ic_sup": float(np.quantile(medias, 1 - alfa))}
 
 
+def deviance_per_cell(ev: Evaluation, nombre: str) -> np.ndarray:
+    """Desviación de Poisson de cada celda para un modelo, calculada en CADA repetición y luego promediada (un modelo
+    honesto cada vez; ver decide())."""
+    return np.mean([poisson_deviance(ev.y, ev.oof[nombre][r]) for r in range(ev.oof[nombre].shape[0])], axis=0)
+
+
+def compare_models(ev: Evaluation, a: str, b: str, n_boot: int = 2000, seed: int = 0) -> dict:
+    """Diferencia de desviación por celda entre dos modelos (a − b; negativa = a es mejor), con IC por bootstrap de
+    bloques y veredicto. Sirve para preguntas como '¿aporta algo el contexto?' (boosting frente a boosting_poi)."""
+    r = block_bootstrap_mean(deviance_per_cell(ev, a) - deviance_per_cell(ev, b), ev.bloques, n_boot, seed)
+    r["veredicto"] = "mejora" if r["ic_sup"] < 0 else ("peor" if r["ic_inf"] > 0 else "indistinguible")
+    return r
+
+
 def decide(ev: Evaluation, candidatos: Sequence[str] = models.CANDIDATOS, baselines: Sequence[str] = models.BASELINES,
            n_boot: int = 2000, seed: int = 0) -> dict:
     """Aplica la regla de decisión: ¿algún candidato supera a la mejor línea base con el intervalo por debajo de 0?
@@ -155,8 +169,7 @@ def decide(ev: Evaluation, candidatos: Sequence[str] = models.CANDIDATOS, baseli
     el bloque de esa celda) y después se promedia. NO se promedian antes las predicciones de varias repeticiones:
     eso convertiría a cada candidato en un conjunto de modelos, favorecería a los de alta varianza (el boosting)
     frente a las líneas base y haría depender el veredicto del número de repeticiones."""
-    por_celda = {n: np.mean([poisson_deviance(ev.y, ev.oof[n][r]) for r in range(ev.oof[n].shape[0])], axis=0)
-                 for n in ev.nombres}
+    por_celda = {n: deviance_per_cell(ev, n) for n in ev.nombres}
     bases = [b for b in baselines if b in por_celda]
     mejor = min(bases, key=lambda b: por_celda[b].mean())
     comparaciones = {}

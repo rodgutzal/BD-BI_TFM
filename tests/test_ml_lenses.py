@@ -18,6 +18,7 @@ from src.ml import business_profiles as bp  # noqa: E402
 from src.ml import features, grid  # noqa: E402
 from src.ml.cell_counts import CellCounts, Selector, selector  # noqa: E402
 from src.ml.lenses import compute_lenses, lens_coverage  # noqa: E402
+from src.ml.osm_context import CONTEXTO  # noqa: E402
 from src.poi_client import CATEGORY_TAGS  # noqa: E402
 
 # tools/ no es un paquete: se carga el script por ruta.
@@ -54,11 +55,12 @@ def test_cada_perfil_es_coherente(clave):
 def test_los_selectores_de_segmentos_y_proveedores_usan_categorias_reales():
     for sels in list(bp.SEGMENTOS_POI.values()) + list(bp.PROVEEDORES_POI.values()):
         for s in sels:
-            assert s.category in CATEGORY_TAGS
+            assert s.category in set(CATEGORY_TAGS) | set(CONTEXTO)         # POIs de Overpass o contexto de la fase 1b
 
 
-def test_residentes_y_distribuidores_sanitarios_no_tienen_proxy_y_lo_declaran_vacio():
-    assert bp.SEGMENTOS_POI["residentes"] == () and bp.PROVEEDORES_POI["distribuidores_sanitarios"] == ()
+def test_residentes_usan_edificios_y_los_distribuidores_sanitarios_siguen_sin_proxy():
+    assert [s.category for s in bp.SEGMENTOS_POI["residentes"]] == ["edificio"]
+    assert bp.PROVEEDORES_POI["distribuidores_sanitarios"] == ()                # sin etiqueta en OSM: sin datos
 
 
 def test_perfil_inexistente_lanza_error():
