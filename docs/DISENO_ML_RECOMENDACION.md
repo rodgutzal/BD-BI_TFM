@@ -76,7 +76,7 @@ texto libre ──► [C] clasificador de texto ──► categoría ─┐
 Todo el entrenamiento se hace **fuera del dashboard** (scripts en `tools/`), y el dashboard solo lee una **tabla precalculada de puntajes por celda**. Así el contenedor del dashboard (límite de 1 GiB) no carga modelos pesados ni nuevas dependencias.
 
 ### A. Rejilla y variables (`src/ml/` — nuevo)
-- Rejilla de ~250 m sobre el área de los POIs (unas 1.700 celdas en total, **estimado** como 38×45 sobre la extensión de los POIs; **560 con POIs, medido**).
+- Rejilla fija de ~250 m (`src/ml/grid.py`): **45 × 51 = 2.295 celdas, de las que 1.139 están activas** (con algún POI en la celda o en su vecindad inmediata) y **560 contienen POIs**. Todo medido en la fase 0.
 - Variables por celda: conteos por categoría en la celda y en la vecindad (anillos de 1 y 2 celdas), distancia al centro de zona más cercano, población de zona suavizada con un núcleo (kernel), accesibilidad de la zona más cercana.
 - **Las tres lentes** (ver la tabla de perfiles de negocio, sección E): cada celda recibe indicadores de **competencia** (directa e indirecta), de **mercado consumidor** (residentes, trabajadores, estudiantes, visitantes y turistas, medidos por los generadores de consumidores cercanos) y de **proveedores** (cercanía y diversidad de los proveedores típicos del tipo de negocio).
 - **Control de fuga:** al modelar la categoría X, **X no entra en las variables** (ni en la celda ni en la vecindad). Si no, el modelo solo copiaría la etiqueta.
@@ -94,7 +94,7 @@ Todo el entrenamiento se hace **fuera del dashboard** (scripts en `tools/`), y e
 
 - **Aprendido:** el modelo de oferta esperada recibe como variables los generadores de consumidores y los proveedores cercanos. Su **importancia aprendida** dice cuánto acompañan al negocio existente (por ejemplo, cuánto se agrupan los restaurantes cerca de oficinas): es un peso estimado de los datos, no una opinión.
 - **Explícito:** además, los tres lentes se muestran **por separado** en el panorama, con sus indicadores crudos. Sin etiquetas de éxito, el modelo **no puede aprender cuánto vale** un buen mercado o un proveedor cercano para el negocio; por eso el puntaje combinado usa pesos visibles y ajustables, con la sensibilidad del ranking a cada peso.
-- **Advertencia sobre proveedores:** Malta es pequeña (distancias de pocos kilómetros), así que **es posible que la cercanía a proveedores casi no varíe entre celdas** y el lente discrimine poco. Se mide en la fase 0 (varianza entre celdas); si no discrimina, se muestra como información y se le quita peso, en vez de fingir que ayuda a decidir.
+- **Advertencia sobre proveedores (medida en la fase 0, ver la sección 3.F):** la hipótesis era que la cercanía a proveedores casi no variaría entre celdas por el tamaño de Malta. **Resultó falsa**: varía mucho. El problema real es otro: las tres lentes están muy correlacionadas entre sí porque miden sobre todo cuán urbana es la celda.
 
 ### C. Clasificador de texto (tipo de negocio)
 - **Hoy:** 140 palabras clave con límites de palabra; si no hay coincidencia, lanza error (no adivina). Es correcto, pero rígido ante sinónimos, errores de ortografía y frases largas.
@@ -142,6 +142,31 @@ Los valores por defecto no se imponen: el usuario conoce su negocio mejor que el
 4. Los **valores por defecto se revisan** una vez (los revisa quien decida el autor: él mismo, su tutor o alguien con experiencia en el sector) y quedan documentados como criterio del autor si no hay revisión externa.
 5. La comparabilidad entre recomendaciones se conserva porque siempre existe el perfil por defecto como punto de referencia.
 
+### F. Resultados de la fase 0 (medidos con `tools/measure_lens_variance.py`, base real en solo lectura)
+
+Sobre las 1.139 celdas activas y los perfiles por defecto:
+
+| Perfil | Competencia: CV | Mercado: CV | Proveedores: CV | Spearman competencia~mercado | Celdas con mercado alto y competencia baja* |
+|---|---|---|---|---|---|
+| Restaurante, café o bar | 1,91 | 1,26 | 1,23 | **+0,71** | **9 %** |
+| Comercio u oficina | 1,14 | 1,28 | sin datos | +0,74 | 9 % |
+| Farmacia, clínica | 1,11 | 1,26 | sin datos | +0,69 | 11 % |
+| Gimnasio | 1,37 | 1,26 | 2,15 | +0,56 | 9 % |
+| Ocio y cultura | 2,33 | turistas sin datos | sin datos | +0,30 | 0 % |
+| Centro comercial | 1,94 | 1,63 | 4,37 | +0,43 | 0 % |
+
+\* Si las lentes fueran independientes saldría ~25 %. CV = coeficiente de variación (desviación / media); por encima de 1 la lente varía mucho entre celdas.
+
+**Lo que dicen los números:**
+1. **Las lentes sí varían** (CV > 1 casi siempre): la hipótesis de que los proveedores no discriminarían era falsa.
+2. **Pero están muy correlacionadas** (competencia~mercado entre +0,56 y +0,74 en los perfiles con datos). Las tres miden sobre todo *densidad urbana*: donde hay más de todo, hay más competencia, más mercado y más proveedores. Por eso solo un ~9 % de las celdas combina mercado alto con competencia baja, en vez del 25 % esperable.
+3. **Consecuencia de diseño:** una suma ponderada de las lentes en bruto (como el MCDA actual) quedaría dominada por la densidad y premiaría o castigaría a las mismas celdas por casi cualquier combinación de pesos. El puntaje debe usar indicadores **relativos a la densidad** (la brecha de oferta de la sección B, que es justamente el residuo tras controlar por contexto, y razones como mercado/competencia), y la sensibilidad a los pesos debe mostrar si el ranking cambia de verdad.
+4. **Lo que no se puede medir hoy** (queda marcado como "sin datos" en cada lente, no como cero): residentes (necesita la fase 1b), turistas (hoteles, fase 1b), distribuidores sanitarios y mayoristas (1 solo en la base).
+
+**Dos defectos del propio diseño que la medición destapó y que ya están corregidos:**
+- **Doble conteo:** un mismo POI contaba como competencia y a la vez como mercado o proveedor (un museo, competencia directa de un negocio de ocio, contaba también como "generador de turistas"). Con esa definición el cuadrante favorable salía al 0 % en ocio. Regla fijada: **un POI cuenta en una sola lente, con prioridad competencia > mercado > proveedores** (`src/ml/lenses.py`).
+- **Perfiles mal definidos:** la competencia directa del comercio genérico era *todo* `business`, lo que incluía las oficinas (que son mercado) y las tiendas proveedoras; y el gimnasio tenía sustitutos con etiquetas que no existen en los datos (100 % ceros). Corregidos en los valores por defecto, que siguen siendo criterio del autor a revisar.
+
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
 
@@ -158,7 +183,7 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 
 | Fase | Entregable | Depende de |
 |---|---|---|
-| 0 | Rejilla y variables (`src/ml/`), con tests y control de fuga; **perfiles de negocio por defecto** (sección E) y los indicadores de las tres lentes con los datos que ya hay; **tabla precalculada celda × subcategoría de OSM** (base del recálculo al ajustar el perfil); medición de cuánto varía cada lente entre celdas | — |
+| 0 | **Hecha (PR #38).** Rejilla y variables (`src/ml/`), con tests y control de fuga; **perfiles de negocio por defecto** (sección E) y los indicadores de las tres lentes con los datos que ya hay; **tabla precalculada celda × subcategoría de OSM** (base del recálculo al ajustar el perfil); medición de cuánto varía cada lente entre celdas | — |
 | 1 | Modelos de oferta (boosting y MLP) + `tools/validate_location_model.py` (validación espacial reproducible, como `validate_forecast.py`) y resultados en el README | 0 |
 | 1b | Edificios residenciales, paradas de transporte, **hoteles y alojamiento turístico**, mayoristas y zonas industriales/logísticas (mercado y proveedores finos) | **autorización de descarga a Overpass** |
 | 2 | Tabla precalculada de **panoramas por celda** (tres lentes + confianza) + mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 1 |
