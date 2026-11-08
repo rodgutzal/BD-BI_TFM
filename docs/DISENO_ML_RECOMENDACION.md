@@ -167,6 +167,39 @@ Sobre las 1.139 celdas activas y los perfiles por defecto:
 - **Doble conteo:** un mismo POI contaba como competencia y a la vez como mercado o proveedor (un museo, competencia directa de un negocio de ocio, contaba también como "generador de turistas"). Con esa definición el cuadrante favorable salía al 0 % en ocio. Regla fijada: **un POI cuenta en una sola lente, con prioridad competencia > mercado > proveedores** (`src/ml/lenses.py`).
 - **Perfiles mal definidos:** la competencia directa del comercio genérico era *todo* `business`, lo que incluía las oficinas (que son mercado) y las tiendas proveedoras; y el gimnasio tenía sustitutos con etiquetas que no existen en los datos (100 % ceros). Corregidos en los valores por defecto, que siguen siendo criterio del autor a revisar.
 
+### G. Resultados de la fase 1 (medidos con `tools/validate_location_model.py`, base real en solo lectura)
+
+Validación cruzada espacial: 10 repeticiones, bloques de 4×4 celdas (~1 km), 1.139 celdas activas. Desviación de Poisson media por celda (menos es mejor):
+
+| Modelo | food_drink | business |
+|---|---|---|
+| **boosting** (Poisson) | **1,513** ± 0,061 | **2,586** ± 0,097 |
+| solo densidad urbana (mejor línea base) | 1,695 ± 0,046 | 2,804 ± 0,043 |
+| red MLP | 2,441 ± 0,507 | 6,424 ± 2,846 |
+| solo distancia al centro | 3,442 | 4,987 |
+| solo población | 4,497 | 5,640 |
+| media constante | 4,625 | 5,594 |
+
+| Candidato frente a la mejor línea base (densidad) | Diferencia por celda (IC 95 %, bootstrap de bloques) | Veredicto |
+|---|---|---|
+| boosting, food_drink | −0,182 [−0,566, +0,178] | **indistinguible** |
+| boosting, business | −0,218 [−0,514, +0,121] | **indistinguible** |
+| MLP, food_drink | +0,747 [+0,119, +1,652] | peor |
+| MLP, business | +3,619 [+0,278, +10,137] | peor |
+
+**Decisión según la regla de la sección 4: ningún candidato mejora a la mejor línea base con claridad, así que NO se publica puntaje de ML; se queda el MCDA.** Es un resultado válido y consistente con lo anunciado: las tres lentes y las variables miden sobre todo densidad urbana (sección F), y con ~1.100 celdas (unos 80 bloques independientes) el contexto adicional no se distingue del ruido.
+
+**Matices que hay que contar en el TFM:**
+- El boosting es **mejor en estimación puntual** (~11 % menos de desviación que la densidad en `food_drink`, ~8 % en `business`; mejor Spearman y precisión@50: 0,58 frente a 0,50 en `food_drink`) pero el intervalo toca el 0. No se puede descartar una mejora pequeña; tampoco afirmarla. Con las variables de la fase 1b (edificios, hoteles, paradas) podría cambiar: es la siguiente palanca.
+- **La red MLP rinde peor y es muy inestable** (desviación estándar entre repeticiones de 0,5 y 2,8). Parte es una limitación conocida: scikit-learn no ofrece pérdida de Poisson en la red y se entrena sobre log(1 + conteo), lo que infraestima los conteos grandes. En Spearman y precisión@50 se acerca al boosting (0,50 y 0,56 frente a 0,55 y 0,58), o sea, ordena razonablemente pero está mal calibrada en escala de conteo. Una red con pérdida de Poisson (requiere `torch`, decisión 2) es la prueba justa que falta.
+- **Contraste independiente con Foursquare** (AUC de la oferta esperada fuera de muestra para las celdas con locales en Foursquare): `food_drink` boosting 0,883, MLP 0,860, densidad 0,851, distancia 0,838, población 0,575; `business` 0,809, 0,793, 0,772, 0,768, 0,403. Mismo orden que la desviación, con ventajas pequeñas. Entre las 50 celdas de mayor brecha, el 12 % (`food_drink`) y el 0 % (`business`) tiene más locales en Foursquare que en OSM, frente a un 10 % y un 1 % de referencia: **no hay señal de que la brecha sea un artefacto de falta de mapeo**.
+- **La brecha absoluta favorece a los centros saturados.** La mayor de `food_drink` es la celda `r36c17` (St Julian's): 18 locales observados frente a ~62 esperados, +44, en la zona más densa de restauración. Por eso se calcula también la **brecha relativa** (en desviaciones típicas), y en la fase 2 el panorama debe usar la relativa. Las celdas de mayor brecha están más cerca de los centros (mediana 559 m frente a 1.974 m en el conjunto), como era de esperar.
+- Sin edificios ni población por celda no se puede comprobar que las celdas de mayor brecha tengan gente (fase 1b).
+
+**Corrección de mi propio procedimiento durante la fase 1:** la primera versión de `decide()` promediaba las predicciones de todas las repeticiones y después calculaba la desviación. Con eso el boosting de `business` salía como «mejora» ([−0,655, −0,098]), pero el veredicto cambiaba con el número de repeticiones: promediar convierte a cada candidato en un conjunto de modelos y favorece a los de alta varianza frente a las líneas base. Ahora la desviación se calcula **en cada repetición por separado** y luego se promedia (un modelo honesto cada vez); el veredicto es el mismo con 4, 10 y 20 repeticiones. Hay un test de regresión.
+
+**Dos errores de robustez que los datos reales o los tests destaparon:** una variable toda en NaN (por ejemplo, la accesibilidad si la base no tiene datos de rutas) rompía el boosting al discretizarla; ahora se descartan esas columnas.
+
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
 
@@ -184,7 +217,7 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 | Fase | Entregable | Depende de |
 |---|---|---|
 | 0 | **Hecha (PR #38).** Rejilla y variables (`src/ml/`), con tests y control de fuga; **perfiles de negocio por defecto** (sección E) y los indicadores de las tres lentes con los datos que ya hay; **tabla precalculada celda × subcategoría de OSM** (base del recálculo al ajustar el perfil); medición de cuánto varía cada lente entre celdas | — |
-| 1 | Modelos de oferta (boosting y MLP) + `tools/validate_location_model.py` (validación espacial reproducible, como `validate_forecast.py`) y resultados en el README | 0 |
+| 1 | **Hecha (PR #39).** Modelos de oferta (boosting y MLP) + `tools/validate_location_model.py` (validación espacial reproducible, como `validate_forecast.py`); resultado en la sección 3.G: **ningún candidato supera a la densidad con claridad, no se publica puntaje de ML** | 0 |
 | 1b | Edificios residenciales, paradas de transporte, **hoteles y alojamiento turístico**, mayoristas y zonas industriales/logísticas (mercado y proveedores finos) | **autorización de descarga a Overpass** |
 | 2 | Tabla precalculada de **panoramas por celda** (tres lentes + confianza) + mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 1 |
 | 3 | Clasificador de texto, comparado con las palabras clave | — |
@@ -202,8 +235,8 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 ## 7. Decisiones pendientes
 
 1. ¿Se autoriza la **descarga completa** de edificios, paradas y estado histórico de toda el área (fases 1b y 4)? La autorización actual cubrió solo la sonda.
-2. ¿Se añade **`torch`** (solo para entrenar, no en el dashboard) si el MLP de scikit-learn se queda corto, o se limita el trabajo a scikit-learn?
-3. ¿Se acepta el **criterio de éxito** de la sección 4 (publicar el ML solo si gana en validación espacial)?
+2. ¿Se añade **`torch`** (solo para entrenar, no en el dashboard)? El MLP de scikit-learn rindió peor y de forma inestable, en parte por no tener pérdida de Poisson (sección 3.G); una red con esa pérdida es la comparación justa que falta, pero es una dependencia pesada para un resultado que probablemente siga sin superar a la densidad.
+3. **Aplicado:** el criterio de éxito de la sección 4 se aplicó tal como estaba fijado y dio un resultado negativo (no se publica puntaje de ML). Queda por decidir qué hacer con la brecha de oferta en la fase 2: (a) no mostrarla, (b) mostrarla etiquetada como **exploratoria** junto a las lentes explícitas, o (c) esperar a la fase 1b.
 4. ¿Quién escribe las **~200 frases de evaluación** del clasificador de texto? Idealmente alguien que conozca el lenguaje real de los usuarios; yo puedo proponer un borrador.
 5. ¿Quién **revisa los valores por defecto de los perfiles de negocio** (sección E)? Ya no es crítico, porque el usuario puede corregirlos; basta con que alguien con criterio de negocio los repase una vez: el propio autor, su tutor o una persona con experiencia en el sector. Yo preparo el borrador completo. Si no hay revisión externa, el TFM debe decir que son criterio del autor.
 6. ¿Qué **umbral** de desviación del perfil por defecto activa el aviso al usuario (por ejemplo, quitar más de la mitad de los elementos de competencia)? Propongo empezar en la mitad y ajustarlo con las primeras pruebas.
