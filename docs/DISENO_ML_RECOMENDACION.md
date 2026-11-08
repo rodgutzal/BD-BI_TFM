@@ -6,6 +6,8 @@
 - La ampliación de datos con Overpass se hace **primero con una prueba pequeña** (hecha, resultados en la sección 2).
 - El producto es un **panorama de tres lentes por celda** (competencia, mercado consumidor y proveedores), y "lo más positivo para el usuario" significa **lo más útil y accionable**, no un puntaje inflado (confirmado el 6-nov-2026).
 - Los **perfiles de negocio son ajustables por el usuario** sobre valores por defecto revisados (sección E, 7-nov-2026).
+- Fase 1b autorizada con descarga a **archivos temporales** (sin tocar la base de datos): hecha y evaluada (sección 3.H, 8-nov-2026).
+- En la fase 2 la **brecha de oferta se mostrará como indicador exploratorio**, claramente etiquetado como no validado y fuera del puntaje combinado (8-nov-2026).
 
 ## 1. Qué problema se quiere resolver, y qué NO se puede afirmar
 
@@ -200,6 +202,43 @@ Validación cruzada espacial: 10 repeticiones, bloques de 4×4 celdas (~1 km), 1
 
 **Dos errores de robustez que los datos reales o los tests destaparon:** una variable toda en NaN (por ejemplo, la accesibilidad si la base no tiene datos de rutas) rompía el boosting al discretizarla; ahora se descartan esas columnas.
 
+### H. Resultados de la fase 1b (contexto de OpenStreetMap, 8-nov-2026)
+
+**Qué se descargó** (7 consultas a Overpass con pausas de 12 s, ~3 MB, a archivos fuera de la base; la base no cambió):
+
+| Tema | Elementos | Observaciones |
+|---|---|---|
+| Edificios | 15.608 | **78 % son `building=yes`** (genéricos); solo el 11 % está marcado como residencial; el 16 % tiene número de plantas. Hay edificios en 1.419 celdas (los POIs activaban 1.139) |
+| Alojamiento | 198 | 129 hoteles, 29 casas de huéspedes, 21 apartamentos, 18 hostales; solo 7 con habitaciones o camas, así que solo se pueden **contar** |
+| Transporte | 1.156 | 1.134 paradas de autobús, 18 de ferry, 3 estaciones y 1 andén (las 427 `stop_position` se descartan: duplican las paradas) |
+| Industria / mayoristas | 149 | 145 áreas industriales y **un único mayorista** (el mismo de antes) |
+
+**Límites que hay que declarar:** al ser casi todo `building=yes`, no se distingue vivienda de comercio; «residentes» se aproxima con los edificios que no son claramente no residenciales (excluye industriales, escuelas, iglesias, garajes, cobertizos...), y el número de edificios mide superficie construida, no población. **La lente de proveedores no mejora**: sigue sin mayoristas.
+
+**Efecto en las lentes.** «Residentes» y «turistas» (alojamiento) pasan de «sin datos» a tener valores en todas las celdas activas. Correlación de Spearman entre la competencia directa de `food_drink` y cada segmento de mercado: residentes **+0,52**, oficinistas +0,59, estudiantes +0,51, turistas +0,69, vida nocturna +0,20. El cuadrante «residentes altos y competencia baja» contiene el **17 %** de las celdas (frente a ~25 % si fueran independientes), así que los residentes se parecen menos a la competencia que el resto de segmentos, pero **el hallazgo de la fase 0 se mantiene**: el índice de mercado combinado sigue correlacionado con la competencia (+0,73) y solo ~10 % de las celdas combinan mercado alto y competencia baja.
+
+**Corrección durante la fase:** `mercado_total` sumaba conteos en bruto y, con ~90 edificios por celda frente a ~1 colegio, era casi solo «cuántos edificios hay» (aparentaba un cuadrante favorable del 16 %, que era un artefacto de escala). Ahora es un **índice 0-1**: la media de los segmentos con datos, cada uno escalado por su máximo en la rejilla.
+
+**Efecto en los modelos** (misma validación espacial, mismas 1.139 celdas; desviación de Poisson por celda, menos es mejor):
+
+| Modelo | food_drink | business |
+|---|---|---|
+| boosting **con** contexto | **1,486** | **2,458** |
+| boosting solo con POIs (fase 1) | 1,513 | 2,586 |
+| solo densidad de POIs (mejor línea base) | 1,695 | 2,804 |
+| red MLP con contexto | 2,027 (±0,31) | 5,141 (±2,06) |
+| solo edificios (línea base nueva) | 3,816 | 4,535 |
+
+| Comparación | food_drink | business |
+|---|---|---|
+| boosting con contexto − mejor línea base | −0,209 [−0,568, +0,104] **indistinguible** | −0,346 [−0,664, +0,015] **indistinguible** |
+| **¿aporta el contexto?** (boosting con − sin contexto) | −0,027 [−0,188, +0,112] **indistinguible** | −0,128 [−0,269, +0,027] **indistinguible** |
+| MLP con contexto − mejor línea base | +0,332 [−0,171, +0,985] indistinguible | +2,337 [−0,261, +7,323] indistinguible |
+
+**Decisión según la regla de la sección 4: sigue sin publicarse puntaje de ML** (en ninguno de los dos objetivos). El contexto mejora la estimación puntual (~2 % en `food_drink`, ~5 % en `business`) pero ningún intervalo queda por debajo de 0; en `business`, la comparación con la línea base queda en el límite (+0,015). Contraste con Foursquare (AUC): `food_drink` boosting con contexto 0,890 (sin contexto 0,883; densidad 0,851); `business` 0,816 (0,809; 0,772). Entre las 50 celdas de mayor brecha no hay señal de falta de mapeo (10 % frente a 10 % de referencia en `food_drink`; 0 % frente a 1 % en `business`).
+
+**Lectura para el TFM:** con ~1.100 celdas (unos 80 bloques independientes) y estas variables, la información del contexto urbano más allá de la densidad de POIs **no se puede separar del ruido**. La densidad de comercios ya recoge casi todo lo que los edificios, el alojamiento y el transporte aportan. Es un resultado negativo bien medido, no una limitación del código.
+
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
 
@@ -218,7 +257,7 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 |---|---|---|
 | 0 | **Hecha (PR #38).** Rejilla y variables (`src/ml/`), con tests y control de fuga; **perfiles de negocio por defecto** (sección E) y los indicadores de las tres lentes con los datos que ya hay; **tabla precalculada celda × subcategoría de OSM** (base del recálculo al ajustar el perfil); medición de cuánto varía cada lente entre celdas | — |
 | 1 | **Hecha (PR #39).** Modelos de oferta (boosting y MLP) + `tools/validate_location_model.py` (validación espacial reproducible, como `validate_forecast.py`); resultado en la sección 3.G: **ningún candidato supera a la densidad con claridad, no se publica puntaje de ML** | 0 |
-| 1b | Edificios residenciales, paradas de transporte, **hoteles y alojamiento turístico**, mayoristas y zonas industriales/logísticas (mercado y proveedores finos) | **autorización de descarga a Overpass** |
+| 1b | **Hecha (PR #40).** Edificios, alojamiento turístico, paradas de transporte e industria/mayoristas descargados de Overpass (`tools/download_osm_context.py`, a archivos fuera de la base) y cargados desde `src/ml/osm_context.py`. Resultado en la sección 3.H: residentes y turistas ya tienen datos; **el contexto no cambia la decisión de la fase 1**; los mayoristas siguen sin datos (solo hay uno) | descarga autorizada |
 | 2 | Tabla precalculada de **panoramas por celda** (tres lentes + confianza) + mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 1 |
 | 3 | Clasificador de texto, comparado con las palabras clave | — |
 | 4 | Riesgo de cierre exploratorio (etiquetas de Overpass histórico de toda el área) | 0, **autorización de descarga** |
@@ -234,7 +273,7 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 
 ## 7. Decisiones pendientes
 
-1. ¿Se autoriza la **descarga completa** de edificios, paradas y estado histórico de toda el área (fases 1b y 4)? La autorización actual cubrió solo la sonda.
+1. **Resuelta para la fase 1b** (edificios, alojamiento, transporte e industria, a archivos temporales). Sigue pendiente la autorización del **estado histórico de toda el área** para la fase 4 (riesgo de cierre); la sonda inicial cubrió solo una zona.
 2. ¿Se añade **`torch`** (solo para entrenar, no en el dashboard)? El MLP de scikit-learn rindió peor y de forma inestable, en parte por no tener pérdida de Poisson (sección 3.G); una red con esa pérdida es la comparación justa que falta, pero es una dependencia pesada para un resultado que probablemente siga sin superar a la densidad.
 3. **Aplicado:** el criterio de éxito de la sección 4 se aplicó tal como estaba fijado y dio un resultado negativo (no se publica puntaje de ML). Queda por decidir qué hacer con la brecha de oferta en la fase 2: (a) no mostrarla, (b) mostrarla etiquetada como **exploratoria** junto a las lentes explícitas, o (c) esperar a la fase 1b.
 4. ¿Quién escribe las **~200 frases de evaluación** del clasificador de texto? Idealmente alguien que conozca el lenguaje real de los usuarios; yo puedo proponer un borrador.

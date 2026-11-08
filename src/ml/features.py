@@ -29,7 +29,7 @@ SIGMA_M = 1500.0
 def target_counts(counts: CellCounts, target: Sequence[Selector], mask: Optional[np.ndarray] = None) -> pd.Series:
     """Número de POIs del objetivo EN cada celda (sin vecindad): la variable que el modelo intenta predecir."""
     if mask is None:
-        mask = grid.active_mask(counts.total_grid())
+        mask = counts.active_mask()
     filas, cols = np.nonzero(mask)
     valores = counts.grid(target)[filas, cols]
     return pd.Series(valores, index=pd.Index([grid.cell_id(f, c) for f, c in zip(filas, cols)], name="cell_id"),
@@ -51,16 +51,18 @@ def _kernel_zonas(lat, lon, valores: pd.Series) -> np.ndarray:
 
 
 def build_features(counts: CellCounts, target: Sequence[Selector], zones: Optional[pd.DataFrame] = None,
-                   mask: Optional[np.ndarray] = None) -> pd.DataFrame:
+                   mask: Optional[np.ndarray] = None, categorias: Sequence[str] = CATEGORIAS) -> pd.DataFrame:
     """Variables de cada celda activa (o de `mask`), sin ningún POI del objetivo. Ver el docstring del módulo.
 
     `zones`: DataFrame indexado por nombre de zona con columnas `demanda` (población) y `tiempo_viaje_prom`
-    (src.location_scoring.zone_demand / zone_accessibility)."""
+    (src.location_scoring.zone_demand / zone_accessibility).
+    `categorias`: qué categorías se cuentan. Por defecto las 7 de Overpass; con el contexto de la fase 1b se pueden
+    añadir `edificio`, `alojamiento`, `transporte` e `industria` (src.ml.osm_context.CONTEXTO)."""
     if mask is None:
-        mask = grid.active_mask(counts.total_grid())
+        mask = counts.active_mask()
     filas, cols = np.nonzero(mask)
     cols_out = {}
-    for categoria in CATEGORIAS:
+    for categoria in categorias:
         matriz = counts.grid([Selector(categoria)], exclude=target)
         cols_out[f"{categoria}_celda"] = grid.ring_sum(matriz, 0)[filas, cols]
         cols_out[f"{categoria}_anillo1"] = grid.ring_sum(matriz, 1)[filas, cols]
