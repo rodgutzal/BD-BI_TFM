@@ -99,7 +99,7 @@ BD_BI_TFM/
 │   ├── demographics_extraction.py   ← CLI del recolector de demografía (opcional, requiere DATACOMMONS_API_KEY; sin servicio Docker propio — correr a mano, la población casi no cambia)
 │   ├── business_type_classifier.py  ← texto libre en español -> categoría de Overpass (para el sistema de recomendación)
 │   ├── location_scoring.py          ← motor de puntuación (MCDA) de zonas para dónde abrir un negocio
-│   ├── ml/                          ← (fase 0 del diseño de ML de recomendación) rejilla de 250 m, conteos por celda, perfiles de negocio ajustables, las tres lentes (competencia/mercado/proveedores) y variables con control de fuga
+│   ├── ml/                          ← (fases 0 y 1 del diseño de ML de recomendación) rejilla de 250 m, conteos por celda, perfiles de negocio ajustables, las tres lentes (competencia/mercado/proveedores), variables con control de fuga, modelos de oferta esperada (boosting de Poisson y red MLP) y validación espacial
 │   ├── database.py               ← capa CSV + SQLite + TimescaleDB (esquema con bug de clima corregido)
 │   ├── collector.py               ← orquestador: recolecta y guarda en las 3 capas + dispara medallion
 │   ├── route_extraction.py       ← CLI del collector (--interval, --source, --hybrid, --no-timescale, --no-medallion)
@@ -133,6 +133,7 @@ BD_BI_TFM/
 │   ├── compare_overpass_foursquare.py ← (solo lectura) mide qué tan completo es OpenStreetMap frente a Foursquare, emparejando por nombre y distancia
 │   ├── check_collection_gaps.py  ← (solo lectura) detecta y mide huecos en la recolección de tráfico (cuándo estuvo apagado el stack)
 │   ├── measure_lens_variance.py  ← (solo lectura) mide cuánto varía cada lente del asistente entre celdas y cuánto se parecen entre sí
+│   ├── validate_location_model.py ← (solo lectura) validación espacial de los modelos de oferta esperada frente a líneas base, con la regla de decisión y el contraste con Foursquare
 │   ├── normalize_bronze_timestamps.py ← (ensayo por defecto; `--apply` con respaldo) normaliza los timestamps antiguos de Bronze al formato ISO — ver Troubleshooting
 │   ├── generate_tests_doc.py     ← genera docs/TESTS.md (catálogo de todos los tests, una línea por test); `--check` verifica que esté al día
 ├── docs/                         ← documentación heredada de urban-mobility-analytics1 (API, research paper) + TESTS.md (catálogo de tests, generado)
@@ -556,6 +557,7 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 | `test_hybrid_scheduler.py` | `HybridScheduler`: cada fuente con su propio reloj, primer ciclo inmediato y cierre por señal. **Ojo:** simula la lógica con una función auxiliar en vez de ejecutar `run()`; el bucle real lo prueba `test_collector.py` |
 | `test_collector.py` | `DataCollector` de punta a punta con clientes falsos y sin esperas: un ciclo guarda las 12 rutas en CSV y SQLite, clima por lugar, umbral de "Alta demora" (>20 min, estricto), tolerancia a fallos de clima/ruta/guardado, TimescaleDB solo con configuración, heartbeat (redirigido, no toca `logs/`), medallón incremental (cada ciclo procesa solo sus filas) y el bucle real de `HybridScheduler` |
 | `test_ml_grid.py` | Rejilla de 250 m (fija, 45×51 celdas, bordes, identificadores, vecindad por anillos sin dar la vuelta) y conteos por celda × subcategoría (`Selector`, POIs fuera de la rejilla, tabla precalculada) |
+| `test_ml_validation.py` | Fase 1 del ML: lectura de datos en solo lectura, modelos de oferta esperada (positivos, deterministas, cada línea base usa solo sus variables, una variable toda NaN no rompe el ajuste), validación espacial (los bloques no se parten entre entrenamiento y prueba, la predicción de una celda no usa su propio valor), desviación de Poisson contra scikit-learn, bootstrap de bloques, la regla de decisión —con la regresión de que el veredicto no depende del número de repeticiones— y `validate_location_model.py` de punta a punta |
 | `test_ml_lenses.py` | Perfiles de negocio y su ajuste por el usuario (una lente no queda vacía, aviso al quitar más de la mitad de la competencia), las tres lentes (NaN ≠ 0, un POI cuenta en una sola lente, apoyo y diversidad), variables del modelo con **control de fuga** (el objetivo no entra) y la herramienta `measure_lens_variance.py` |
 | `test_location_scoring.py` | Recomendación de ubicación (MCDA): demanda, competencia, accesibilidad, pesos, zonas sin dato como neutrales y caso de punta a punta |
 | `test_locations.py` | Las 7 ubicaciones y las 12 rutas |
