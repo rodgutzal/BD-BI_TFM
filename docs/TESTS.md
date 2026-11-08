@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**35 archivos · 451 funciones de test · 523 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**36 archivos · 481 funciones de test · 555 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -35,6 +35,7 @@
 | [`tests/test_migrations.py`](#teststest_migrationspy) | 18 | 18 |
 | [`tests/test_ml_grid.py`](#teststest_ml_gridpy) | 19 | 22 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
+| [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 30 | 32+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
 | [`tests/test_ors_null_fields.py`](#teststest_ors_null_fieldspy) | 2 | 2 |
@@ -579,6 +580,42 @@
 - `test_la_serie_constante_no_da_cv_infinito`
 - `test_cuadrante_de_oportunidad`
 - `test_la_herramienta_imprime_un_informe_por_perfil`
+
+## `tests/test_ml_validation.py`
+
+> Tests de la fase 1 del ML de recomendación: lectura de datos en solo lectura (src/ml/data_access.py), modelos de
+> oferta esperada (src/ml/models.py), validación espacial (src/ml/validation.py) y tools/validate_location_model.py.
+
+- `test_la_lectura_es_de_solo_lectura`
+- `test_foursquare_es_opcional`
+- `test_tabla_de_zonas_con_poblacion_y_tiempo_de_viaje`
+- `test_la_densidad_suma_las_categorias_en_log`
+- `test_cada_modelo_usa_solo_sus_variables`
+- `test_las_predicciones_son_positivas_y_tienen_una_por_fila`
+- `test_la_media_es_el_promedio_de_entrenamiento`
+- `test_fit_predict_es_determinista_con_la_misma_semilla`
+- `test_modelo_desconocido_lanza_error`
+- `test_el_boosting_aprende_la_senal_y_gana_a_la_media`
+- `test_una_variable_toda_nan_no_rompe_el_ajuste` ×3 — Regresión: sin datos de rutas la accesibilidad llega toda NaN y el boosting fallaba al discretizarla (ValueError: window shape cannot be larger than input array shape).
+- `test_el_conjunto_da_media_y_dispersion`
+- `test_las_celdas_de_un_bloque_comparten_etiqueta_y_el_desplazamiento_la_cambia`
+- `test_los_pliegues_no_parten_un_bloque_y_estan_equilibrados`
+- `test_la_desviacion_de_poisson_coincide_con_scikit_learn_y_los_casos_limite`
+- `test_precision_en_las_k_primeras_y_spearman`
+- `test_evaluate_devuelve_predicciones_fuera_de_muestra_para_todas_las_celdas`
+- `test_la_prediccion_de_una_celda_no_usa_su_propio_valor` — Fuera de muestra de verdad: cambiar el valor real de una celda no cambia su propia predicción.
+- `test_el_bootstrap_de_bloques_con_predicciones_identicas_da_cero`
+- `test_el_bootstrap_detecta_una_mejora_uniforme_y_es_prudente_si_solo_hay_un_bloque_mejor`
+- `test_decide_publica_solo_si_el_intervalo_queda_por_debajo_de_cero`
+- `test_decide_sin_mejora_clara_no_hay_ganador_y_marca_al_que_empeora`
+- `test_decide_no_depende_de_cuantas_repeticiones_se_promedien` — Regresión: antes se promediaban las predicciones entre repeticiones y DESPUÉS se calculaba la desviación. Un candidato muy inestable (cada repetición falla mucho, pero en promedio acierta) salía como 'mejora' solo por ser un conjunto de modelos, y el veredicto cambiaba con el número de repeticiones.
+- `test_la_brecha_relativa_no_premia_solo_a_las_celdas_grandes`
+- `test_auc_y_artefacto_de_cartografia`
+- `test_conteos_de_foursquare_por_celda`
+- `test_zona_mas_cercana`
+- `test_la_herramienta_valida_un_objetivo_de_punta_a_punta`
+- `test_run_target_devuelve_todo_lo_necesario`
+- `test_la_herramienta_sin_foursquare_no_hace_el_contraste`
 
 ## `tests/test_normalize_bronze_timestamps.py`
 
