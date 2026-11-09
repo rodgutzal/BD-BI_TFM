@@ -274,6 +274,18 @@ El entrenamiento no corre donde está el stack. Hasta la fase 1b las herramienta
 
 **Reproducibilidad:** con la misma entrada y semilla, `panorama.csv` sale con el mismo hash (comprobado dos veces, incluida la brecha).
 
+### K. Interfaz del panorama (fase 2b, 9-nov-2026)
+
+El panorama aparece en **Recomendación**, debajo del resultado por zona (`streamlit_app/dashboards/panorama_section.py`; la lógica sin Streamlit está en `src/ml/panorama_view.py` y no importa scikit-learn). Lee `data/ml/` y se niega a mostrarlo si algún CSV no coincide con el hash del manifiesto.
+
+- **Tres lentes por separado, sin puntaje combinado.** El mapa colorea una capa a la vez (competencia directa, mercado, proveedores, diversidad de proveedores); la ficha de la celda elegida muestra las tres con sus indicadores, la confianza y su significado.
+- **Controles de perfil** (sección E): a quién vendes, competencia directa, competencia indirecta y proveedores, partiendo del perfil por defecto. Cada cambio recalcula las lentes desde `cell_counts.csv`, sin la base. La pantalla **siempre indica el perfil usado** y avisa cuando se aparta del por defecto: lente que no puede quedar vacía, más de la mitad de la competencia por defecto quitada («el panorama será más optimista de lo que los datos respaldan») y elementos elegidos como directa e indirecta a la vez (cuentan solo como directa). Se puede **añadir** competencia con cualquier categoría y subcategoría de OSM, salvo las del contexto (edificios, transporte...).
+- **La brecha es una capa aparte, etiquetada «EXPLORATORIA, no validada».** Aparece solo en `food_drink` y `business`, con la advertencia de que la validación no mostró que supere a la densidad de comercios y de que su intervalo no es de confianza. **No se recalcula con el perfil** (decisión de la sección E): la pantalla lo dice cuando el perfil es personalizado.
+- **Lista de celdas ★:** mercado en el 25 % superior, competencia directa en el 25 % inferior y confianza no baja. Es un **filtro**, no un puntaje; se muestra cuántas celdas lo cumplen y se advierte de que, como las lentes se parecen, son pocas.
+- **Los resultados sobreviven a tocar un control.** Antes, cualquier cambio volvía a ejecutar la página con el botón «Buscar» en falso y los resultados desaparecían (también pasaba con los pesos). Ahora se recuerda el texto buscado hasta que se pulsa el botón otra vez; el texto vacío borra la búsqueda anterior. Los controles del panorama tienen una clave por categoría, para que los ajustes de un negocio no pasen al siguiente.
+
+**Límites que la pantalla no resuelve:** el perfil por defecto es un borrador del autor y los pesos de «qué es competencia» siguen siendo conocimiento de negocio, no un resultado de los datos; los residentes se aproximan con edificios no claramente no residenciales (~78 % de los edificios de Malta son `building=yes`); y la brecha, aun etiquetada, puede leerse como una recomendación. Las otras cinco categorías no tienen brecha y siguen con el panorama explícito.
+
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
 
@@ -295,7 +307,7 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 | 1b | **Hecha (PR #40).** Edificios, alojamiento turístico, paradas de transporte e industria/mayoristas descargados de Overpass (`tools/download_osm_context.py`, a archivos fuera de la base) y cargados desde `src/ml/osm_context.py`. Resultado en la sección 3.H: residentes y turistas ya tienen datos; **el contexto no cambia la decisión de la fase 1**; los mayoristas siguen sin datos (solo hay uno) | descarga autorizada |
 | 1c | **Hecha (PR #41).** Entrenamiento en otra máquina (sección 3.I): paquete de entrada de ~1 MB con manifiesto y verificación (`tools/export_ml_inputs.py`), `--db` acepta el paquete, `requirements-ml.txt` con versiones exactas y convención de salida (tablas con procedencia, sin `.pkl`) | 1b |
 | 2a | **Hecha (PR #42).** Tabla precalculada de panoramas por celda (tres lentes, percentiles, confianza y brecha exploratoria etiquetada), conteos para recalcular con otro perfil y manifiesto: `src/ml/panorama.py` y `tools/build_panorama.py` (sección 3.J). Sin interfaz | 1c |
-| 2b | Interfaz: mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 2a |
+| 2b | **Hecha (PR #43).** Interfaz (sección 3.K): mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 2a |
 | 3 | Clasificador de texto, comparado con las palabras clave | — |
 | 4 | Riesgo de cierre exploratorio (etiquetas de Overpass histórico de toda el área) | 0, **autorización de descarga** |
 
