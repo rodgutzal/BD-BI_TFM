@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**37 archivos · 515 funciones de test · 589 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**38 archivos · 550 funciones de test · 624 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -35,6 +35,7 @@
 | [`tests/test_migrations.py`](#teststest_migrationspy) | 18 | 18 |
 | [`tests/test_ml_context.py`](#teststest_ml_contextpy) | 33 | 33+ |
 | [`tests/test_ml_grid.py`](#teststest_ml_gridpy) | 19 | 22 |
+| [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 35 | 35 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
@@ -576,6 +577,47 @@
 - `test_sin_pois_los_conteos_estan_vacios_pero_las_consultas_funcionan`
 - `test_exclude_quita_del_conteo_lo_que_cumple_el_objetivo`
 - `test_la_tabla_celda_por_subcategoria`
+
+## `tests/test_ml_inputs_bundle.py`
+
+> Tests de la fase 1c: paquete de entrada del ML para entrenar en otra máquina (src/ml/inputs_bundle.py), su
+> exportador tools/export_ml_inputs.py y que las herramientas de la fase 0 y 1 aceptan el paquete en `--db`.
+
+- `test_table_hash_no_depende_del_orden_de_las_filas` — El hash de una tabla es el mismo aunque cambie el orden de las filas.
+- `test_table_hash_detecta_un_cambio_de_valor` — Cambiar un solo valor cambia el hash.
+- `test_table_hash_distingue_columnas_y_nulos` — Un nulo no es lo mismo que un 0, y otra columna con los mismos valores da otro hash.
+- `test_table_hash_tabla_vacia_es_estable` — Una tabla sin filas tiene un hash definido (no falla) y depende de sus columnas.
+- `test_el_paquete_se_lee_igual_que_la_base` — Las funciones de data_access devuelven lo mismo con el paquete que con la base de origen.
+- `test_las_rutas_se_agregan_por_par_origen_destino` — El paquete guarda un tiempo medio por par (no las mediciones) y lleva cuántas mediciones lo respaldan.
+- `test_el_paquete_no_trae_la_polilinea_ni_columnas_innecesarias` — Se excluye lo que el ML no usa (la polilínea es lo que más pesa en la base real).
+- `test_el_paquete_pesa_mucho_menos_que_la_base` — Con mediciones de rutas voluminosas, el paquete es una fracción del tamaño de la base.
+- `test_exportar_no_modifica_la_base_de_origen` — La base de origen queda byte a byte igual.
+- `test_no_pisa_un_paquete_existente_sin_sobrescribir` — Con el archivo ya creado falla, y con sobrescribir=True lo reemplaza.
+- `test_el_paquete_no_puede_ser_la_base_de_origen` — Exportar sobre la propia base está prohibido incluso con sobrescribir (la destruiría).
+- `test_sin_pois_no_hay_nada_que_exportar` — Una base sin POIs (o sin la tabla) se rechaza en lugar de producir un paquete vacío.
+- `test_las_tablas_opcionales_ausentes_quedan_vacias` — Sin Foursquare, demografía ni rutas, el paquete se crea y las zonas quedan con NaN, no con 0.
+- `test_un_paquete_recien_exportado_es_integro` — verify_bundle no encuentra problemas en un paquete sin tocar.
+- `test_verify_detecta_un_valor_alterado` — Cambiar un valor sin cambiar el número de filas se detecta por el hash.
+- `test_verify_detecta_filas_perdidas` — Una copia truncada se detecta por el número de filas.
+- `test_verify_detecta_una_tabla_ausente` — Si falta una tabla, lo dice por su nombre.
+- `test_verify_detecta_un_formato_distinto` — Un paquete de otro formato se rechaza aunque su contenido sea coherente.
+- `test_verify_de_la_base_completa_o_de_un_archivo_que_no_es_paquete` — La base completa no tiene manifiesto: se informa en vez de lanzar una excepción.
+- `test_is_bundle_distingue_el_paquete_de_la_base` — Solo el paquete tiene manifiesto; un archivo inexistente no lo es.
+- `test_el_manifiesto_registra_commit_versiones_y_filas` — El manifiesto deja constancia de con qué se produjo el paquete.
+- `test_el_contexto_viaja_dentro_del_paquete` — El contexto de OSM se guarda normalizado y data_access lo devuelve sin necesidad del directorio de JSON.
+- `test_con_la_base_completa_y_sin_directorio_no_hay_contexto` — Con la base completa no hay tabla osm_context: el resultado es un DataFrame vacío con las columnas correctas.
+- `test_el_directorio_tiene_prioridad_sobre_la_tabla_del_paquete` — Si se da --contexto, se usa ese directorio aunque el paquete traiga su propia tabla.
+- `test_sin_contexto_la_tabla_va_vacia_pero_integra` — Exportar sin contexto da una tabla osm_context vacía y el paquete sigue siendo íntegro.
+- `test_provenance_incluye_el_hash_del_archivo_y_los_datos_del_manifiesto` — La procedencia de un resultado dice qué paquete y qué versiones lo produjeron.
+- `test_provenance_con_la_base_completa_no_tiene_datos_de_manifiesto` — Con la base completa no hay manifiesto; la procedencia lo omite en vez de fallar.
+- `test_export_ml_inputs_crea_y_verifica` — La herramienta escribe el paquete, lo verifica y se niega a pisarlo sin --force.
+- `test_export_ml_inputs_verify_falla_con_un_paquete_alterado` — --verify sale con 1 y nombra la tabla alterada.
+- `test_export_ml_inputs_avisa_si_el_directorio_de_contexto_esta_vacio` — Un directorio de contexto sin JSON válidos no rompe la exportación, pero avisa.
+- `test_export_ml_inputs_no_exporta_sobre_la_base` — Apuntar --out a la base de origen se rechaza sin tocarla.
+- `test_validate_location_model_rechaza_un_paquete_alterado` — La herramienta de validación comprueba el paquete antes de entrenar y no sigue si no coincide.
+- `test_measure_lens_variance_da_lo_mismo_con_el_paquete_que_con_la_base` — Los indicadores de las lentes salen idénticos desde la base y desde el paquete (sin contexto en ambos).
+- `test_measure_lens_variance_usa_el_contexto_del_paquete` — Sin --contexto, el contexto que lleva el paquete se suma a los conteos y se informa.
+- `test_requirements_ml_fija_versiones_exactas` — requirements-ml.txt fija con == las librerías que cambian los números, y coinciden con las de requirements.txt cuando esta también las fija.
 
 ## `tests/test_ml_lenses.py`
 
