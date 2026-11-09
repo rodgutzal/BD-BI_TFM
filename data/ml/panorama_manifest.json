@@ -1,0 +1,85 @@
+{
+  "advertencia": "La brecha de oferta es EXPLORATORIA: en la validación espacial ningún candidato superó con claridad a la densidad de POIs (ver docs/DISENO_ML_RECOMENDACION.md §3.G y §3.H). No entra en ningún puntaje.",
+  "archivos": {
+    "cell_counts.csv": {
+      "filas": 1447,
+      "sha256": "47bad22a5d4e90888fb57f9d419d4a797e675a499228e27ba4766027144af466"
+    },
+    "panorama.csv": {
+      "filas": 7973,
+      "sha256": "265a374718cf6c10a896e5c27218f805e20701b22079488a66a0c844179a35cb"
+    }
+  },
+  "brecha": {
+    "business": {
+      "comparaciones": {
+        "boosting": {
+          "diferencia": -0.3465,
+          "ic_inf": -0.6635,
+          "ic_sup": 0.0153,
+          "veredicto": "indistinguible"
+        },
+        "mlp": {
+          "diferencia": 2.3369,
+          "ic_inf": -0.2611,
+          "ic_sup": 7.3227,
+          "veredicto": "indistinguible"
+        }
+      },
+      "ganador": null,
+      "mejor_baseline": "solo_densidad",
+      "modelo_brecha": "boosting"
+    },
+    "food_drink": {
+      "comparaciones": {
+        "boosting": {
+          "diferencia": -0.2088,
+          "ic_inf": -0.5675,
+          "ic_sup": 0.1038,
+          "veredicto": "indistinguible"
+        },
+        "mlp": {
+          "diferencia": 0.3322,
+          "ic_inf": -0.1712,
+          "ic_sup": 0.9853,
+          "veredicto": "indistinguible"
+        }
+      },
+      "ganador": null,
+      "mejor_baseline": "solo_densidad",
+      "modelo_brecha": "boosting"
+    }
+  },
+  "formato": 1,
+  "parametros": {
+    "boot": 2000,
+    "con_brecha": true,
+    "con_contexto": true,
+    "folds": 5,
+    "k": 50,
+    "repeats": 10,
+    "seed": 0
+  },
+  "perfiles": [
+    "food_drink",
+    "business",
+    "hospital",
+    "school",
+    "sport",
+    "leisure",
+    "mall"
+  ],
+  "procedencia": {
+    "commit": "756553e",
+    "ejecutado": "2026-11-09T03:38:37Z",
+    "entrada_commit": "0e32acf",
+    "entrada_creada": "2026-11-09T03:34:18Z",
+    "entrada_sha256": "596f17badc88dbfc47111b63b5378e87ed20c17431a9064b9a2415fa4527fb88",
+    "python_exe": "python.exe",
+    "version.numpy": "2.4.6",
+    "version.pandas": "3.0.3",
+    "version.python": "3.13.14",
+    "version.scikit-learn": "1.9.0",
+    "version.scipy": "1.18.0"
+  }
+}
