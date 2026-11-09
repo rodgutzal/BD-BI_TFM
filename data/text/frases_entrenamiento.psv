@@ -1,0 +1,348 @@
+categoria|frase
+food_drink|quiero abrir un restaurante de comida italiana
+food_drink|una cafetería con terraza
+food_drink|un bar de cervezas artesanales
+food_drink|pizzería a domicilio
+food_drink|panadería artesanal
+food_drink|pastelería de pasteles personalizados
+food_drink|heladería con sabores naturales
+food_drink|taquería al pastor
+food_drink|restaurante de mariscos frescos
+food_drink|puesto de hamburguesas
+food_drink|un bistró francés pequeño
+food_drink|cocina económica para oficinistas
+food_drink|local de comida rápida
+food_drink|food truck de comida mexicana
+food_drink|cevichería frente al mar
+food_drink|una juguería y licuados naturales
+food_drink|bar de vinos y tapas
+food_drink|pub irlandés con música en vivo
+food_drink|cervecería con cocina
+food_drink|sushi bar
+food_drink|restaurante vegano
+food_drink|café de especialidad
+food_drink|repostería y cupcakes
+food_drink|una parrilla argentina
+food_drink|fonda de comida casera
+food_drink|comedor industrial para trabajadores
+food_drink|cafetería de barrio con desayunos
+food_drink|servir brunch los domingos
+food_drink|crepería dulce y salada
+food_drink|rosticería de pollos asados
+food_drink|taberna con platillos para compartir
+food_drink|local de smoothies y bowls
+food_drink|lugar para vender pasta fresca
+food_drink|restaurante de sushi y ramen
+food_drink|una dark kitchen de delivery
+food_drink|wine bar con quesos
+food_drink|coffee shop con wifi
+food_drink|gelatería
+food_drink|barra de tragos y cocteles
+food_drink|quiero vender empanadas
+food_drink|restaurante familiar con menú del día
+food_drink|tortillería y antojitos
+food_drink|hamburguesería gourmet
+food_drink|negocio de comida para llevar
+food_drink|kiosco de café en la estación
+food_drink|pizza al horno de leña
+food_drink|panadería y cafetería
+food_drink|churrería con chocolate caliente
+food_drink|una marisquería
+food_drink|local de bocadillos y sándwiches
+hospital|una farmacia de turno
+hospital|clínica dental
+hospital|consultorio médico general
+hospital|veterinaria para perros y gatos
+hospital|óptica con examen de la vista
+hospital|laboratorio de análisis clínicos
+hospital|centro de fisioterapia
+hospital|consultorio de psicología
+hospital|clínica pediátrica
+hospital|quiero abrir un hospital privado
+hospital|dentista con ortodoncia
+hospital|consulta de nutrición
+hospital|centro de rehabilitación física
+hospital|farmacia homeopática
+hospital|clínica de urgencias
+hospital|centro médico con especialistas
+hospital|doctor de cabecera
+hospital|policlínico de barrio
+hospital|clínica veterinaria 24 horas
+hospital|consultorio de dermatología
+hospital|centro de diálisis
+hospital|laboratorio de rayos x
+hospital|una óptica con lentes de contacto
+hospital|consultorio de ginecología
+hospital|clínica de salud mental
+hospital|terapia ocupacional para niños
+hospital|centro de acupuntura y medicina alternativa
+hospital|botica de barrio
+hospital|clínica oftalmológica
+hospital|consulta de podología
+hospital|centro de vacunación
+hospital|servicio de ambulancias privadas
+hospital|quiropráctico
+hospital|farmacia con servicio de inyecciones
+hospital|centro de audiología y audífonos
+hospital|clínica de fertilidad
+hospital|odontopediatría
+hospital|consultorio de cardiología
+hospital|enfermería a domicilio
+hospital|centro de diagnóstico por imagen
+hospital|clínica del dolor
+hospital|psicólogo infantil
+hospital|cirugía ambulatoria
+hospital|residencia geriátrica con atención médica
+hospital|terapia del lenguaje
+school|una escuela primaria
+school|academia de idiomas
+school|guardería para bebés
+school|jardín infantil
+school|universidad privada
+school|centro educativo técnico
+school|clases particulares de matemáticas
+school|escuela de música
+school|instituto de enseñanza media
+school|preescolar montessori
+school|centro de tutorías
+school|escuela de manejo
+school|academia de inglés
+school|escuela de cocina
+school|centro de capacitación para adultos
+school|colegio para niños con necesidades especiales
+school|kinder con jornada completa
+school|escuela de arte y dibujo
+school|instituto de computación
+school|curso de preparación para exámenes
+school|centro de apoyo escolar
+school|escuela secundaria
+school|academia de pintura para niños
+school|escuela de idiomas para extranjeros
+school|escuelita de verano
+school|colegio católico
+school|centro de formación profesional
+school|escuela de baile infantil y clases de apoyo
+school|ludoteca con refuerzo escolar
+school|escuela nocturna para adultos
+school|instituto de estética y belleza
+school|escuela de conducción
+school|academia de programación
+school|centro de estudios universitarios
+school|prepa abierta
+school|escuela de aviación
+school|nursery para niños pequeños
+school|escuela de teatro
+school|academia militar
+school|instituto bilingüe de primaria
+school|colegio con internado
+school|centro de formación docente
+school|escuela taller de oficios
+school|escuela de verano de ciencias
+sport|un gimnasio de barrio
+sport|centro deportivo con piscina
+sport|clases de pilates
+sport|academia de artes marciales
+sport|cancha de pádel
+sport|club de natación
+sport|gimnasio de boxeo
+sport|centro de spinning
+sport|escuela de fútbol para niños
+sport|pared de escalada
+sport|centro de entrenamiento funcional
+sport|gimnasio para mujeres
+sport|estudio de danza deportiva
+sport|cancha de fútbol siete
+sport|club de golf
+sport|centro de yoga y meditación
+sport|gimnasio 24 horas
+sport|escuela de surf
+sport|centro de buceo
+sport|academia de karate
+sport|piscina cubierta para natación
+sport|club de remo
+sport|centro de bicicleta de montaña
+sport|gym con entrenador personal
+sport|escuela de judo
+sport|cancha de basquetbol
+sport|club de running
+sport|centro fitness
+sport|estudio de barre
+sport|campo de tiro con arco
+sport|gimnasio de halterofilia
+sport|escuela de esgrima
+sport|polideportivo municipal
+sport|centro de calistenia
+sport|club de squash
+sport|escuela de gimnasia rítmica
+sport|centro de entrenamiento de kickboxing
+sport|zumba y aeróbicos
+sport|cancha de voleibol de playa
+sport|gimnasio de barrio con pesas
+sport|escuela de equitación
+sport|academia de tenis de mesa
+leisure|un cine independiente
+leisure|teatro para obras locales
+leisure|museo de historia
+leisure|galería de arte
+leisure|discoteca en el centro
+leisure|club nocturno
+leisure|casino pequeño
+leisure|salón de fiestas infantiles
+leisure|arcade con videojuegos
+leisure|bolera
+leisure|parque de diversiones
+leisure|sala de juegos
+leisure|karaoke con cabinas privadas
+leisure|parque de trampolines
+leisure|boliche con cenas
+leisure|centro de ocio familiar
+leisure|cine al aire libre
+leisure|salón de eventos y bodas
+leisure|zoológico pequeño
+leisure|acuario
+leisure|centro de paintball
+leisure|sala de cine con butacas reclinables
+leisure|bar con pista de baile
+leisure|salón de baile para eventos
+leisure|centro cultural
+leisure|local de realidad virtual
+leisure|parque temático
+leisure|teatro de títeres
+leisure|salón de billar
+leisure|centro de juegos de mesa
+leisure|club social
+leisure|sala de exposiciones
+leisure|feria de atracciones
+leisure|tour de aventura
+leisure|sala de fiestas
+leisure|club de jazz
+leisure|auditorio para espectáculos
+leisure|lugar de entretenimiento nocturno
+mall|un centro comercial
+mall|mall grande con estacionamiento
+mall|plaza comercial
+mall|galería comercial cerrada
+mall|centro comercial al aire libre
+mall|outlet de marcas
+mall|mall con tiendas ancla
+mall|centro de compras familiar
+mall|gran superficie comercial
+mall|paseo comercial
+mall|mercado cubierto con muchos puestos
+mall|centro comercial de barrio
+mall|plaza de comercios y servicios
+mall|centro comercial con hipermercado
+mall|galería de locales
+mall|mall de lujo
+mall|parque comercial
+mall|centro comercial con cine y patio de comidas
+mall|complejo comercial
+mall|centro de tiendas de descuento
+mall|gran plaza con tiendas
+mall|bazar grande con muchos negocios
+mall|arcada comercial
+mall|shopping mall
+mall|centro comercial en la periferia
+mall|village de outlets
+mall|plaza con supermercado y tiendas
+mall|nuevo centro comercial
+business|una tienda de ropa
+business|peluquería
+business|librería
+business|zapatería
+business|tienda de muebles
+business|joyería
+business|salón de belleza
+business|spa
+business|lavandería
+business|tintorería
+business|despacho de abogados
+business|agencia de viajes
+business|banco
+business|inmobiliaria
+business|aseguradora
+business|minimarket
+business|tienda de abarrotes
+business|venta de celulares
+business|tienda de computadoras
+business|florería
+business|tienda de mascotas
+business|juguetería
+business|bazar
+business|cerrajería
+business|imprenta
+business|estudio de fotografía
+business|notaría
+business|consultoría
+business|papelería
+business|tienda de regalos
+business|tienda de deportes
+business|tienda de artículos de limpieza
+business|verdulería
+business|tienda de bicicletas
+business|centro de copiado
+business|boutique de ropa
+business|agencia de publicidad
+business|tienda de telas
+business|óptica fashion de lentes de sol
+business|taller de bicicletas
+business|estética canina
+business|venta de autos usados
+business|tienda de vinos y licores
+business|coworking
+business|tienda de segunda mano
+business|tienda de pinturas
+business|oficina de arquitectos
+business|centro de impresión 3d
+ninguna|quiero comprar un auto
+ninguna|cómo llego al aeropuerto
+ninguna|hola
+ninguna|buenos días
+ninguna|ayuda
+ninguna|qué hora es
+ninguna|cuál es la capital de francia
+ninguna|no sé qué negocio abrir
+ninguna|algo que dé dinero
+ninguna|asdfgh
+ninguna|123456
+ninguna|prueba
+ninguna|quiero ser rico
+ninguna|receta de arroz con leche
+ninguna|el clima de mañana
+ninguna|mi equipo favorito ganó
+ninguna|necesito un préstamo
+ninguna|cuánto cuesta un vuelo
+ninguna|dónde queda la playa
+ninguna|quiero invertir
+ninguna|un negocio
+ninguna|abrir algo
+ninguna|poner un negocio rentable
+ninguna|quiero ganar dinero
+ninguna|información sobre impuestos
+ninguna|cómo cambiar una llanta
+ninguna|noticias de hoy
+ninguna|lorem ipsum dolor sit amet
+ninguna|test test test
+ninguna|que tengo que hacer
+ninguna|me quiero mudar de ciudad
+ninguna|buscar trabajo
+ninguna|el partido de ayer
+ninguna|cómo se escribe hola
+ninguna|tengo sueño
+ninguna|ideas para el fin de semana
+ninguna|que lindo día
+ninguna|calcular mi sueldo
+ninguna|gracias
+ninguna|adiós
+ninguna|mi nombre es juan
+ninguna|solo curiosidad
+ninguna|no entiendo
+ninguna|dame un consejo
+ninguna|xxxxxxxx
+ninguna|qwerty
+ninguna|cuanto es dos mas dos
+ninguna|donde estaciono
+ninguna|quiero aprender a bailar en casa
+ninguna|vender mi casa
+ninguna|comprar una computadora para mí
+ninguna|mejor momento para viajar

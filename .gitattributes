@@ -1,3 +1,6 @@
 # Tablas del ML (fase 2a): su manifiesto guarda el sha256 de cada archivo, asi que los bytes no pueden cambiar al
 # clonar o hacer checkout (con core.autocrlf=true, git convertiria LF a CRLF en Windows y la verificacion fallaria).
 data/ml/* -text
+
+# Frases del clasificador de texto (fase 3): el manifiesto del modelo guarda su sha256, asi que los bytes no deben cambiar al clonar.
+data/text/* -text
