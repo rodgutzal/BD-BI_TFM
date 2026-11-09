@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**39 archivos · 582 funciones de test · 656 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**39 archivos · 586 funciones de test · 660 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -37,7 +37,7 @@
 | [`tests/test_ml_grid.py`](#teststest_ml_gridpy) | 19 | 22 |
 | [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 35 | 35 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
-| [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 32 | 32 |
+| [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
@@ -696,9 +696,13 @@
 - `test_el_panorama_leido_coincide_con_el_escrito` — La ida y vuelta por CSV conserva columnas, índice y valores (con la precisión escrita).
 - `test_los_conteos_leidos_dan_las_mismas_lentes` — read_counts reconstruye los conteos: las lentes recalculadas coinciden con las de los conteos originales.
 - `test_escribir_dos_veces_da_los_mismos_bytes` — La salida es determinista (sin fechas dentro de los CSV): el hash no cambia entre ejecuciones.
+- `test_los_tres_archivos_se_escriben_con_saltos_de_linea_lf` — Los archivos salen iguales en Windows y Linux (sin CRLF), para que la tabla versionada no cambie según dónde se genere.
 - `test_verify_detecta_un_csv_alterado` — Cambiar un valor del panorama se detecta por el hash y read_panorama se niega a leerlo.
 - `test_verify_detecta_archivos_ausentes_y_manifiesto_roto` — Falta un CSV, falta el manifiesto, o el formato no es el esperado.
 - `test_el_manifiesto_no_puede_omitir_un_archivo` — Un CSV que existe pero no figura en el manifiesto se reporta.
+- `test_la_tabla_versionada_coincide_con_su_manifiesto` — data/ml/ (la tabla que llevará el dashboard) está íntegra: los hashes del manifiesto coinciden con los archivos y ningún saneamiento de saltos de línea los alteró (ver .gitattributes).
+- `test_la_tabla_versionada_declara_la_brecha_como_lo_dice_la_validacion` — La brecha solo aparece en food_drink y business; brecha_validada coincide con la decisión del manifiesto (hoy ninguna) y las otras cinco categorías no afirman nada. Si algún día un candidato gana, habrá que regenerarla.
+- `test_la_tabla_versionada_recalcula_las_mismas_lentes` — Con data/ml/cell_counts.csv, el panorama de cada perfil sale igual que el guardado: es lo que hará el dashboard.
 - `test_build_panorama_sin_brecha_de_punta_a_punta` — La herramienta escribe los tres archivos con la procedencia del paquete y las siete categorías.
 - `test_build_panorama_con_brecha_la_etiqueta_como_exploratoria` — Con brecha, solo food_drink y business la llevan; el manifiesto declara la decisión y la advertencia, y la columna brecha_validada solo es True si un candidato superó a la línea base.
 - `test_build_panorama_rechaza_un_paquete_alterado` — Antes de calcular se verifica el paquete; si no coincide, no se escribe nada.
