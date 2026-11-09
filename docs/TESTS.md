@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**41 archivos · 630 funciones de test · 704 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**42 archivos · 664 funciones de test · 751 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -39,6 +39,7 @@
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
 | [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 23 | 23 |
+| [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 34 | 47 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
@@ -737,6 +738,47 @@
 - `test_layer_values_devuelve_la_columna_correcta` — Cada capa muestra su columna; la de brecha, la brecha relativa.
 - `test_cell_label_incluye_celda_zona_y_distancia` — La etiqueta de la lista de celdas dice dónde está.
 - `test_el_modulo_no_importa_scikit_learn` — La interfaz usa este módulo en el contenedor del dashboard, que no carga scikit-learn.
+
+## `tests/test_ml_text_classifier.py`
+
+> Tests de la fase 3: clasificador de texto del tipo de negocio (src/ml/text_classifier.py, src/ml/text_training.py y
+> tools/evaluate_text_classifier.py) — inferencia con solo numpy que reproduce a scikit-learn, abstención, regla de
+> decisión y que los datos de evaluación no se usan para entrenar ni para elegir el umbral.
+
+- `test_los_ngramas_coinciden_con_los_de_scikit_learn` ×14 — Los n-gramas de caracteres son exactamente los del analizador `char_wb` de scikit-learn (incluidas las palabras más cortas que n, los espacios repetidos y la ñ).
+- `test_normalizar_quita_tildes_y_enie_y_pasa_a_minusculas` — Sin tildes ni mayúsculas; la ñ pasa a n.
+- `test_las_probabilidades_coinciden_con_scikit_learn_en_todas_las_frases` — Para todas las frases del proyecto, las probabilidades de la inferencia de solo numpy difieren de las de scikit-learn en menos de 1e-9.
+- `test_las_probabilidades_suman_uno_y_un_texto_desconocido_no_falla` — Un texto sin ningún n-grama conocido da una distribución válida (solo el intercepto).
+- `test_una_frase_clara_se_clasifica_y_devuelve_su_confianza` — «una farmacia» se clasifica como hospital con confianza alta.
+- `test_texto_vacio_o_en_blanco_no_responde` — Sin texto no hay respuesta ni confianza.
+- `test_gana_ninguna_y_no_responde` — Una frase que no describe un negocio no recibe categoría.
+- `test_por_debajo_del_umbral_no_responde_y_el_umbral_se_puede_cambiar` — Con un umbral imposible no se responde; con uno nulo responde si la clase ganadora no es «ninguna».
+- `test_guardar_y_cargar_da_el_mismo_modelo` — El JSON conserva todo: las probabilidades son idénticas y el archivo usa LF.
+- `test_un_formato_o_unas_dimensiones_incoherentes_se_rechazan` — Un modelo de otro formato o con coeficientes que no cuadran con el vocabulario no se carga.
+- `test_el_modulo_de_inferencia_no_importa_scikit_learn` — El dashboard debe poder cargar el modelo sin scikit-learn.
+- `test_aciertos_equivocadas_y_perdidas_tienen_el_significado_documentado` — Una frase fuera de alcance se acierta no respondiendo; responderle es una respuesta equivocada; no responder a un negocio es una pérdida, no un error.
+- `test_el_hibrido_prefiere_las_palabras_clave_y_usa_el_modelo_solo_si_se_abstienen` — Donde las palabras clave responden, manda su respuesta aunque el modelo diga otra cosa.
+- `test_respuesta_aplica_la_abstencion` — Gana «ninguna» o no llega al umbral: None.
+- `test_elegir_umbral_toma_el_de_mayor_exactitud_y_en_empate_el_mas_alto` — Con probabilidades que no discriminan entre umbrales el empate lo gana el más alto (más prudente).
+- `test_bootstrap_pareado_con_diferencia_constante_y_con_diferencia_nula` — Si a acierta siempre y b nunca, el IC es [1, 1]; si son iguales, la diferencia es 0.
+- `test_la_regla_adopta_solo_si_mejora_y_no_sube_los_errores` — Las tres salidas posibles de la regla fijada: adoptar, fallar por exactitud y fallar por errores.
+- `test_la_tolerancia_de_errores_es_de_dos_puntos` — Justo en la tolerancia (+2 puntos) todavía cumple; por encima, no.
+- `test_por_tipo_agrupa_las_metricas` — Una fila por tipo con su número de frases y sus tasas.
+- `test_los_datos_versionados_son_validos_y_el_conjunto_de_evaluacion_es_el_prometido` — Sin categorías raras, sin repetidas, sin frases en ambos conjuntos; ≥200 frases de evaluación con los cinco tipos del diseño y las siete categorías más las fuera de alcance.
+- `test_validar_datos_detecta_cada_problema` — Categoría desconocida, frases repetidas o vacías, y fuga de evaluación a entrenamiento.
+- `test_la_decision_es_la_regla_aplicada_a_las_cifras` — `adoptar` es la conjunción de las dos condiciones y las cifras del resumen son las de los sistemas.
+- `test_el_hibrido_nunca_cambia_una_respuesta_de_las_palabras_clave` — Donde las palabras clave responden, el híbrido da lo mismo.
+- `test_el_umbral_no_depende_de_la_evaluacion` — El umbral sale solo del entrenamiento: si se barajan las etiquetas de la evaluación no cambia.
+- `test_ninguna_frase_de_evaluacion_entra_en_el_entrenamiento` — El vocabulario del modelo sale solo del entrenamiento: añadir una frase con n-gramas inéditos a la evaluación no lo cambia.
+- `test_la_evaluacion_es_determinista` — Mismos datos y semilla, mismas cifras.
+- `test_la_sensibilidad_recorre_los_umbrales_y_a_mayor_umbral_menos_respuestas` — A mayor umbral el híbrido responde menos (más «sin respuesta»); la tabla es descriptiva.
+- `test_main_imprime_la_decision_y_exporta_modelo_y_manifiesto` — La herramienta termina bien, imprime la decisión, y con --exportar escribe un modelo cuyo hash está en el manifiesto y que se carga y clasifica.
+- `test_main_se_niega_a_evaluar_con_datos_invalidos` — Si una frase de evaluación está también en el entrenamiento, no se evalúa.
+- `test_sin_mlp_se_omiten_la_red_y_su_comparacion` — Con con_mlp=False no hay sistema MLP, ni su umbral, ni la comparación logística-MLP; el resto se calcula igual.
+- `test_con_mlp_se_comparan_la_red_y_la_logistica` — Con la red incluida hay umbral propio, sistema híbrido con la red y la comparación pareada.
+- `test_la_regla_exige_que_el_intervalo_quede_por_encima_de_cero_no_solo_la_media` — Una mejora pequeña (2 aciertos más de 40) tiene media positiva pero un IC que llega a 0: no cumple la exactitud.
+- `test_el_bootstrap_da_un_intervalo_con_anchura_que_contiene_la_media` — Con diferencias variables el IC tiene anchura positiva y rodea a la media.
+- `test_el_softmax_es_estable_con_logits_enormes` — Con coeficientes gigantes no hay desbordamiento: las probabilidades siguen siendo válidas.
 
 ## `tests/test_ml_validation.py`
 

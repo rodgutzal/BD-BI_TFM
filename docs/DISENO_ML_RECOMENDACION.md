@@ -286,6 +286,48 @@ El panorama aparece en **Recomendación**, debajo del resultado por zona (`strea
 
 **Límites que la pantalla no resuelve:** el perfil por defecto es un borrador del autor y los pesos de «qué es competencia» siguen siendo conocimiento de negocio, no un resultado de los datos; los residentes se aproximan con edificios no claramente no residenciales (~78 % de los edificios de Malta son `building=yes`); y la brecha, aun etiquetada, puede leerse como una recomendación. Las otras cinco categorías no tienen brecha y siguen con el panorama explícito.
 
+### L. Clasificador de texto (fase 3, 9-nov-2026)
+
+**Resultado: el clasificador entrenado NO se adopta; se queda el método de palabras clave.** Es un resultado negativo según la regla fijada antes de ver los datos, y con una causa concreta que se explica abajo.
+
+**Qué se construyó** (`src/ml/text_classifier.py`, `src/ml/text_training.py`, `tools/evaluate_text_classifier.py`, datos en `data/text/`):
+- TF-IDF de n-gramas de caracteres (2 a 5, por palabra) + regresión logística, con una clase `ninguna` (frases que no describen un negocio) y un umbral de confianza: si gana `ninguna` o no se llega al umbral, no se elige categoría, como hace el método actual.
+- **Inferencia de solo numpy**, sin scikit-learn: el modelo se exporta a JSON (vocabulario, idf, coeficientes) en lugar de un `.pkl`, para no depender de la versión de scikit-learn del dashboard. Un test comprueba que las probabilidades coinciden con las de scikit-learn (error < 1e-9) en todas las frases del proyecto.
+- Segundo candidato: una red MLP de scikit-learn sobre los mismos TF-IDF (3 semillas).
+- **Datos escritos a mano por el autor:** 347 frases de entrenamiento y un conjunto de evaluación reservado de **200** (39 directas, 53 sinónimos, 34 erratas, 34 frases largas y 40 fuera de alcance). Ninguna frase de evaluación se usa para entrenar ni para elegir el umbral (sale de una validación cruzada sobre el entrenamiento; un test lo comprueba barajando las etiquetas de evaluación).
+
+**Regla de decisión (fijada de antemano):** el híbrido —palabras clave primero y, solo si se abstienen, el clasificador— se adopta si (a) su exactitud supera a la de las palabras clave con el intervalo por bootstrap pareado por encima de 0 y (b) su tasa de respuestas equivocadas no pasa de la de las palabras clave más 2 puntos.
+
+| Sistema | Exactitud | Respuestas equivocadas | Sin respuesta |
+|---|---|---|---|
+| palabras clave | 45,0 % | **3,0 %** | 52,0 % |
+| logística | 69,0 % | 11,5 % | 19,5 % |
+| red MLP | 72,5 % | 14,0 % | 13,5 % |
+| **híbrido (palabras + logística)** | **73,0 %** | 10,0 % | 17,0 % |
+
+| Tipo (n) | palabras clave | logística | híbrido |
+|---|---|---|---|
+| directa (39) | 92 % / 8 % | 85 % / 13 % | 92 % / 8 % |
+| errata (34) | 21 % / 0 % | 79 % / 6 % | 82 % / 3 % |
+| larga (34) | 24 % / 6 % | 26 % / 21 % | 41 % / 18 % |
+| sinónimo (53) | 0 % / 0 % | 57 % / 15 % | 57 % / 15 % |
+| fuera de alcance (40) | 98 % / 2 % | 98 % / 2 % | 95 % / 5 % |
+
+(exactitud / respuestas equivocadas.) La exactitud del híbrido mejora en **+28,0 puntos** [IC 95 %: +22,0, +34,5] → cumple (a). Pero sus respuestas equivocadas son el 10,0 % frente al 3,0 % de las palabras clave (tolerancia +2 puntos) → **no cumple (b)**. La red no se distingue de la logística (−3,5 [−8,0, +1,0]), y es peor en respuestas equivocadas.
+
+**Lectura honesta:**
+- El clasificador gana donde las palabras clave no llegan —erratas (21 % → 82 %) y sinónimos (0 % → 57 %)—, pero **contesta mal más a menudo cuando contesta**: confunde cines con museos, carnicerías con restaurantes, o responde a «reservar una mesa para el sábado». Las palabras clave, cuando responden, casi siempre aciertan, y por eso cuestan menos en respuestas equivocadas.
+- **La causa del fallo de (b) es un defecto de mi protocolo, no solo de los datos:** el umbral se eligió maximizando la exactitud fuera de muestra, lo que trata igual una respuesta equivocada que una pregunta sin respuesta. Salió el mínimo de la rejilla (0,30), el más atrevido. La regla (b), en cambio, penaliza justo las respuestas equivocadas. Los dos criterios no son coherentes.
+- **Sensibilidad al umbral (solo descriptiva):** con un umbral de 0,50 o más, el mismo híbrido sí cumpliría la regla (4,0 % de respuestas equivocadas con 0,50). Pero elegir ahora el umbral mirando esa tabla sería ajustar a la evaluación. **No cambia la decisión:** cualquier cambio de protocolo exige una evaluación nueva.
+
+**Límites que condicionan todo el resultado:**
+1. **Las frases las escribió el mismo autor** (entrenamiento y evaluación), no son consultas reales de usuarios. La exactitud es optimista.
+2. **La composición del conjunto la fijó el autor:** 121 de 200 frases son sinónimos, erratas o frases largas, pensadas para que las palabras clave fallen. Por eso la exactitud global de las palabras clave (45 %) no dice cómo irá con consultas reales; lo comparable es el desglose por tipo.
+3. **Etiquetas discutibles:** una carnicería o un «mall con cine» admiten más de una lectura. No hay una verdad única.
+4. 200 frases dan intervalos anchos, y las erratas y sinónimos de entrenamiento y evaluación comparten estilo.
+
+**Qué haría falta para adoptarlo:** (i) un criterio de umbral coherente con la regla, fijado antes —p. ej. el umbral más bajo cuyas respuestas equivocadas fuera de muestra no superen las de las palabras clave más la tolerancia—; (ii) un conjunto de evaluación nuevo, idealmente con consultas reales o escritas por otras personas. Con eso, la herramienta ya está lista: `python tools/evaluate_text_classifier.py` (`--exportar data/ml` guarda el modelo y su manifiesto; `--sin-mlp` omite la red).
+
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
 
@@ -308,7 +350,7 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 | 1c | **Hecha (PR #41).** Entrenamiento en otra máquina (sección 3.I): paquete de entrada de ~1 MB con manifiesto y verificación (`tools/export_ml_inputs.py`), `--db` acepta el paquete, `requirements-ml.txt` con versiones exactas y convención de salida (tablas con procedencia, sin `.pkl`) | 1b |
 | 2a | **Hecha (PR #42).** Tabla precalculada de panoramas por celda (tres lentes, percentiles, confianza y brecha exploratoria etiquetada), conteos para recalcular con otro perfil y manifiesto: `src/ml/panorama.py` y `tools/build_panorama.py` (sección 3.J). Sin interfaz | 1c |
 | 2b | **Hecha (PR #43).** Interfaz (sección 3.K): mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 2a |
-| 3 | Clasificador de texto, comparado con las palabras clave | — |
+| 3 | **Hecha (PR #44).** Clasificador de texto comparado con las palabras clave (sección 3.L): **no se adopta** (más respuestas equivocadas que las palabras clave); herramienta y datos listos para repetir con una evaluación nueva | — |
 | 4 | Riesgo de cierre exploratorio (etiquetas de Overpass histórico de toda el área) | 0, **autorización de descarga** |
 
 ## 6. Riesgos y sesgos que hay que declarar en el TFM
