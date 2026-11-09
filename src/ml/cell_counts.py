@@ -70,6 +70,22 @@ class CellCounts:
             arrays[k] = grid.count_grid(filas[indices], cols[indices])
         return cls(arrays, int((~dentro).sum()), len(df))
 
+    @classmethod
+    def from_frame(cls, frame: pd.DataFrame) -> "CellCounts":
+        """Inversa de `to_frame`: reconstruye los conteos desde la tabla celda × (categoría|subcategoría). Las celdas
+        que no están en la tabla quedan en 0. Es lo que permite al dashboard recalcular las lentes con el perfil que
+        ajuste el usuario sin la base de datos."""
+        arrays: Dict[Tuple[str, str], np.ndarray] = {}
+        posiciones = [grid.parse_cell_id(i) for i in frame.index]
+        filas = np.array([p[0] for p in posiciones], dtype=int)
+        cols = np.array([p[1] for p in posiciones], dtype=int)
+        for columna in frame.columns:
+            categoria, _, subcategoria = str(columna).partition("|")
+            matriz = np.zeros(grid.SHAPE, dtype=float)
+            matriz[filas, cols] = frame[columna].to_numpy(dtype=float)
+            arrays[(categoria, subcategoria)] = matriz
+        return cls(arrays, 0, int(sum(m.sum() for m in arrays.values())))
+
     def pairs(self):
         return sorted(self.arrays)
 
