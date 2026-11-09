@@ -18,6 +18,7 @@ from src.database import RouteDatabase
 from src.location_scoring import recommend_locations, DEFAULT_WEIGHTS
 from src.locations import LOCATIONS
 from streamlit_app.dashboards.maps_dashboard import POI_CATEGORY_STYLE
+from streamlit_app.dashboards.panorama_section import render_panorama_section
 
 _CACHE_TTL = 60
 
@@ -145,10 +146,16 @@ def main():
     weights = render_weight_controls()
     buscar = st.button("🔍 Buscar mejor ubicación", type="primary")
 
-    if not buscar:
-        return
-    if not texto or not texto.strip():
-        st.warning("Escribe una descripción del negocio primero.")
+    # Los resultados persisten al tocar los controles del panorama por celda (cada cambio vuelve a ejecutar la página y
+    # `buscar` sería False): se recuerda el texto con que se buscó, y solo cambia al volver a pulsar el botón.
+    if buscar:
+        if not texto or not texto.strip():
+            st.session_state.pop("reco_texto", None)
+            st.warning("Escribe una descripción del negocio primero.")
+            return
+        st.session_state["reco_texto"] = texto.strip()
+    texto = st.session_state.get("reco_texto")
+    if not texto:
         return
 
     try:
@@ -179,6 +186,7 @@ def main():
         "Nota: Msida, Gzira, Sliema y St Julian's están a menos de 1.500 m entre sí — "
         "sus conteos de competencia se solapan de forma natural, no es un error."
     )
+    render_panorama_section(categoria)
 
 
 if __name__ == "__main__":
