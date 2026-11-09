@@ -1,0 +1,201 @@
+tipo|categoria|frase
+directa|food_drink|quiero abrir una pizzería en sliema
+directa|food_drink|un restaurante de comida china
+directa|food_drink|cafetería cerca de la universidad
+directa|food_drink|un bar deportivo con pantallas
+directa|food_drink|panadería de esquina
+directa|food_drink|heladería artesanal en la costa
+directa|hospital|una farmacia veinticuatro horas
+directa|hospital|clínica dental familiar
+directa|hospital|consultorio médico en el centro
+directa|hospital|veterinaria con peluquería canina
+directa|school|una escuela de inglés
+directa|school|guardería para hijos de trabajadores
+directa|school|academia de matemáticas
+directa|school|colegio bilingüe
+directa|school|centro educativo para adultos
+directa|sport|un gimnasio con pesas y cardio
+directa|sport|estudio de yoga
+directa|sport|centro deportivo con alberca
+directa|sport|academia de pilates
+directa|sport|gimnasio de crossfit
+directa|leisure|un cine de barrio
+directa|leisure|teatro independiente
+directa|leisure|discoteca para jóvenes
+directa|leisure|sala de karaoke
+directa|mall|un centro comercial pequeño
+directa|mall|mall con cine
+directa|mall|plaza comercial en construcción
+directa|business|tienda de ropa
+directa|business|peluquería unisex
+directa|business|una librería
+directa|business|oficina de contabilidad
+directa|business|zapatería para niños
+directa|business|ferretería
+directa|business|joyería de plata
+directa|business|supermercado
+directa|business|taller mecánico
+directa|business|barbería
+directa|business|agencia de seguros
+directa|business|tienda de electrónica
+sinonimo|food_drink|puesto de tacos al pastor
+sinonimo|food_drink|gastrobar con tapas
+sinonimo|food_drink|chiringuito en la playa
+sinonimo|food_drink|local de empanadas
+sinonimo|food_drink|pizza al corte
+sinonimo|food_drink|un sitio para comer pescado fresco
+sinonimo|food_drink|tasca con vinos
+sinonimo|food_drink|negocio de tortas y jugos
+sinonimo|hospital|centro de salud
+sinonimo|hospital|consulta de pediatría
+sinonimo|hospital|atención odontológica
+sinonimo|hospital|laboratorio de análisis
+sinonimo|hospital|oftalmólogo
+sinonimo|hospital|servicio de enfermería
+sinonimo|hospital|centro de terapia física
+sinonimo|school|preparatoria privada
+sinonimo|school|liceo
+sinonimo|school|kindergarten
+sinonimo|school|bachillerato técnico
+sinonimo|school|apoyo escolar para niños
+sinonimo|school|centro de capacitación laboral
+sinonimo|school|curso de programación para niños
+sinonimo|sport|club de tenis
+sinonimo|sport|campo de fútbol rápido
+sinonimo|sport|ring de kickboxing
+sinonimo|sport|alberca para entrenamiento
+sinonimo|sport|pista de patinaje
+sinonimo|sport|sala de musculación
+sinonimo|sport|entrenamiento personal
+sinonimo|leisure|sala de conciertos
+sinonimo|leisure|club de comedia
+sinonimo|leisure|parque de atracciones
+sinonimo|leisure|escape room
+sinonimo|leisure|salón de videojuegos
+sinonimo|leisure|pista de karts
+sinonimo|leisure|planetario
+sinonimo|mall|complejo de tiendas y restaurantes
+sinonimo|mall|plaza con muchos locales
+sinonimo|mall|centro de compras
+sinonimo|mall|outlet grande
+sinonimo|mall|shopping center
+sinonimo|business|corte de cabello para hombres
+sinonimo|business|salón de uñas
+sinonimo|business|venta de bicicletas
+sinonimo|business|casa de empeño
+sinonimo|business|estudio de tatuajes
+sinonimo|business|repuestos para autos
+sinonimo|business|lavado de autos
+sinonimo|business|casa de cambio
+sinonimo|business|estudio de diseño gráfico
+sinonimo|business|vivero de plantas
+sinonimo|business|frutería
+sinonimo|business|carnicería
+errata|food_drink|pizeria
+errata|food_drink|restorante de mariscos
+errata|food_drink|cafeteia
+errata|food_drink|panadria
+errata|food_drink|eladeria
+errata|food_drink|taqueria al pastor
+errata|hospital|farmasia
+errata|hospital|clinca dental
+errata|hospital|vetrinaria
+errata|hospital|consultorio medico
+errata|school|escuea
+errata|school|colejio
+errata|school|garderia
+errata|school|universdad
+errata|sport|gimnacio
+errata|sport|yoha
+errata|sport|natasion
+errata|sport|jym
+errata|leisure|sinema
+errata|leisure|disoteca
+errata|leisure|museeo
+errata|leisure|karaoque
+errata|mall|centro comersial
+errata|mall|mol
+errata|mall|plasa comercial
+errata|business|peluqeria
+errata|business|liberia
+errata|business|ferretria
+errata|business|zapateria
+errata|business|tienda de ropaa
+errata|business|jollería
+errata|business|supermecado
+errata|business|lavanderia
+errata|business|barberia
+larga|food_drink|estoy pensando en abrir un local pequeño donde la gente pueda venir a tomar café y comer postres por las tardes
+larga|food_drink|mi familia tiene una receta de pastas y quiero montar un lugar donde sirvamos cenas los fines de semana
+larga|food_drink|me gustaría poner algo en la zona del puerto para que los turistas coman pescado y beban cerveza fría
+larga|food_drink|tengo un horno grande y quiero hacer pan y bollería para vender cada mañana
+larga|hospital|soy dentista y quiero poner mi propio consultorio cerca de donde vivo
+larga|hospital|quiero abrir un sitio donde los vecinos puedan comprar medicinas sin tener que ir lejos
+larga|hospital|trabajo como fisioterapeuta y busco una zona con muchos adultos mayores para abrir mi centro
+larga|school|quiero un lugar para dar clases a niños después del horario escolar con ayuda en las tareas
+larga|school|pensamos abrir un espacio para enseñar inglés a adultos que trabajan durante el día
+larga|school|hay muchas familias jóvenes en la zona y falta un sitio para dejar a los niños pequeños mientras trabajan
+larga|sport|soy entrenador y quiero abrir un lugar con pesas máquinas y clases grupales para la gente del barrio
+larga|sport|me gustaría montar un espacio para clases de yoga y meditación al amanecer
+larga|sport|quiero abrir un club donde se pueda jugar al tenis y al pádel los fines de semana
+larga|sport|busco una zona cerca del mar para abrir una escuela donde enseñe a nadar a niños y adultos
+larga|leisure|quiero montar un sitio para ver películas con amigos en pantalla grande y butacas cómodas
+larga|leisure|tengo experiencia organizando eventos y quiero abrir un local para celebrar cumpleaños infantiles
+larga|leisure|me gustaría abrir un lugar con música en vivo donde la gente baile hasta tarde
+larga|leisure|quiero un espacio donde exponer cuadros y esculturas de artistas locales
+larga|mall|un inversor quiere construir un gran lugar con decenas de tiendas cines y restaurantes bajo un mismo techo
+larga|mall|buscamos una zona con mucho tráfico para levantar un conjunto de tiendas de marcas conocidas con estacionamiento
+larga|mall|queremos abrir un gran espacio cerrado con muchos negocios distintos para pasar la tarde de compras
+larga|business|quiero vender ropa deportiva y zapatillas a la gente joven del barrio
+larga|business|soy contador y busco un lugar para poner mi propia oficina con clientes
+larga|business|quiero cortar y peinar cabello en un local pequeño en el centro
+larga|business|me gustaría abrir un negocio donde se reparen computadoras y celulares
+larga|business|tengo un camión y quiero un lugar para lavar y encerar coches
+larga|business|quiero poner una tienda donde vender regalos y recuerdos para los turistas
+larga|business|necesito un local donde atender a clientes para asesoría de impuestos
+larga|business|quiero vender flores y plantas de interior en una zona residencial
+larga|business|mi idea es vender productos de limpieza al por menor en una zona con muchos edificios
+larga|food_drink|quiero abrir un lugar para vender cafés y croissants a los oficinistas por la mañana
+larga|food_drink|me gustaría poner un puesto de comida callejera cerca de la estación de autobuses
+larga|school|quiero abrir un centro para preparar a estudiantes que van a presentar exámenes de ingreso
+larga|hospital|quiero atender mascotas enfermas y vacunarlas en un local pequeño
+fuera|ninguna|quiero comprar un coche usado
+fuera|ninguna|cuál es el clima de mañana
+fuera|ninguna|asdfgh jkl
+fuera|ninguna|hola buenas tardes
+fuera|ninguna|ayúdame por favor
+fuera|ninguna|necesito pedir un crédito al banco para mi casa
+fuera|ninguna|cómo llego a la estación
+fuera|ninguna|receta de paella valenciana
+fuera|ninguna|cuánto cuesta un vuelo a roma
+fuera|ninguna|1234567
+fuera|ninguna|quiero ser millonario
+fuera|ninguna|lorem ipsum
+fuera|ninguna|el mejor equipo del mundial
+fuera|ninguna|no sé qué abrir
+fuera|ninguna|algo rentable
+fuera|ninguna|un negocio cualquiera
+fuera|ninguna|quiero invertir mi dinero
+fuera|ninguna|abrir algo en la ciudad
+fuera|ninguna|ganar dinero rápido
+fuera|ninguna|poner un negocio
+fuera|ninguna|ideas para el domingo
+fuera|ninguna|cómo se escribe cafetera en inglés
+fuera|ninguna|mi abuela vive en el pueblo
+fuera|ninguna|hace mucho calor hoy
+fuera|ninguna|tengo que pagar la luz
+fuera|ninguna|cuando empieza la liga
+fuera|ninguna|quiero cambiar de trabajo
+fuera|ninguna|prueba de sonido
+fuera|ninguna|zzzzzz
+fuera|ninguna|me duele la cabeza
+fuera|ninguna|alquilar un departamento
+fuera|ninguna|comprar un terreno
+fuera|ninguna|cuál es mi horóscopo
+fuera|ninguna|hasta luego
+fuera|ninguna|quiero aprender francés por mi cuenta
+fuera|ninguna|dónde dejo el coche esta noche
+fuera|ninguna|qué película veo esta noche
+fuera|ninguna|reservar una mesa para el sábado
+fuera|ninguna|cuántos habitantes tiene malta
+fuera|ninguna|mejor época para viajar
