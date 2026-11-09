@@ -134,7 +134,7 @@ def write_outputs(out_dir, panorama: pd.DataFrame, counts: CellCounts, manifiest
         ARCHIVOS["cell_counts"]: {"filas": int(len(cuentas)), "sha256": file_hash(ruta_c)},
     }
     (directorio / ARCHIVOS["manifest"]).write_text(json.dumps(completo, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
-                                                   encoding="utf-8")
+                                                   encoding="utf-8", newline="\n")
     return completo
 
 
