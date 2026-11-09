@@ -75,7 +75,7 @@ texto libre ──► [C] clasificador de texto ──► categoría ─┐
                                               [D] riesgo de cierre (exploratorio, opcional) ───────────────────┘
 ```
 
-Todo el entrenamiento se hace **fuera del dashboard** (scripts en `tools/`), y el dashboard solo lee una **tabla precalculada de puntajes por celda**. Así el contenedor del dashboard (límite de 1 GiB) no carga modelos pesados ni nuevas dependencias.
+Todo el entrenamiento se hace **fuera del dashboard** (scripts en `tools/`) y, preferentemente, **en otra máquina** (sección 3.I), y el dashboard solo lee una **tabla precalculada de puntajes por celda**. Así el contenedor del dashboard (límite de 1 GiB) no carga modelos pesados ni nuevas dependencias.
 
 ### A. Rejilla y variables (`src/ml/` — nuevo)
 - Rejilla fija de ~250 m (`src/ml/grid.py`): **45 × 51 = 2.295 celdas, de las que 1.139 están activas** (con algún POI en la celda o en su vecindad inmediata) y **560 contienen POIs**. Todo medido en la fase 0.
@@ -239,6 +239,20 @@ Validación cruzada espacial: 10 repeticiones, bloques de 4×4 celdas (~1 km), 1
 
 **Lectura para el TFM:** con ~1.100 celdas (unos 80 bloques independientes) y estas variables, la información del contexto urbano más allá de la densidad de POIs **no se puede separar del ruido**. La densidad de comercios ya recoge casi todo lo que los edificios, el alojamiento y el transporte aportan. Es un resultado negativo bien medido, no una limitación del código.
 
+### I. Entrenar en otra máquina (fase 1c, 9-nov-2026)
+
+El entrenamiento no corre donde está el stack. Hasta la fase 1b las herramientas abrían `data/mobility.db` (~412 MB, casi todo mediciones de rutas con su polilínea) y leían el contexto de OSM de un directorio temporal. Ninguna de las dos cosas viaja bien, así que la fase 1c define las entradas y salidas del entrenamiento:
+
+- **Paquete de entrada** (`tools/export_ml_inputs.py` → `data/ml_inputs.sqlite`, `src/ml/inputs_bundle.py`). Un archivo SQLite sin dependencias nuevas, con las **mismas tablas y columnas que ya lee `data_access`**, así que `--db paquete.sqlite` funciona en `validate_location_model.py` y `measure_lens_variance.py` sin más cambios. Lleva los POIs de Overpass y de Foursquare, la población por zona, el tiempo de viaje medio por par de zonas (ya agregado) y el contexto de OSM normalizado. Medido con la base real: **0,3 MB sin contexto y 1,0 MB con él, frente a 412 MB**.
+- **Manifiesto y verificación.** Cada paquete guarda fecha, commit, versiones de Python, pandas, numpy, scikit-learn y scipy, y filas y sha256 por tabla. `python tools/export_ml_inputs.py --verify paquete.sqlite` lo comprueba en la máquina de entrenamiento, sin la base; `validate_location_model.py` lo comprueba solo antes de entrenar y se detiene si no coincide.
+- **Mismos resultados.** Con la base real, `measure_lens_variance.py` da una salida idéntica desde la base y desde el paquete, y `validate_location_model.py` también (mismas métricas con el contexto desde el directorio y desde el paquete). La base no se modifica.
+- **Entorno** (`requirements-ml.txt`). Versiones exactas de pandas, numpy, scikit-learn y scipy. `requirements.txt` deja las dos últimas con cota inferior porque el dashboard no entrena.
+- **Salida: tablas, no modelos serializados.** Lo que vuelve de la máquina de entrenamiento es una tabla precalculada (la de panoramas, en la fase 2) con su procedencia (`inputs_bundle.provenance`: hash del paquete, commit y versiones). No se mueven `.pkl`, que dependerían de la versión de scikit-learn del dashboard.
+
+**Flujo:** `export_ml_inputs.py` (aquí) → copiar el archivo → `--verify` y entrenar (allí) → traer la tabla de resultados → versionarla (aquí).
+
+**Fuera de alcance de esta fase:** `--jobs` en la validación (hoy tarda 1-2 minutos y es secuencial); y dónde lee el dashboard el contexto de OSM, que se decide con la tabla de panoramas en la fase 2.
+
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
 
@@ -258,6 +272,7 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 | 0 | **Hecha (PR #38).** Rejilla y variables (`src/ml/`), con tests y control de fuga; **perfiles de negocio por defecto** (sección E) y los indicadores de las tres lentes con los datos que ya hay; **tabla precalculada celda × subcategoría de OSM** (base del recálculo al ajustar el perfil); medición de cuánto varía cada lente entre celdas | — |
 | 1 | **Hecha (PR #39).** Modelos de oferta (boosting y MLP) + `tools/validate_location_model.py` (validación espacial reproducible, como `validate_forecast.py`); resultado en la sección 3.G: **ningún candidato supera a la densidad con claridad, no se publica puntaje de ML** | 0 |
 | 1b | **Hecha (PR #40).** Edificios, alojamiento turístico, paradas de transporte e industria/mayoristas descargados de Overpass (`tools/download_osm_context.py`, a archivos fuera de la base) y cargados desde `src/ml/osm_context.py`. Resultado en la sección 3.H: residentes y turistas ya tienen datos; **el contexto no cambia la decisión de la fase 1**; los mayoristas siguen sin datos (solo hay uno) | descarga autorizada |
+| 1c | **Hecha (PR #41).** Entrenamiento en otra máquina (sección 3.I): paquete de entrada de ~1 MB con manifiesto y verificación (`tools/export_ml_inputs.py`), `--db` acepta el paquete, `requirements-ml.txt` con versiones exactas y convención de salida (tablas con procedencia, sin `.pkl`) | 1b |
 | 2 | Tabla precalculada de **panoramas por celda** (tres lentes + confianza) + mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 1 |
 | 3 | Clasificador de texto, comparado con las palabras clave | — |
 | 4 | Riesgo de cierre exploratorio (etiquetas de Overpass histórico de toda el área) | 0, **autorización de descarga** |
