@@ -253,6 +253,27 @@ El entrenamiento no corre donde está el stack. Hasta la fase 1b las herramienta
 
 **Fuera de alcance de esta fase:** `--jobs` en la validación (hoy tarda 1-2 minutos y es secuencial); y dónde lee el dashboard el contexto de OSM, que se decide con la tabla de panoramas en la fase 2.
 
+### J. Panorama por celda (fase 2a, 9-nov-2026)
+
+`tools/build_panorama.py` (en la máquina de entrenamiento, con el paquete de la sección I) calcula el panorama de las 1.139 celdas activas para los siete perfiles por defecto y escribe en `data/ml/`:
+
+| Archivo | Contenido |
+|---|---|
+| `panorama.csv` | 7.973 filas (perfil × celda): ubicación, zona más cercana, las tres lentes con sus indicadores, percentiles, confianza y, solo para `food_drink` y `business`, la brecha exploratoria |
+| `cell_counts.csv` | 1.447 celdas × (categoría\|subcategoría): la base para recalcular las lentes con el perfil que ajuste el usuario, sin la base de datos |
+| `panorama_manifest.json` | procedencia (hash de la entrada, commit, versiones), parámetros, decisión de la validación y sha256 de los dos CSV |
+
+`src/ml/panorama.py` solo usa numpy, pandas y scipy (la rejilla ya lo usaba): **no importa scikit-learn**, así que el dashboard puede importarlo. Con `--sin-brecha` solo se calculan las lentes, en segundos; con la brecha, ~1 minuto por objetivo.
+
+**Qué dice cada columna y qué no:**
+- **Lentes y percentiles.** Indicadores explícitos (conteos); el percentil ordena las celdas de 0 a 1 y deja `NaN` donde no hay datos (sin datos no es una posición baja). No hay puntaje combinado.
+- **Confianza** (`confianza` 0-1 y `confianza_nivel` alta/media/baja): media de las tres lentes de min(apoyo / 5, 1), con 0 para una lente sin datos. En las siete categorías, ~74 % de las celdas salen con confianza alta, ~26 % media y ninguna baja. **No es una probabilidad.** La competencia se apoya en los POIs de cualquier categoría de la vecindad (`pois_vecindad`) y no en el número de competidores: «cero competidores» es una observación creíble donde hay mucho mapeado, y con el número de competidores las celdas sin competencia saldrían siempre con confianza baja, justo las que interesan.
+- **Brecha exploratoria** (`esperado`, `brecha_relativa`, `brecha_p10`, `brecha_p90`, `modelo_brecha`, `brecha_validada`). Es la brecha relativa de la sección G, fuera de muestra y con el boosting. **`brecha_validada` es False** porque ningún candidato superó con claridad a la densidad de POIs (diferencias −0,209 y −0,346, ambas indistinguibles de 0, idénticas a las de la fase 1b). El manifiesto lo declara. Viaja en columnas propias y no entra en ninguna otra. Con el boosting, ~3 % de las celdas de `food_drink` y ~7 % de las de `business` tienen brecha relativa mayor que 1. **Los percentiles 10-90 no son un intervalo de confianza:** miden solo cuánto cambia la brecha según cómo se reparten los bloques entre entrenamiento y prueba (anchura mediana 0,08 y 0,22), y subestiman la incertidumbre real del modelo.
+
+**Error encontrado y corregido durante la fase:** `cell_counts.csv` incluía solo las celdas activas, pero estas se definen con POIs de Overpass y el contexto de OSM (edificios, alojamiento) de celdas inactivas vecinas también suma en las lentes de las activas. Recalcular desde esa tabla daba otros números (2,4 % de las celdas con distinto `mercado_residentes`). Ahora incluye toda celda con algún conteo (1.447 en lugar de 1.139) y un test comprueba que las lentes recalculadas son idénticas a las del panorama.
+
+**Reproducibilidad:** con la misma entrada y semilla, `panorama.csv` sale con el mismo hash (comprobado dos veces, incluida la brecha).
+
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
 
@@ -273,7 +294,8 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 | 1 | **Hecha (PR #39).** Modelos de oferta (boosting y MLP) + `tools/validate_location_model.py` (validación espacial reproducible, como `validate_forecast.py`); resultado en la sección 3.G: **ningún candidato supera a la densidad con claridad, no se publica puntaje de ML** | 0 |
 | 1b | **Hecha (PR #40).** Edificios, alojamiento turístico, paradas de transporte e industria/mayoristas descargados de Overpass (`tools/download_osm_context.py`, a archivos fuera de la base) y cargados desde `src/ml/osm_context.py`. Resultado en la sección 3.H: residentes y turistas ya tienen datos; **el contexto no cambia la decisión de la fase 1**; los mayoristas siguen sin datos (solo hay uno) | descarga autorizada |
 | 1c | **Hecha (PR #41).** Entrenamiento en otra máquina (sección 3.I): paquete de entrada de ~1 MB con manifiesto y verificación (`tools/export_ml_inputs.py`), `--db` acepta el paquete, `requirements-ml.txt` con versiones exactas y convención de salida (tablas con procedencia, sin `.pkl`) | 1b |
-| 2 | Tabla precalculada de **panoramas por celda** (tres lentes + confianza) + mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 1 |
+| 2a | **Hecha (PR #42).** Tabla precalculada de panoramas por celda (tres lentes, percentiles, confianza y brecha exploratoria etiquetada), conteos para recalcular con otro perfil y manifiesto: `src/ml/panorama.py` y `tools/build_panorama.py` (sección 3.J). Sin interfaz | 1c |
+| 2b | Interfaz: mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 2a |
 | 3 | Clasificador de texto, comparado con las palabras clave | — |
 | 4 | Riesgo de cierre exploratorio (etiquetas de Overpass histórico de toda el área) | 0, **autorización de descarga** |
 

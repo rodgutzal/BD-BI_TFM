@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**38 archivos · 550 funciones de test · 624 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**39 archivos · 582 funciones de test · 656 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -37,6 +37,7 @@
 | [`tests/test_ml_grid.py`](#teststest_ml_gridpy) | 19 | 22 |
 | [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 35 | 35 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
+| [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 32 | 32 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
@@ -662,6 +663,45 @@
 - `test_la_serie_constante_no_da_cv_infinito`
 - `test_cuadrante_de_oportunidad`
 - `test_la_herramienta_imprime_un_informe_por_perfil`
+
+## `tests/test_ml_panorama.py`
+
+> Tests de la fase 2a: panorama por celda (src/ml/panorama.py) — lentes con percentiles y confianza, brecha exploratoria
+> etiquetada, archivos de salida con manifiesto, reconstrucción de los conteos para recalcular con otro perfil y la
+> herramienta tools/build_panorama.py.
+
+- `test_from_frame_es_la_inversa_de_to_frame` — Reconstruir los conteos desde la tabla da las mismas matrices en las celdas de la tabla.
+- `test_las_lentes_recalculadas_desde_la_tabla_son_identicas` — Con los conteos reconstruidos desde toda celda con algún conteo, cada perfil por defecto da exactamente las mismas lentes: el dashboard puede recalcular sin la base de datos.
+- `test_cell_counts_incluye_el_contexto_de_celdas_inactivas` — Regresión: las celdas activas se definen solo con POIs de Overpass, pero un edificio en una celda inactiva vecina suma en las lentes de la activa. Si cell_counts.csv solo trajera las activas, recalcular daría otros números.
+- `test_from_frame_conserva_la_subcategoria_vacia` — Una subcategoría vacía se guarda como 'categoria|' y vuelve como ''.
+- `test_from_frame_con_tabla_vacia_no_falla` — Sin columnas no hay conteos, pero tampoco error.
+- `test_percentile_rank_conserva_los_nan_y_es_monotono` — Sin datos sigue siendo NaN (no una posición baja) y el orden se respeta.
+- `test_percentile_rank_empates_reciben_el_rango_medio` — Valores iguales tienen el mismo percentil.
+- `test_confianza_una_lente_sin_datos_cuenta_cero` — Con apoyo de sobra pero una lente sin datos, la confianza máxima es 2/3 (nivel media-alta, nunca 1).
+- `test_confianza_toda_la_informacion_da_uno_y_ninguna_da_cero` — Los extremos: apoyo suficiente en las tres lentes = 1; sin datos en ninguna = 0 (baja).
+- `test_confianza_competencia_usa_los_pois_de_la_vecindad_no_los_competidores` — Una celda sin competidores pero rodeada de POIs tiene confianza ALTA en competencia: cero competidores es una observación creíble donde hay mucho mapeado. (Con el número de competidores saldría baja, y penalizaría justo las celdas de oportunidad.)
+- `test_confianza_niveles_en_los_umbrales` — Los umbrales son 1/3 y 2/3, inclusivos hacia arriba.
+- `test_locate_da_la_zona_mas_cercana_y_su_distancia` — El centro de la celda de una zona se asigna a esa zona, a menos de media celda de distancia.
+- `test_panorama_sin_brecha_deja_la_brecha_vacia_y_no_validada` — Sin tabla de brecha, sus columnas son NaN, no hay modelo y brecha_validada es False.
+- `test_panorama_incluye_las_lentes_sin_alterarlas` — Las columnas de lentes del panorama son exactamente las de compute_lenses.
+- `test_panorama_percentiles_entre_cero_y_uno` — Cada percentil está en (0, 1] y la celda con más competencia tiene el máximo.
+- `test_panorama_con_brecha_se_alinea_por_celda` — La brecha se une por cell_id: las celdas sin brecha quedan en NaN y las sobrantes se ignoran.
+- `test_pois_vecindad_cuenta_solo_pois_de_overpass_no_el_contexto` — El apoyo general de la confianza son POIs de Overpass en la celda y sus 8 vecinas; los edificios del contexto de OSM no cuentan (no dicen cuán completo está el mapa de comercios).
+- `test_la_brecha_no_modifica_ninguna_otra_columna` — Con o sin brecha, las lentes, percentiles y confianza son idénticos: la brecha no entra en nada más.
+- `test_brecha_validada_se_propaga_solo_si_hay_brecha` — brecha_validada=True solo se refleja cuando se entrega una brecha; sin ella el panorama no afirma nada.
+- `test_el_modulo_del_panorama_no_importa_scikit_learn` — El dashboard debe poder importar el panorama sin cargar scikit-learn (el contenedor tiene 1 GiB). scipy sí: la rejilla ya lo usa y está en requirements.txt.
+- `test_gap_from_evaluation_calcula_esperado_brecha_y_percentiles` — Con predicciones conocidas: el esperado es la media entre repeticiones y la brecha, la relativa de la media.
+- `test_gap_from_evaluation_una_repeticion_no_tiene_dispersion` — Con una sola repetición los percentiles coinciden con la brecha de esa repetición.
+- `test_los_archivos_se_escriben_y_se_verifican` — Se escriben los tres archivos y la verificación no encuentra problemas.
+- `test_el_panorama_leido_coincide_con_el_escrito` — La ida y vuelta por CSV conserva columnas, índice y valores (con la precisión escrita).
+- `test_los_conteos_leidos_dan_las_mismas_lentes` — read_counts reconstruye los conteos: las lentes recalculadas coinciden con las de los conteos originales.
+- `test_escribir_dos_veces_da_los_mismos_bytes` — La salida es determinista (sin fechas dentro de los CSV): el hash no cambia entre ejecuciones.
+- `test_verify_detecta_un_csv_alterado` — Cambiar un valor del panorama se detecta por el hash y read_panorama se niega a leerlo.
+- `test_verify_detecta_archivos_ausentes_y_manifiesto_roto` — Falta un CSV, falta el manifiesto, o el formato no es el esperado.
+- `test_el_manifiesto_no_puede_omitir_un_archivo` — Un CSV que existe pero no figura en el manifiesto se reporta.
+- `test_build_panorama_sin_brecha_de_punta_a_punta` — La herramienta escribe los tres archivos con la procedencia del paquete y las siete categorías.
+- `test_build_panorama_con_brecha_la_etiqueta_como_exploratoria` — Con brecha, solo food_drink y business la llevan; el manifiesto declara la decisión y la advertencia, y la columna brecha_validada solo es True si un candidato superó a la línea base.
+- `test_build_panorama_rechaza_un_paquete_alterado` — Antes de calcular se verifica el paquete; si no coincide, no se escribe nada.
 
 ## `tests/test_ml_validation.py`
 
