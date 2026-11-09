@@ -195,6 +195,22 @@ def brecha_relativa(esperado, observado) -> np.ndarray:
     return (esperado - observado) / np.sqrt(esperado + 1.0)
 
 
+def gap_from_evaluation(ev: Evaluation, nombre: str) -> pd.DataFrame:
+    """Brecha de oferta FUERA DE MUESTRA de cada celda con el modelo `nombre`, en el mismo orden que `ev.y` (sin índice
+    de celda: quien llama lo pone). Columnas:
+      esperado         oferta esperada media de las repeticiones (cada celda se predice con un modelo que no vio su bloque)
+      brecha_relativa  (esperado − observado) / √(esperado + 1), con el esperado medio
+      brecha_p10/p90   percentiles 10 y 90 de la brecha relativa entre las repeticiones: cuánto cambia la brecha según
+                       cómo se reparten los bloques entre entrenamiento y prueba (incertidumbre de partición, no un
+                       intervalo de confianza)."""
+    oof = ev.oof[nombre]
+    por_repeticion = np.stack([brecha_relativa(oof[r], ev.y) for r in range(oof.shape[0])])
+    esperado = oof.mean(axis=0)
+    return pd.DataFrame({"esperado": esperado, "brecha_relativa": brecha_relativa(esperado, ev.y),
+                         "brecha_p10": np.percentile(por_repeticion, 10, axis=0),
+                         "brecha_p90": np.percentile(por_repeticion, 90, axis=0)})
+
+
 # ---------------------------------------------------------------------------
 # Contraste con una fuente independiente (Foursquare)
 # ---------------------------------------------------------------------------

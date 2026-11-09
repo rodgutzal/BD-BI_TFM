@@ -1,0 +1,3 @@
+# Tablas del ML (fase 2a): su manifiesto guarda el sha256 de cada archivo, asi que los bytes no pueden cambiar al
+# clonar o hacer checkout (con core.autocrlf=true, git convertiria LF a CRLF en Windows y la verificacion fallaria).
+data/ml/* -text
