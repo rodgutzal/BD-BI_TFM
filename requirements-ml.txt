@@ -1,0 +1,20 @@
+# Entorno de la MÁQUINA DE ENTRENAMIENTO del ML de recomendación (fase 1c).
+#
+# Versiones EXACTAS, las mismas con las que se midieron los resultados de docs/DISENO_ML_RECOMENDACION.md (§3.G, §3.H).
+# requirements.txt deja scikit-learn y scipy con cota inferior (>=) porque el dashboard no entrena; para entrenar, una
+# versión distinta puede dar otros números. El manifiesto del paquete de entrada (tools/export_ml_inputs.py) registra
+# las versiones con que se exportó, y cada resultado debe guardar las suyas (src/ml/inputs_bundle.py::provenance).
+#
+# Para entrenar solo hace falta el paquete data/ml_inputs.sqlite, no la base completa ni Docker:
+#   python -m venv .venv-ml && .venv-ml\Scripts\activate
+#   pip install -r requirements-ml.txt
+#   python tools/validate_location_model.py --db ml_inputs.sqlite
+#
+# Python 3.13 (versión local de referencia: 3.13.14)
+pandas==3.0.3
+numpy==2.4.6
+scikit-learn==1.9.0
+scipy==1.18.0
+
+# Solo si se aprueba la red con pérdida de Poisson (decisión pendiente, diseño §7.2); NO va en el dashboard:
+# torch

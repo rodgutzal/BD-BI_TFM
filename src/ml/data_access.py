@@ -37,6 +37,16 @@ def load_pois_foursquare(db_path) -> pd.DataFrame:
         return pd.DataFrame(columns=["category", "subcategory", "name", "latitude", "longitude"])
 
 
+def load_context(db_path, directorio=None) -> pd.DataFrame:
+    """Contexto de OSM (fase 1b) como POIs. Si se da `directorio` (JSON de tools/download_osm_context.py) se lee de
+    ahí; si no, de la tabla `osm_context` del paquete de entrada (src/ml/inputs_bundle.py). Con la base completa y sin
+    directorio no hay contexto y el resultado es un DataFrame vacío."""
+    from src.ml import inputs_bundle, osm_context
+    if directorio:
+        return osm_context.load_context(directorio)
+    return inputs_bundle.load_context_table(db_path)
+
+
 def load_zone_table(db_path) -> pd.DataFrame:
     """Tabla por zona para las variables del modelo, indexada por nombre de zona:
       demanda            población (zone_demographics)

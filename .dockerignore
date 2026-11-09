@@ -39,3 +39,6 @@ htmlcov
 docs
 tests
 *.md
+
+# Paquete de entrada del ML (fase 1c): no va dentro de la imagen del dashboard
+data/ml_inputs*.sqlite
