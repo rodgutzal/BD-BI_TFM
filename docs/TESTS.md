@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**39 archivos · 586 funciones de test · 660 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**41 archivos · 630 funciones de test · 704 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -38,6 +38,7 @@
 | [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 35 | 35 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
+| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 23 | 23 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
@@ -46,6 +47,7 @@
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 21 | 21+ |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
 | [`tests/test_travel_time_predictor.py`](#teststest_travel_time_predictorpy) | 25 | 28 |
@@ -707,6 +709,35 @@
 - `test_build_panorama_con_brecha_la_etiqueta_como_exploratoria` — Con brecha, solo food_drink y business la llevan; el manifiesto declara la decisión y la advertencia, y la columna brecha_validada solo es True si un candidato superó a la línea base.
 - `test_build_panorama_rechaza_un_paquete_alterado` — Antes de calcular se verifica el paquete; si no coincide, no se escribe nada.
 
+## `tests/test_ml_panorama_view.py`
+
+> Tests de la fase 2b, parte sin interfaz (src/ml/panorama_view.py): opciones de competencia, perfil personalizado con sus
+> avisos, panorama recalculado con ese perfil, brecha precalculada que no cambia con el perfil y filtro de oportunidad.
+
+- `test_expand_selectors_separa_las_subcategorias_y_etiqueta_el_resto` — Cada subcategoría de un selector queda por separado; una categoría entera y un «todo salvo» tienen su etiqueta.
+- `test_expandir_no_cambia_lo_que_se_cuenta` — La unión de los selectores expandidos cuenta lo mismo que los originales: dividir no altera el perfil.
+- `test_available_pairs_omite_el_contexto_y_lo_vacio` — Edificios y transporte no son comercios: no se ofrecen como competencia. La subcategoría vacía se etiqueta.
+- `test_competition_options_incluye_los_defectos_y_son_disjuntos` — Los valores por defecto de directa e indirecta están entre las opciones y no se solapan.
+- `test_sin_cambios_devuelve_el_perfil_por_defecto_sin_avisos` — Si el usuario no toca nada, el perfil es el de por defecto (no personalizado) y no hay ningún aviso.
+- `test_el_orden_de_la_seleccion_no_cuenta_como_cambio` — Elegir lo mismo en otro orden no hace personalizado el perfil.
+- `test_cambiar_un_segmento_personaliza_el_perfil` — Quitar un segmento da un perfil personalizado con ese segmento menos, sin avisos si es razonable.
+- `test_quitar_todos_los_segmentos_conserva_los_de_por_defecto_y_avisa` — Una lente que el perfil tiene no puede quedar vacía: se conserva y se avisa.
+- `test_quitar_toda_la_competencia_directa_avisa` — Sin competencia directa se conserva la de por defecto, con aviso.
+- `test_quitar_mas_de_la_mitad_de_la_competencia_avisa_del_optimismo` — Quitar la competencia indirecta (3 de 4 elementos) supera el umbral y avisa de que el panorama será más optimista.
+- `test_anadir_competencia_no_avisa_de_optimismo` — Añadir competencia hace el panorama más conservador: personaliza el perfil pero sin aviso.
+- `test_un_elemento_en_directa_e_indirecta_cuenta_solo_como_directa` — Si se elige en las dos, se avisa y solo cuenta una vez (en la directa).
+- `test_same_profile_distingue_competencia_segmentos_y_proveedores` — Cualquiera de las tres definiciones distinta hace que los perfiles no sean el mismo.
+- `test_gap_table_solo_existe_para_las_categorias_con_brecha` — food_drink y business tienen brecha (no validada); hospital no.
+- `test_la_vista_por_defecto_coincide_con_la_tabla_guardada` — Recalcular el perfil por defecto desde los conteos da las lentes del panorama guardado.
+- `test_un_perfil_distinto_cambia_las_lentes_pero_no_la_brecha` — Quitar la competencia indirecta baja la competencia directa+indirecta pero la brecha sigue siendo la precalculada.
+- `test_un_segmento_menos_cambia_el_mercado` — Con solo «residentes» el índice de mercado es el de residentes escalado, distinto del combinado.
+- `test_filtro_de_oportunidad_en_los_umbrales` — Mercado ≥ 0,75 y competencia ≤ 0,25 (inclusivos) y confianza no baja.
+- `test_filtro_de_oportunidad_ignora_las_celdas_sin_datos` — Un NaN en un percentil nunca cuenta como oportunidad.
+- `test_capas_disponibles_omiten_lo_que_no_tiene_datos` — La brecha solo es una capa si la categoría la tiene; una lente toda NaN no se ofrece.
+- `test_layer_values_devuelve_la_columna_correcta` — Cada capa muestra su columna; la de brecha, la brecha relativa.
+- `test_cell_label_incluye_celda_zona_y_distancia` — La etiqueta de la lista de celdas dice dónde está.
+- `test_el_modulo_no_importa_scikit_learn` — La interfaz usa este módulo en el contenedor del dashboard, que no carga scikit-learn.
+
 ## `tests/test_ml_validation.py`
 
 > Tests de la fase 1 del ML de recomendación: lectura de datos en solo lectura (src/ml/data_access.py), modelos de
@@ -868,6 +899,34 @@
 - `test_el_puntaje_es_la_suma_ponderada_de_las_columnas_mostradas` — Lo que dice el pie de la tabla: Puntaje = suma ponderada de las tres columnas (0-1), con 0.5 donde falta el dato.
 - `test_una_zona_sin_dato_queda_en_blanco_y_se_nota`
 - `test_normalize_weights_conserva_proporciones_y_suma_uno`
+
+## `tests/test_recommendation_panorama_ui.py`
+
+> Tests de pantalla de la fase 2b (Streamlit AppTest): el panorama por celda dentro de Recomendación, con la tabla
+> versionada en data/ml/. Comprueban lo que promete el diseño: lentes por separado sin puntaje combinado, el perfil usado
+> siempre indicado, los controles que recalculan, la brecha etiquetada como exploratoria y que no cambia con el perfil.
+
+- `test_la_seccion_abre_para_cada_categoria` — Las siete categorías muestran el mapa, la lista de celdas y los cuatro controles de perfil.
+- `test_declara_que_no_hay_puntaje_combinado` — El texto explicativo dice que no hay puntaje y que son conteos, no una predicción.
+- `test_siempre_indica_el_perfil_usado` — Con el perfil por defecto lo dice; no aparece el aviso de perfil personalizado.
+- `test_las_capas_son_las_tres_lentes_y_la_brecha_solo_donde_existe` — food_drink ofrece la brecha como capa exploratoria; hospital no la tiene.
+- `test_la_lista_de_celdas_empieza_por_las_de_mercado_alto_y_competencia_baja` — La primera opción lleva la estrella del filtro de oportunidad, y la nota dice cuántas celdas son.
+- `test_la_ficha_muestra_las_tres_lentes_y_la_confianza` — La ficha de la celda elegida trae competencia, mercado, proveedores y la confianza (que no es una probabilidad).
+- `test_el_mapa_y_la_ficha_usan_el_perfil_elegido` — Una celda con competencia indirecta la pierde al quitar ese tipo de competencia: las lentes se recalculan con el perfil del usuario, no con el de por defecto.
+- `test_la_brecha_de_la_ficha_se_etiqueta_como_exploratoria_y_no_validada` — Donde hay brecha, la ficha la muestra con la advertencia de que no está validada y el intervalo no es de confianza.
+- `test_sin_brecha_no_hay_advertencia_de_brecha` — En una categoría sin brecha no aparece ninguna advertencia sobre ella.
+- `test_elegir_la_capa_de_brecha_muestra_la_advertencia_de_capa` — Cambiar a la capa de brecha añade el aviso de que es exploratoria y puede reflejar solo la saturación.
+- `test_quitar_un_segmento_marca_el_perfil_como_personalizado` — Al cambiar un control, la pantalla lo dice y el perfil ya no es el por defecto.
+- `test_volver_al_perfil_por_defecto_quita_el_aviso` — Restaurar la selección original devuelve el perfil por defecto.
+- `test_quitar_la_competencia_indirecta_avisa_de_que_el_panorama_es_mas_optimista` — Quitar más de la mitad de la competencia por defecto genera el aviso del diseño.
+- `test_dejar_vacia_la_competencia_directa_avisa_y_conserva_la_de_por_defecto` — No se puede quedar sin competencia directa: se avisa y se usa la de por defecto.
+- `test_cambiar_el_perfil_no_cambia_la_brecha_y_la_pantalla_lo_dice` — La brecha de la misma celda es idéntica con el perfil por defecto y con uno personalizado, y la ficha avisa de que usa las categorías estándar.
+- `test_sin_tabla_la_seccion_lo_dice_y_no_falla` — Con un directorio vacío no hay excepción: se informa y se indica cómo generarla.
+- `test_con_la_tabla_alterada_la_seccion_se_niega_a_mostrarla` — Si un CSV no coincide con el hash del manifiesto, no se muestra nada de él.
+- `test_la_pagina_muestra_el_panorama_despues_de_buscar` — Sin pulsar el botón no hay resultados; al buscar aparecen el MCDA por zona y debajo el panorama por celda.
+- `test_los_resultados_sobreviven_a_cambiar_un_control_del_panorama` — Regresión: cada cambio de un control vuelve a ejecutar la página con el botón en False; antes los resultados desaparecían. Ahora se recuerda el texto buscado.
+- `test_buscar_con_texto_vacio_avisa_y_no_deja_resultados_viejos` — Un texto vacío da el aviso de siempre y borra lo buscado antes.
+- `test_cambiar_de_negocio_no_arrastra_los_ajustes_del_anterior` — Los controles del panorama son propios de cada categoría: tras ajustar el perfil de un restaurante y buscar una farmacia, el perfil de la farmacia es el de por defecto.
 
 ## `tests/test_tests_documentation.py`
 
