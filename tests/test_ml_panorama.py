@@ -311,6 +311,14 @@ def test_escribir_dos_veces_da_los_mismos_bytes(tmp_path, counts):
     assert a == b
 
 
+def test_los_tres_archivos_se_escriben_con_saltos_de_linea_lf(salida):
+    """Los archivos salen iguales en Windows y Linux (sin CRLF), para que la tabla versionada no cambie según dónde se
+    genere."""
+    d, _ = salida
+    for nombre in panorama.ARCHIVOS.values():
+        assert b"\r" not in (d / nombre).read_bytes(), nombre
+
+
 def test_verify_detecta_un_csv_alterado(salida):
     """Cambiar un valor del panorama se detecta por el hash y read_panorama se niega a leerlo."""
     d, _ = salida
@@ -342,6 +350,43 @@ def test_el_manifiesto_no_puede_omitir_un_archivo(salida):
     del m["archivos"]["cell_counts.csv"]
     (d / "panorama_manifest.json").write_text(json.dumps(m), encoding="utf-8")
     assert "cell_counts.csv no está en el manifiesto" in panorama.verify_outputs(d)
+
+
+# ---- tabla versionada en el repositorio --------------------------------------------------------------------------
+DATA_ML = ROOT / "data" / "ml"
+
+
+def test_la_tabla_versionada_coincide_con_su_manifiesto():
+    """data/ml/ (la tabla que llevará el dashboard) está íntegra: los hashes del manifiesto coinciden con los archivos
+    y ningún saneamiento de saltos de línea los alteró (ver .gitattributes)."""
+    assert panorama.verify_outputs(DATA_ML) == []
+    assert b"\r\n" not in (DATA_ML / "panorama.csv").read_bytes()
+
+
+def test_la_tabla_versionada_declara_la_brecha_como_lo_dice_la_validacion():
+    """La brecha solo aparece en food_drink y business; brecha_validada coincide con la decisión del manifiesto (hoy
+    ninguna) y las otras cinco categorías no afirman nada. Si algún día un candidato gana, habrá que regenerarla."""
+    p = panorama.read_panorama(DATA_ML)
+    m = json.loads((DATA_ML / "panorama_manifest.json").read_text(encoding="utf-8"))
+    assert set(p["perfil"]) == set(bp.DEFAULT_PROFILES)
+    assert set(p.loc[p["esperado"].notna(), "perfil"]) == set(m["brecha"]) == {"food_drink", "business"}
+    for clave, info in m["brecha"].items():
+        assert p.loc[p["perfil"] == clave, "brecha_validada"].eq(info["ganador"] is not None).all()
+    assert not p.loc[~p["perfil"].isin(m["brecha"]), "brecha_validada"].any()
+    assert "EXPLORATORIA" in m["advertencia"]
+
+
+def test_la_tabla_versionada_recalcula_las_mismas_lentes():
+    """Con data/ml/cell_counts.csv, el panorama de cada perfil sale igual que el guardado: es lo que hará el dashboard."""
+    p = panorama.read_panorama(DATA_ML)
+    c = panorama.read_counts(DATA_ML)
+    for clave, perfil in bp.DEFAULT_PROFILES.items():
+        guardado = p[p["perfil"] == clave].set_index("cell_id")
+        nuevo = panorama.build_panorama(c, perfil)
+        assert list(nuevo.index) == list(guardado.index)
+        for col in ("competencia_directa", "mercado_total", "proveedores_total", "apoyo_mercado", "pois_vecindad"):
+            np.testing.assert_allclose(nuevo[col].to_numpy(dtype=float), guardado[col].to_numpy(dtype=float),
+                                       rtol=1e-5, equal_nan=True, err_msg=f"{clave}.{col}")
 
 
 # ---- herramienta -------------------------------------------------------------------------------------------------
