@@ -26,7 +26,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.ml import grid, osm_context  # noqa: E402
+from src.ml import data_access, grid  # noqa: E402
 from src.ml.business_profiles import DEFAULT_PROFILES  # noqa: E402
 from src.ml.cell_counts import CellCounts  # noqa: E402
 from src.ml.lenses import compute_lenses, lens_coverage  # noqa: E402
@@ -84,9 +84,10 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     pois = load_pois(Path(args.db))
-    if args.contexto:
-        contexto = osm_context.load_context(args.contexto)
+    contexto = data_access.load_context(args.db, args.contexto)
+    if args.contexto or not contexto.empty:
         print(f"Contexto de OSM cargado: {contexto.groupby('category').size().to_dict() if not contexto.empty else 'sin datos'}")
+    if not contexto.empty:
         counts = CellCounts.from_pois(pd.concat([pois, contexto], ignore_index=True))
     else:
         counts = CellCounts.from_pois(pois)

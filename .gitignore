@@ -57,3 +57,6 @@ models/*.pkl
 
 # --- Respaldos de Postgres (pg_dump) sueltos en la raiz ---
 /backup*.sql
+
+# Paquete de entrada del ML para entrenar en otra maquina (tools/export_ml_inputs.py): se regenera
+data/ml_inputs*.sqlite

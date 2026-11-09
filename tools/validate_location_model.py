@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.locations import LOCATIONS  # noqa: E402
-from src.ml import business_profiles, data_access, features, grid, models, osm_context, validation  # noqa: E402
+from src.ml import business_profiles, data_access, features, grid, inputs_bundle, models, osm_context, validation  # noqa: E402
 from src.ml.cell_counts import CellCounts  # noqa: E402
 
 DEFAULT_DB = ROOT / "data" / "mobility.db"
@@ -140,7 +140,8 @@ def imprimir(r: dict, repeats: int, k_top: int) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--db", default=str(DEFAULT_DB), help=f"ruta de la base (default: {DEFAULT_DB})")
+    ap.add_argument("--db", default=str(DEFAULT_DB), help=f"ruta de la base o del paquete de entrada de "
+                    f"tools/export_ml_inputs.py (default: {DEFAULT_DB})")
     ap.add_argument("--target", choices=TARGETS + ("all",), default="all")
     ap.add_argument("--repeats", type=int, default=10, help="repeticiones de la validación espacial")
     ap.add_argument("--folds", type=int, default=5)
@@ -148,18 +149,25 @@ def main(argv=None) -> int:
     ap.add_argument("--k", type=int, default=50, help="k de la precisión@k y del análisis de la brecha")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--contexto", default=None,
-                    help="directorio con el contexto de OSM descargado con tools/download_osm_context.py (fase 1b)")
+                    help="directorio con el contexto de OSM descargado con tools/download_osm_context.py (fase 1b); "
+                         "sin él se usa el que lleve el paquete de entrada, si lo lleva")
     args = ap.parse_args(argv)
 
     pois = data_access.load_pois(args.db)
     zonas = data_access.load_zone_table(args.db)
     fsq = data_access.load_pois_foursquare(args.db)
-    contexto = osm_context.load_context(args.contexto) if args.contexto else None
+    if inputs_bundle.is_bundle(args.db):         # paquete de entrada (fase 1c): se comprueba antes de usarlo
+        problemas = inputs_bundle.verify_bundle(args.db)
+        if problemas:
+            print("El paquete de entrada no coincide con su manifiesto:\n  " + "\n  ".join(problemas))
+            return 1
+        print(f"Paquete de entrada íntegro (creado {inputs_bundle.read_manifest(args.db).get('creado')})")
+    contexto = data_access.load_context(args.db, args.contexto)
     todos = pd.concat([pois, contexto], ignore_index=True) if contexto is not None and not contexto.empty else pois
     counts = CellCounts.from_pois(todos)
     print(f"POIs de Overpass: {len(pois)} | Foursquare: {len(fsq)} | zonas con población: {int(zonas['demanda'].notna().sum())}/{len(zonas)}")
     con_contexto = contexto is not None and not contexto.empty
-    if args.contexto:
+    if args.contexto or con_contexto:
         resumen_ctx = contexto.groupby("category").size().to_dict() if con_contexto else {}
         print(f"Contexto de OSM (fase 1b): {resumen_ctx if con_contexto else 'directorio sin datos válidos: se valida sin contexto'}")
     for clave in (TARGETS if args.target == "all" else (args.target,)):
