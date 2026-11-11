@@ -28,6 +28,7 @@ from src.poi_client import CATEGORY_TAGS
     ],
 )
 def test_clasifica_negocios_comunes(texto, esperado):
+    """Cada texto de negocio común (parametrizado) se clasifica en la categoría esperada."""
     assert classify_business_type(texto) == esperado
 
 
@@ -40,12 +41,14 @@ def test_barberia_no_se_confunde_con_bar():
 
 
 def test_ignora_mayusculas_tildes_y_espacios_de_mas():
+    """El clasificador no distingue mayúsculas, tildes ni espacios repetidos o sobrantes."""
     assert classify_business_type("  PIZZERÍA  ") == "food_drink"
     assert classify_business_type("salon   de   belleza") == "business"
 
 
 @pytest.mark.parametrize("texto", ["", "   ", None, "xyz", "asdfgh qwerty"])
 def test_sin_coincidencia_devuelve_none_y_nunca_adivina(texto):
+    """Un texto sin ninguna palabra clave devuelve `None`; nunca elige una categoría al azar."""
     assert classify_business_type(texto) is None
 
 

@@ -51,6 +51,7 @@ def db_con_datos(db):
 # ---------------------------------------------------------------------------
 
 def test_totales_y_rutas(db_con_datos):
+    """El perfil da el total de filas, de rutas y de orígenes, y las filas de cada ruta."""
     p = db_con_datos.get_data_profile()
     assert p["total_rows"] == 17
     assert p["n_routes"] == 3
@@ -61,12 +62,14 @@ def test_totales_y_rutas(db_con_datos):
 
 
 def test_fechas_primera_y_ultima(db_con_datos):
+    """El primer y el último timestamp del perfil son el mínimo y el máximo de las mediciones."""
     p = db_con_datos.get_data_profile()
     assert p["first_timestamp"] == min(db_con_datos.query_measurements(limit=100)["timestamp"])
     assert p["last_timestamp"] == max(db_con_datos.query_measurements(limit=100)["timestamp"])
 
 
 def test_los_nulos_coinciden_con_un_calculo_independiente_en_pandas(db_con_datos):
+    """Los nulos por columna, por ruta y el porcentaje de faltantes coinciden con un cálculo independiente en pandas."""
     p = db_con_datos.get_data_profile()
     cols = p["measurement_columns"]
     df = db_con_datos.query_measurements(limit=100)[cols]
@@ -76,6 +79,7 @@ def test_los_nulos_coinciden_con_un_calculo_independiente_en_pandas(db_con_datos
 
 
 def test_completitud_por_ruta(db_con_datos):
+    """La completitud por ruta está entre 0 y 100, y la ruta de ORS, con más columnas vacías, es menos completa que las de TomTom."""
     r = db_con_datos.get_data_profile()["routes"].set_index(["origin", "destination"])
     # la ruta de ORS tiene 2 columnas más vacías en cada fila: es menos completa que las de TomTom
     assert r.loc[("Msida", "Sliema"), "completeness_pct"] < r.loc[("Msida", "Gzira"), "completeness_pct"]
@@ -83,6 +87,7 @@ def test_completitud_por_ruta(db_con_datos):
 
 
 def test_id_polyline_y_created_at_no_son_columnas_de_medicion(db_con_datos):
+    """`id`, `polyline` y `created_at` no cuentan como columnas de medición."""
     cols = db_con_datos.get_data_profile()["measurement_columns"]
     for no_medida in ("id", "polyline", "created_at"):
         assert no_medida not in cols
@@ -99,6 +104,7 @@ def test_una_polilinea_nula_no_cuenta_como_dato_faltante(db):
 
 
 def test_base_vacia(db):
+    """Con una base vacía el perfil devuelve ceros, fechas `None` y una tabla de rutas vacía pero con sus columnas."""
     p = db.get_data_profile()
     assert p["total_rows"] == 0 and p["n_routes"] == 0 and p["n_origins"] == 0
     assert p["first_timestamp"] is None and p["last_timestamp"] is None
@@ -125,6 +131,7 @@ def test_cuenta_duplicados_de_ruta_instante_y_fuente(tmp_path):
 
 
 def test_en_la_tabla_real_no_hay_duplicados(db_con_datos):
+    """El perfil no encuentra duplicados en la tabla de datos de prueba."""
     assert db_con_datos.get_data_profile()["duplicates"] == 0
 
 
@@ -133,6 +140,7 @@ def test_en_la_tabla_real_no_hay_duplicados(db_con_datos):
 # ---------------------------------------------------------------------------
 
 def test_el_perfil_hace_una_sola_consulta_sobre_la_tabla(db_con_datos, monkeypatch):
+    """El perfil recorre la tabla de mediciones con una sola consulta."""
     consultas = []
     original = RouteDatabase._connect
 
@@ -152,15 +160,18 @@ def test_el_perfil_hace_una_sola_consulta_sobre_la_tabla(db_con_datos, monkeypat
 # ---------------------------------------------------------------------------
 
 def test_ultimo_timestamp(db_con_datos):
+    """`get_last_timestamp` devuelve el máximo de los timestamps."""
     esperado = max(db_con_datos.query_measurements(limit=100)["timestamp"])
     assert db_con_datos.get_last_timestamp() == esperado
 
 
 def test_ultimo_timestamp_de_base_vacia(db):
+    """`get_last_timestamp` devuelve `None` con una base vacía."""
     assert db.get_last_timestamp() is None
 
 
 def test_resumen_sin_rutas_omite_solo_las_rutas_unicas(db_con_datos):
+    """`get_database_summary(include_routes=False)` omite solo las rutas únicas y el resto del resumen es igual."""
     completo = db_con_datos.get_database_summary()
     rapido = db_con_datos.get_database_summary(include_routes=False)
     assert completo["unique_routes"] == 3

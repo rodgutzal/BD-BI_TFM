@@ -67,11 +67,11 @@
 >   - `get_all_routes_statistics()` recorría la tabla otra vez solo para contar filas por ruta.
 > Todo eso sale ahora de `get_data_profile()`, una sola pasada.
 
-- `test_abrir_analyst_no_usa_las_consultas_caras`
+- `test_abrir_analyst_no_usa_las_consultas_caras` — Abrir el Analyst no lanza `get_available_routes` ni `get_all_routes_statistics`; hace un único `get_data_profile` compartido por todas las pestañas.
 - `test_ninguna_consulta_carga_la_base_entera` — 'Missing Values' ya no carga 100 mil filas: toda lectura de filas es de UNA ruta.
-- `test_las_metricas_de_calidad_son_las_del_perfil`
-- `test_la_completitud_por_ruta_sale_del_perfil_y_cubre_todas_las_rutas`
-- `test_las_muestras_por_ruta_de_model_performance_son_las_filas_reales`
+- `test_las_metricas_de_calidad_son_las_del_perfil` — Total de registros, valores faltantes, duplicados y rango de fechas de la pestaña de calidad coinciden con los del perfil de datos.
+- `test_la_completitud_por_ruta_sale_del_perfil_y_cubre_todas_las_rutas` — La tabla de completitud sale del perfil, trae todas las rutas y la ruta con `traffic_delay_min` vacío es menos completa que la que lo trae.
+- `test_las_muestras_por_ruta_de_model_performance_son_las_filas_reales` — La tabla de muestras por ruta de Model Performance cuenta las filas reales de cada ruta.
 - `test_el_panel_lateral_usa_el_ultimo_timestamp_y_no_el_resumen_completo` — app.py pedía get_database_summary() (con el DISTINCT de rutas) solo para la hora del último dato.
 
 ## `tests/test_analyst_tabs.py`
@@ -82,26 +82,26 @@
 > (test_analyst_quality.py ya prueba que Analyst abre con UN perfil de la base; test_predictive_modeling_*.py,
 > el modelado. Aquí el modelado se sustituye por un no-op.)
 
-- `test_el_editor_sql_ejecuta_selects_y_ofrece_la_descarga`
-- `test_el_editor_sql_acepta_with_recursivo_y_funciones`
-- `test_el_editor_sql_rechaza_escrituras_y_pragmas_sin_tocar_los_datos` ×7
+- `test_el_editor_sql_ejecuta_selects_y_ofrece_la_descarga` — El editor SQL ejecuta un SELECT, muestra el número de filas y la tabla con el resultado correcto.
+- `test_el_editor_sql_acepta_with_recursivo_y_funciones` — El editor SQL de solo lectura acepta consultas con `WITH RECURSIVE` y funciones de SQLite.
+- `test_el_editor_sql_rechaza_escrituras_y_pragmas_sin_tocar_los_datos` ×7 — Cada consulta que escribe o usa PRAGMA (parametrizado) se rechaza con «Error en la consulta» y el archivo de la base queda byte a byte igual.
 - `test_el_editor_sql_no_crea_archivos_en_disco` ×2 — Regresión: con solo `mode=ro`, ATTACH y VACUUM INTO se ejecutaban y creaban archivos nuevos (VACUUM INTO vuelca una copia completa de la base a cualquier ruta escribible). El authorizer de SQLite los deniega.
 - `test_el_editor_sql_cierra_la_conexion_aunque_la_consulta_falle` — Si no se cerrara, en Windows el archivo quedaría bloqueado (no se podría borrar/mover).
-- `test_el_editor_sql_con_consulta_vacia_avisa`
-- `test_un_ejemplo_del_editor_rellena_la_consulta`
+- `test_el_editor_sql_con_consulta_vacia_avisa` — Una consulta vacía o de solo espacios muestra el aviso «Escribe una consulta».
+- `test_un_ejemplo_del_editor_rellena_la_consulta` — Elegir un ejemplo en el selector del editor rellena el cuadro de texto con su consulta.
 - `test_todos_los_ejemplos_del_editor_se_pueden_ejecutar` — Cada consulta de ejemplo debe ser válida y pasar el authorizer (incluida sqlite_master).
-- `test_la_exportacion_incluye_todas_las_rutas_y_la_polyline_por_defecto`
+- `test_la_exportacion_incluye_todas_las_rutas_y_la_polyline_por_defecto` — La exportación por defecto incluye las filas de todas las rutas e informa de cuántas son.
 - `test_la_exportacion_ligera_omite_la_polyline` ×2 — La casilla de la polyline debe respetarse tanto en la exportación total como en la limitada por fechas.
-- `test_la_exportacion_con_rango_de_fechas_filtra`
-- `test_la_exportacion_sin_datos_avisa`
-- `test_el_explorador_muestra_los_datos_de_la_ruta_elegida`
-- `test_las_pruebas_estadisticas_corren_con_datos_suficientes`
-- `test_las_correlaciones_se_dibujan_con_las_columnas_por_defecto`
-- `test_analyst_con_la_base_vacia_no_lanza_excepciones`
-- `test_la_pestana_de_modelos_marca_las_rutas_con_modelo_entrenado`
+- `test_la_exportacion_con_rango_de_fechas_filtra` — Con el rango de fechas activado y un día de historial, la exportación trae menos filas que sin filtro.
+- `test_la_exportacion_sin_datos_avisa` — Si la tabla está vacía, la exportación avisa «No hay datos disponibles» en vez de fallar.
+- `test_el_explorador_muestra_los_datos_de_la_ruta_elegida` — El Data Explorer muestra una tabla con las 60 filas de la ruta elegida.
+- `test_las_pruebas_estadisticas_corren_con_datos_suficientes` — Con datos suficientes, la pestaña de pruebas estadísticas muestra las pruebas de estacionariedad y sus resultados.
+- `test_las_correlaciones_se_dibujan_con_las_columnas_por_defecto` — La pestaña de correlaciones preselecciona las columnas por defecto (tiempo de viaje, velocidad y temperatura).
+- `test_analyst_con_la_base_vacia_no_lanza_excepciones` — El Analyst se abre sin excepciones con una base vacía.
+- `test_la_pestana_de_modelos_marca_las_rutas_con_modelo_entrenado` — La pestaña de modelos marca como entrenadas las rutas que tienen su archivo de modelo y como no entrenadas las demás.
 - `test_un_error_en_una_pestana_se_muestra_en_ella_y_no_tumba_la_pagina` — Antes una excepción en cualquier pestaña (se ejecutan las siete en cada rerun) dejaba la página entera con el traceback. Ahora cada una se aísla: se dice cuál falló y por qué.
 - `test_las_demas_pestanas_siguen_mostrandose_cuando_una_falla` — Con el explorador roto, la pestaña del editor SQL (que viene después) sigue dibujando su editor.
-- `test_sin_fallos_no_aparece_ningun_aviso_de_pestana`
+- `test_sin_fallos_no_aparece_ningun_aviso_de_pestana` — Si ninguna pestaña falla, no aparece ningún aviso «No se pudo mostrar».
 - `test_el_fallo_de_una_pestana_queda_en_el_registro` — El mensaje en pantalla es corto; el traceback completo va al registro de la aplicación.
 - `test_st_stop_dentro_de_una_pestana_no_se_trata_como_un_error` — Solo se captura Exception: st.stop() usa una excepción de control (BaseException) y debe seguir deteniendo el script. Si se capturara, se registraría como un fallo de la pestaña que no lo es (en pantalla no se notaría: el propio st.error volvería a disparar la parada), así que se comprueba el registro.
 
@@ -175,10 +175,10 @@
 
 > Pruebas del clasificador de texto libre -> categoría de Overpass.
 
-- `test_clasifica_negocios_comunes` ×10
+- `test_clasifica_negocios_comunes` ×10 — Cada texto de negocio común (parametrizado) se clasifica en la categoría esperada.
 - `test_barberia_no_se_confunde_con_bar` — Regresión: la palabra clave "bar" (comida y bebida) no debe matchear dentro de "barbería". Es el bug que ya ocurrió una vez con datos reales de Foursquare, y el clasificador usa límites de palabra (\b) para evitarlo.
-- `test_ignora_mayusculas_tildes_y_espacios_de_mas`
-- `test_sin_coincidencia_devuelve_none_y_nunca_adivina` ×5
+- `test_ignora_mayusculas_tildes_y_espacios_de_mas` — El clasificador no distingue mayúsculas, tildes ni espacios repetidos o sobrantes.
+- `test_sin_coincidencia_devuelve_none_y_nunca_adivina` ×5 — Un texto sin ninguna palabra clave devuelve `None`; nunca elige una categoría al azar.
 - `test_todas_las_categorias_existen_en_overpass` — El clasificador solo puede devolver categorías que realmente guarda la tabla `pois` (CATEGORY_TAGS de poi_client.py).
 - `test_ninguna_palabra_clave_choca_con_otra_categoria` — Una misma palabra no puede aparecer en dos categorías (el orden de las reglas decidiría en silencio), y ninguna palabra de una categoría puede estar contenida como palabra completa dentro de una frase de otra.
 - `test_cantidad_de_palabras_clave_documentada` — El README dice 140 palabras clave (únicas).
@@ -217,16 +217,16 @@
 
 > Pruebas de tools/check_collection_gaps.py (detección de huecos de recolección).
 
-- `test_find_gaps_detecta_solo_pausas_mayores_al_umbral`
-- `test_find_gaps_sin_huecos`
-- `test_find_gaps_ignora_duplicados_y_orden`
-- `test_find_gaps_con_menos_de_dos_instantes`
-- `test_fmt_h`
-- `test_load_cycle_times_filtra_por_fecha_y_descarta_timestamps_invalidos`
-- `test_load_cycle_times_es_de_solo_lectura`
-- `test_report_avisa_si_ahora_mismo_no_llega_trafico`
-- `test_report_mide_el_tiempo_total_sin_datos`
-- `test_report_sin_datos`
+- `test_find_gaps_detecta_solo_pausas_mayores_al_umbral` — `find_gaps` detecta solo las pausas mayores que el umbral: ciclos cada 15 minutos y 5 horas de silencio dan un único hueco.
+- `test_find_gaps_sin_huecos` — Sin pausas mayores que el umbral, `find_gaps` devuelve una tabla vacía.
+- `test_find_gaps_ignora_duplicados_y_orden` — Las filas de un mismo ciclo comparten instante y el orden de entrada no importa para detectar huecos.
+- `test_find_gaps_con_menos_de_dos_instantes` — Con menos de dos instantes distintos no puede haber huecos.
+- `test_fmt_h` — `fmt_h` da horas para una duración corta (3 h se muestra «3.0 h») y días para una larga (72 h se muestra «3.0 días»).
+- `test_load_cycle_times_filtra_por_fecha_y_descarta_timestamps_invalidos` — `load_cycle_times` descarta lo anterior a la fecha de inicio y los timestamps que no son fechas.
+- `test_load_cycle_times_es_de_solo_lectura` — `load_cycle_times` no modifica la base de datos.
+- `test_report_avisa_si_ahora_mismo_no_llega_trafico` — El informe avisa «AHORA MISMO» si el último dato es antiguo y devuelve su edad.
+- `test_report_mide_el_tiempo_total_sin_datos` — El informe cuenta los huecos y suma el tiempo total sin datos, sin avisar de sequía actual si los datos son recientes.
+- `test_report_sin_datos` — Sin datos, el informe devuelve cero huecos y escribe «Sin datos».
 
 ## `tests/test_collector.py`
 
@@ -325,19 +325,19 @@
 > cuesta ~8 s en el bind mount de Windows de Docker (décimas de segundo en el host), así que sumaban
 > ~87 s. Un único perfil agregado da todo eso en un recorrido.
 
-- `test_totales_y_rutas`
-- `test_fechas_primera_y_ultima`
-- `test_los_nulos_coinciden_con_un_calculo_independiente_en_pandas`
-- `test_completitud_por_ruta`
-- `test_id_polyline_y_created_at_no_son_columnas_de_medicion`
+- `test_totales_y_rutas` — El perfil da el total de filas, de rutas y de orígenes, y las filas de cada ruta.
+- `test_fechas_primera_y_ultima` — El primer y el último timestamp del perfil son el mínimo y el máximo de las mediciones.
+- `test_los_nulos_coinciden_con_un_calculo_independiente_en_pandas` — Los nulos por columna, por ruta y el porcentaje de faltantes coinciden con un cálculo independiente en pandas.
+- `test_completitud_por_ruta` — La completitud por ruta está entre 0 y 100, y la ruta de ORS, con más columnas vacías, es menos completa que las de TomTom.
+- `test_id_polyline_y_created_at_no_son_columnas_de_medicion` — `id`, `polyline` y `created_at` no cuentan como columnas de medición.
 - `test_una_polilinea_nula_no_cuenta_como_dato_faltante` — Las filas históricas de TomTom no tienen polyline: eso no debe bajar la completitud.
-- `test_base_vacia`
+- `test_base_vacia` — Con una base vacía el perfil devuelve ceros, fechas `None` y una tabla de rutas vacía pero con sus columnas.
 - `test_cuenta_duplicados_de_ruta_instante_y_fuente` — La clave UNIQUE de la tabla real los impide; se prueba con una tabla SIN la restricción.
-- `test_en_la_tabla_real_no_hay_duplicados`
-- `test_el_perfil_hace_una_sola_consulta_sobre_la_tabla`
-- `test_ultimo_timestamp`
-- `test_ultimo_timestamp_de_base_vacia`
-- `test_resumen_sin_rutas_omite_solo_las_rutas_unicas`
+- `test_en_la_tabla_real_no_hay_duplicados` — El perfil no encuentra duplicados en la tabla de datos de prueba.
+- `test_el_perfil_hace_una_sola_consulta_sobre_la_tabla` — El perfil recorre la tabla de mediciones con una sola consulta.
+- `test_ultimo_timestamp` — `get_last_timestamp` devuelve el máximo de los timestamps.
+- `test_ultimo_timestamp_de_base_vacia` — `get_last_timestamp` devuelve `None` con una base vacía.
+- `test_resumen_sin_rutas_omite_solo_las_rutas_unicas` — `get_database_summary(include_routes=False)` omite solo las rutas únicas y el resto del resumen es igual.
 - `test_el_resumen_por_defecto_sigue_igual` — Compatibilidad: quien lo llame sin argumentos sigue obteniendo unique_routes.
 - `test_ultimo_timestamp_no_recorre_la_tabla` — MAX(timestamp) se resuelve con el índice: una sola consulta, sin DISTINCT.
 
@@ -359,17 +359,17 @@
 > con mucha recolección mostraban solo los últimos días sin avisar.
 
 - `test_el_limit_antiguo_si_recortaba_la_ventana` — Documenta el bug: con limit=10000 solo se llega a ~25 de los 30 días.
-- `test_promedio_diario_cubre_toda_la_ventana`
-- `test_promedio_diario_respeta_la_ventana`
-- `test_promedio_diario_calcula_bien_el_promedio`
-- `test_promedio_diario_base_vacia`
-- `test_promedio_por_ruta_y_hora`
-- `test_promedio_por_ruta_y_hora_no_pierde_filas_con_mucha_data`
-- `test_columnas_numericas_excluyen_el_id_y_el_texto`
-- `test_query_columns_trae_solo_lo_pedido_sin_limit`
-- `test_query_columns_rechaza_columnas_que_no_existen`
-- `test_query_columns_no_permite_inyeccion_sql`
-- `test_query_columns_sin_columnas`
+- `test_promedio_diario_cubre_toda_la_ventana` — El promedio diario cubre toda la ventana, no pierde ninguna fila y sale ordenado por fecha.
+- `test_promedio_diario_respeta_la_ventana` — Con una ventana de 3 días el promedio diario devuelve pocos días y menos filas que con la ventana completa.
+- `test_promedio_diario_calcula_bien_el_promedio` — El promedio diario es la media de los tiempos de viaje del día.
+- `test_promedio_diario_base_vacia` — Con una base vacía el promedio diario devuelve una tabla vacía.
+- `test_promedio_por_ruta_y_hora` — El promedio por ruta y hora agrupa por origen, destino y hora, y cuenta las mediciones de cada grupo.
+- `test_promedio_por_ruta_y_hora_no_pierde_filas_con_mucha_data` — El promedio por ruta y hora no pierde filas con mucho volumen y las horas están entre 0 y 23.
+- `test_columnas_numericas_excluyen_el_id_y_el_texto` — Las columnas numéricas disponibles excluyen el `id` y las columnas de texto.
+- `test_query_columns_trae_solo_lo_pedido_sin_limit` — `query_columns` devuelve solo las columnas pedidas y todas las filas de la ventana, sin límite.
+- `test_query_columns_rechaza_columnas_que_no_existen` — `query_columns` lanza `ValueError` si una columna no existe.
+- `test_query_columns_no_permite_inyeccion_sql` — `query_columns` rechaza un nombre de columna con inyección SQL y no toca la tabla.
+- `test_query_columns_sin_columnas` — `query_columns` sin columnas devuelve una tabla vacía.
 
 ## `tests/test_demographics.py`
 
@@ -413,8 +413,8 @@
 - `test_el_sarima_aprende_el_ciclo_diario` — Con un ciclo diario claro, el pronóstico sigue el perfil mejor que una media plana.
 - `test_las_horas_sin_dato_no_se_inventan` — hourly_share deja NaN en las horas sin mediciones; solo se interpolan huecos cortos al ajustar.
 - `test_perfil_horario_y_su_pronostico` — La referencia usa la media de cada hora del día; para una hora sin historia cae a la media global.
-- `test_mae_ignora_las_posiciones_sin_dato`
-- `test_los_cortes_exigen_horizonte_y_pasado_con_datos`
+- `test_mae_ignora_las_posiciones_sin_dato` — El MAE salta las posiciones con NaN y devuelve `None` si no queda ninguna con dato.
+- `test_los_cortes_exigen_horizonte_y_pasado_con_datos` — Un corte de validación exige una semana de pasado con datos y un horizonte que no esté vacío; si el horizonte queda en NaN deja de ser elegible.
 - `test_las_referencias_no_usan_datos_del_futuro` — Cambiar los valores a partir del corte no debe alterar ninguna referencia.
 - `test_la_validacion_compara_con_las_referencias` — evaluate + summarize: con un ciclo diario limpio el perfil y el SARIMA ganan a media y persistencia.
 - `test_la_validacion_lee_la_base_en_solo_lectura` — load_hourly_share abre la base con immutable=1: no crea -wal/-shm ni modifica el archivo.
@@ -425,18 +425,18 @@
 >
 > No hacen llamadas de red: solo ejercitan la lógica pura del cliente.
 
-- `test_categoriza_nombres_reales_de_foursquare` ×17
+- `test_categoriza_nombres_reales_de_foursquare` ×17 — Cada nombre de categoría real de Foursquare (parametrizado) cae en el balde esperado.
 - `test_barbershop_no_se_confunde_con_bar` — Regresión: "bar" dentro de "Barbershop" no puede mandarlo a restaurant (se usa \b, no un simple `in`).
-- `test_nunca_descarta_un_poi_sin_categoria`
-- `test_sin_rutas_solo_devuelve_las_zonas`
+- `test_nunca_descarta_un_poi_sin_categoria` — Una lista de categorías vacía, `None` o un nombre desconocido devuelve «other»; el POI nunca se descarta.
+- `test_sin_rutas_solo_devuelve_las_zonas` — Sin rutas, los puntos de búsqueda son solo las zonas.
 - `test_con_las_rutas_actuales_son_27_llamadas` — El README documenta 7 zonas + 20 puntos intermedios = 27 llamadas por refresco (~117/mes con refresco semanal, 23% del límite gratis).
 - `test_no_duplica_corredores_en_sentido_inverso` — Valletta->Birkirkara y Birkirkara->Valletta son el mismo tramo físico.
-- `test_puntos_intermedios_quedan_entre_origen_y_destino`
-- `test_ignora_rutas_con_zonas_desconocidas`
-- `test_acepta_la_forma_nueva_de_la_respuesta`
-- `test_acepta_la_forma_antigua_con_geocodes`
-- `test_descarta_lugares_sin_id_o_sin_coordenadas`
-- `test_cliente_exige_api_key`
+- `test_puntos_intermedios_quedan_entre_origen_y_destino` — Los puntos intermedios de una ruta larga caen dentro del rectángulo que forman su origen y su destino.
+- `test_ignora_rutas_con_zonas_desconocidas` — Una ruta con una zona que no existe se ignora y no añade puntos.
+- `test_acepta_la_forma_nueva_de_la_respuesta` — Se interpreta la respuesta nueva de la API (`fsq_place_id` con latitud y longitud planas).
+- `test_acepta_la_forma_antigua_con_geocodes` — Se interpreta la respuesta antigua de la API (`fsq_id` con coordenadas dentro de `geocodes`).
+- `test_descarta_lugares_sin_id_o_sin_coordenadas` — Un lugar sin identificador o sin coordenadas se descarta.
+- `test_cliente_exige_api_key` — Crear el cliente con una clave de API vacía lanza `ValueError`.
 
 ## `tests/test_hybrid_scheduler.py`
 
@@ -937,11 +937,11 @@
 > tienen el clima en NULL, y una sola basta para que `LogisticRegression` lance
 > `Input X contains NaN`. Esa excepción cortaba toda la vista Analyst.
 
-- `test_clima_ausente_no_se_convierte_en_lluvia`
-- `test_descripciones_conocidas_y_desconocidas_se_agrupan_como_antes`
-- `test_complete_cases_excluye_solo_las_filas_sin_clima`
-- `test_sin_filas_incompletas_no_se_pierde_nada`
-- `test_regresion_no_falla_con_filas_sin_clima`
+- `test_clima_ausente_no_se_convierte_en_lluvia` — Una fila sin clima queda como NaN en el grupo de clima, no como «lluvia».
+- `test_descripciones_conocidas_y_desconocidas_se_agrupan_como_antes` — Las descripciones de clima conocidas y las desconocidas se agrupan igual que antes del cambio.
+- `test_complete_cases_excluye_solo_las_filas_sin_clima` — `_complete_cases` descarta solo las filas sin clima y no modifica el DataFrame original.
+- `test_sin_filas_incompletas_no_se_pierde_nada` — Si no hay filas incompletas, `_complete_cases` conserva todas.
+- `test_regresion_no_falla_con_filas_sin_clima` — La regresión se ajusta sin fallar aunque haya filas sin clima.
 - `test_clasificacion_no_falla_con_filas_sin_clima` — El caso exacto del bug: 'Input X contains NaN' en LogisticRegression.
 - `test_el_temporal_y_el_clustering_conservan_las_filas_sin_clima` — Su tiempo de viaje es válido: no deben pasar por _complete_cases.
 
@@ -954,11 +954,11 @@
 > ~9 min dentro del contenedor del dashboard, de 1 CPU y 1 GiB, donde además rozaba el límite de
 > memoria). Ahora se entrena solo lo que el usuario pide.
 
-- `test_las_secciones_coinciden_con_los_modelos`
-- `test_al_abrir_no_se_entrena_nada`
-- `test_pulsar_un_boton_entrena_solo_esa_seccion`
-- `test_lo_pedido_se_mantiene_en_la_sesion`
-- `test_el_boton_de_todos_entrena_las_cuatro_secciones`
+- `test_las_secciones_coinciden_con_los_modelos` — Las secciones de la pantalla coinciden con los modelos que se pueden entrenar.
+- `test_al_abrir_no_se_entrena_nada` — Al abrir la pantalla no se entrena ningún modelo; solo se muestran los botones y las métricas baratas de resumen.
+- `test_pulsar_un_boton_entrena_solo_esa_seccion` — Pulsar el botón de una sección entrena solo esa y el botón se reemplaza por su resultado.
+- `test_lo_pedido_se_mantiene_en_la_sesion` — Lo ya pedido se conserva entre reejecuciones de la página, sin pedir de nuevo otras secciones.
+- `test_el_boton_de_todos_entrena_las_cuatro_secciones` — El botón de «todos» entrena las cuatro secciones.
 - `test_el_forecast_temporal_funciona_con_low_memory` — El SARIMA usa fit(low_memory=True): se comprueba que el pronóstico y su intervalo se pueden obtener (sin resultados suavizados ni predicción en muestra, que low_memory no ofrece), y que la pantalla muestra la referencia y la nota de validación.
 
 ## `tests/test_query_measurements_polyline.py`
@@ -971,13 +971,13 @@
 > la caché de Streamlit, agotaba el límite de 1 GiB del contenedor del dashboard al abrir
 > Analyst (el proceso moría por falta de memoria).
 
-- `test_por_defecto_no_carga_la_polilinea`
-- `test_include_polyline_la_devuelve_intacta`
+- `test_por_defecto_no_carga_la_polilinea` — Por defecto `query_measurements` no carga la columna `polyline`.
+- `test_include_polyline_la_devuelve_intacta` — Con `include_polyline=True` la polilínea vuelve idéntica a la guardada.
 - `test_las_demas_columnas_son_exactamente_las_mismas` — Sin polyline tampoco se lee created_at (va después de polyline y leerla recorre las páginas de desbordamiento de todas las filas); el resto de columnas no cambia.
-- `test_por_defecto_tampoco_lee_created_at_pero_con_include_polyline_si`
-- `test_los_filtros_y_el_orden_no_cambian`
+- `test_por_defecto_tampoco_lee_created_at_pero_con_include_polyline_si` — `created_at` solo se lee con `include_polyline=True`.
+- `test_los_filtros_y_el_orden_no_cambian` — Los filtros por origen, destino y fecha y el orden (más reciente primero) siguen igual que antes.
 - `test_sin_la_polilinea_la_memoria_baja_mucho` — No es una cifra mágica: con polilíneas de ~12 KB, cargarlas pesa >10× lo que pesa el resto.
-- `test_base_vacia_no_falla`
+- `test_base_vacia_no_falla` — Con una base vacía `query_measurements` devuelve un DataFrame vacío sin fallar.
 - `test_export_route_data_conserva_la_polilinea` — La exportación por ruta no cambia: sigue incluyendo la geometría.
 
 ## `tests/test_recommendation_dashboard.py`
@@ -987,12 +987,12 @@
 > El README promete que el desglose muestra cada dimensión CRUDA y NORMALIZADA
 > ("nunca solo el número final"). Esto lo verifica sin abrir Streamlit.
 
-- `test_la_tabla_muestra_cada_factor_crudo_y_normalizado`
-- `test_las_columnas_normalizadas_estan_entre_0_y_1`
+- `test_la_tabla_muestra_cada_factor_crudo_y_normalizado` — La tabla de resultados trae, por cada factor, el valor crudo y el normalizado, y una fila por zona.
+- `test_las_columnas_normalizadas_estan_entre_0_y_1` — Las columnas normalizadas (demanda, baja competencia, accesibilidad) quedan entre 0 y 1.
 - `test_mas_alto_siempre_es_mejor_en_las_tres_columnas` — La zona con más competencia tiene el menor 'Baja competencia'.
 - `test_el_puntaje_es_la_suma_ponderada_de_las_columnas_mostradas` — Lo que dice el pie de la tabla: Puntaje = suma ponderada de las tres columnas (0-1), con 0.5 donde falta el dato.
-- `test_una_zona_sin_dato_queda_en_blanco_y_se_nota`
-- `test_normalize_weights_conserva_proporciones_y_suma_uno`
+- `test_una_zona_sin_dato_queda_en_blanco_y_se_nota` — Una zona sin dato queda en blanco (NaN) en vez de en 0 y su recuento de datos completos baja de 3.
+- `test_normalize_weights_conserva_proporciones_y_suma_uno` — Los pesos normalizados conservan las proporciones y suman 1; con todo en cero se usan los pesos por defecto sin dividir entre cero.
 
 ## `tests/test_recommendation_panorama_ui.py`
 
@@ -1038,15 +1038,15 @@
 >
 > Si falla, el mensaje dice exactamente qué hacer.
 
-- `test_el_catalogo_de_tests_esta_al_dia`
+- `test_el_catalogo_de_tests_esta_al_dia` — `docs/TESTS.md` coincide con lo que genera `tools/generate_tests_doc.py` a partir de los tests actuales.
 - `test_el_catalogo_menciona_cada_funcion_de_test` — Ninguna función `test_*` puede faltar en el catálogo (aunque el resto del texto cambie).
-- `test_todo_archivo_de_test_esta_en_la_tabla_del_readme`
-- `test_la_tabla_del_readme_no_cita_archivos_que_ya_no_existen`
-- `test_parametrize_con_literales_cuenta_los_casos`
-- `test_parametrize_apilado_multiplica`
-- `test_parametrize_con_valores_no_literales_no_se_puede_contar`
-- `test_sin_parametrize_es_un_caso`
-- `test_el_generador_encuentra_funciones_y_metodos_de_clases_test`
+- `test_todo_archivo_de_test_esta_en_la_tabla_del_readme` — Cada archivo `tests/test_*.py` tiene su fila en la tabla de tests del README.
+- `test_la_tabla_del_readme_no_cita_archivos_que_ya_no_existen` — La tabla de tests del README no cita archivos de test que ya no existen.
+- `test_parametrize_con_literales_cuenta_los_casos` — Un `parametrize` con una lista literal cuenta sus casos.
+- `test_parametrize_apilado_multiplica` — Dos `parametrize` apilados multiplican sus casos.
+- `test_parametrize_con_valores_no_literales_no_se_puede_contar` — Si los valores de `parametrize` no son literales, el número de casos es `None`.
+- `test_sin_parametrize_es_un_caso` — Un test sin `parametrize` cuenta como un caso.
+- `test_el_generador_encuentra_funciones_y_metodos_de_clases_test` — El generador del catálogo encuentra las funciones de test y los métodos de clases `Test*`, usa la primera frase del docstring e ignora lo que no es test.
 
 ## `tests/test_time_series.py`
 
