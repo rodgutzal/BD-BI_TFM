@@ -29,17 +29,17 @@ def sample_data():
     return pd.DataFrame(data)
 
 
-def test_ensemble_initialization():
+def test_ensemble_initialization(tmp_path):
     """Test ensemble predictor initialization."""
-    predictor = EnsemblePredictor('test_route', Path('/tmp'))
+    predictor = EnsemblePredictor('test_route', tmp_path)
     assert predictor.route_name == 'test_route'
     assert not predictor.is_trained
     assert 'random_forest' in predictor.models
 
 
-def test_feature_preparation(sample_data):
+def test_feature_preparation(sample_data, tmp_path):
     """Test feature preparation."""
-    predictor = EnsemblePredictor('test', Path('/tmp'))
+    predictor = EnsemblePredictor('test', tmp_path)
     X, y, cols = predictor.prepare_features(sample_data)
 
     assert X is not None
@@ -49,9 +49,9 @@ def test_feature_preparation(sample_data):
     assert len(y) == len(sample_data)
 
 
-def test_model_training(sample_data):
+def test_model_training(sample_data, tmp_path):
     """Test ensemble model training."""
-    predictor = EnsemblePredictor('test', Path('/tmp'))
+    predictor = EnsemblePredictor('test', tmp_path)
     result = predictor.train(sample_data)
 
     assert result.get('status') == 'success'
@@ -60,9 +60,9 @@ def test_model_training(sample_data):
     assert predictor.is_trained
 
 
-def test_prediction_output(sample_data):
+def test_prediction_output(sample_data, tmp_path):
     """Test prediction output format."""
-    predictor = EnsemblePredictor('test', Path('/tmp'))
+    predictor = EnsemblePredictor('test', tmp_path)
     predictor.train(sample_data)
 
     X, _, _ = predictor.prepare_features(sample_data)
@@ -76,9 +76,9 @@ def test_prediction_output(sample_data):
     assert predictions['ensemble_prediction'] < predictions['confidence_interval_95']['upper']
 
 
-def test_anomaly_detection(sample_data):
+def test_anomaly_detection(sample_data, tmp_path):
     """Test anomaly detection."""
-    predictor = EnsemblePredictor('test', Path('/tmp'))
+    predictor = EnsemblePredictor('test', tmp_path)
 
     # Add anomaly
     sample_data.loc[50, 'travel_time_min'] = 100  # Outlier
@@ -90,14 +90,14 @@ def test_anomaly_detection(sample_data):
     assert 'anomalies' in result
 
 
-def test_insufficient_data():
+def test_insufficient_data(tmp_path):
     """Test handling of insufficient data."""
     small_data = pd.DataFrame({
         'timestamp': pd.date_range('2026-01-01', periods=10, freq='1h', tz='UTC'),
         'travel_time_min': [20] * 10
     })
 
-    predictor = EnsemblePredictor('test', Path('/tmp'))
+    predictor = EnsemblePredictor('test', tmp_path)
     result = predictor.train(small_data)
 
     assert 'error' in result or result.get('status') == 'success'  # Should handle gracefully
