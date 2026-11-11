@@ -417,13 +417,13 @@ def test_measure_lens_variance_usa_el_contexto_del_paquete(paquete, capsys):
     assert "Contexto de OSM cargado" in salida and "edificio" in salida
 
 
-def test_requirements_fija_scipy_y_statsmodels():
-    """Las dos librerías estadísticas del dashboard van con == (antes >=): una versión nueva puede cambiar resultados o
-    no tener wheels para el Python de Docker y CI."""
+def test_requirements_fija_las_librerias_cientificas():
+    """scikit-learn, scipy, statsmodels y matplotlib van con == (antes >=): una versión nueva puede cambiar resultados
+    o no tener wheels para el Python de Docker y CI."""
     lineas = [
         l.split("#")[0].strip().lower() for l in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
     ]
-    for paquete in ("scipy", "statsmodels"):
+    for paquete in ("scikit-learn", "scipy", "statsmodels", "matplotlib"):
         fijas = [l for l in lineas if l.startswith(paquete)]
         assert len(fijas) == 1 and fijas[0].startswith(
             paquete + "=="
@@ -445,5 +445,5 @@ def test_requirements_ml_fija_versiones_exactas():
 
     ml, base = pins("requirements-ml.txt"), pins("requirements.txt")
     assert {"pandas", "numpy", "scikit-learn", "scipy"} <= set(ml)
-    for k in ("pandas", "numpy"):
+    for k in ("pandas", "numpy", "scikit-learn"):
         assert ml[k] == base[k], f"{k} distinto entre requirements.txt y requirements-ml.txt"
