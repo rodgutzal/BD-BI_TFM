@@ -804,37 +804,37 @@
 > Tests de la fase 1 del ML de recomendación: lectura de datos en solo lectura (src/ml/data_access.py), modelos de
 > oferta esperada (src/ml/models.py), validación espacial (src/ml/validation.py) y tools/validate_location_model.py.
 
-- `test_la_lectura_es_de_solo_lectura`
-- `test_foursquare_es_opcional`
-- `test_tabla_de_zonas_con_poblacion_y_tiempo_de_viaje`
-- `test_la_densidad_suma_las_categorias_en_log`
-- `test_cada_modelo_usa_solo_sus_variables`
-- `test_las_predicciones_son_positivas_y_tienen_una_por_fila`
+- `test_la_lectura_es_de_solo_lectura` — Leer POIs, POIs de Foursquare y la tabla de zonas no modifica la base de datos ni crea archivos.
+- `test_foursquare_es_opcional` — Sin tabla de Foursquare, la carga devuelve una tabla vacía con sus columnas.
+- `test_tabla_de_zonas_con_poblacion_y_tiempo_de_viaje` — La tabla de zonas trae la población y el tiempo de viaje medio de las rutas que tocan cada zona; las zonas sin dato quedan en NaN.
+- `test_la_densidad_suma_las_categorias_en_log` — La densidad suma todas las categorías de la celda y de los anillos y aplica el logaritmo.
+- `test_cada_modelo_usa_solo_sus_variables` — Cada modelo de referencia usa solo sus variables: cambiar la población no altera `solo_distancia` ni `solo_densidad`, pero sí `solo_poblacion`.
+- `test_las_predicciones_son_positivas_y_tienen_una_por_fila` — Cada modelo (parametrizado) da una predicción finita y positiva por cada fila de prueba.
 - `test_una_linea_base_sin_su_unica_variable_degrada_a_la_media` — Regresión: sin demografía cargada la población llega toda NaN, se descarta y solo_poblacion fallaba con KeyError.
-- `test_la_media_es_el_promedio_de_entrenamiento`
-- `test_fit_predict_es_determinista_con_la_misma_semilla`
-- `test_modelo_desconocido_lanza_error`
-- `test_el_boosting_aprende_la_senal_y_gana_a_la_media`
+- `test_la_media_es_el_promedio_de_entrenamiento` — El modelo `media` predice el promedio del objetivo de entrenamiento.
+- `test_fit_predict_es_determinista_con_la_misma_semilla` — `fit_predict` da las mismas predicciones con la misma semilla.
+- `test_modelo_desconocido_lanza_error` — Un nombre de modelo desconocido lanza `ValueError`.
+- `test_el_boosting_aprende_la_senal_y_gana_a_la_media` — Sobre datos sintéticos con señal, el boosting aprende y baja la desviación de Poisson al menos un 10 % respecto a la media.
 - `test_una_variable_toda_nan_no_rompe_el_ajuste` ×3 — Regresión: sin datos de rutas la accesibilidad llega toda NaN y el boosting fallaba al discretizarla (ValueError: window shape cannot be larger than input array shape).
-- `test_el_conjunto_da_media_y_dispersion`
-- `test_las_celdas_de_un_bloque_comparten_etiqueta_y_el_desplazamiento_la_cambia`
-- `test_los_pliegues_no_parten_un_bloque_y_estan_equilibrados`
-- `test_la_desviacion_de_poisson_coincide_con_scikit_learn_y_los_casos_limite`
-- `test_precision_en_las_k_primeras_y_spearman`
-- `test_evaluate_devuelve_predicciones_fuera_de_muestra_para_todas_las_celdas`
+- `test_el_conjunto_da_media_y_dispersion` — El conjunto de modelos da media, desviación y percentiles 10 y 90; con un solo modelo la desviación es 0.
+- `test_las_celdas_de_un_bloque_comparten_etiqueta_y_el_desplazamiento_la_cambia` — Las celdas de un mismo bloque comparten etiqueta y desplazar los bloques cambia la etiqueta.
+- `test_los_pliegues_no_parten_un_bloque_y_estan_equilibrados` — Los pliegues no parten ningún bloque, están equilibrados y son reproducibles con la misma semilla.
+- `test_la_desviacion_de_poisson_coincide_con_scikit_learn_y_los_casos_limite` — La desviación de Poisson coincide con la de scikit-learn y maneja los casos límite (cero observado, predicción cero).
+- `test_precision_en_las_k_primeras_y_spearman` — La precisión en las k primeras y la correlación de Spearman dan los valores esperados, incluidos k mayor que n y una serie constante.
+- `test_evaluate_devuelve_predicciones_fuera_de_muestra_para_todas_las_celdas` — `evaluate` devuelve predicciones fuera de muestra para todas las celdas y repeticiones, y el resumen ordena los modelos por desviación.
 - `test_la_prediccion_de_una_celda_no_usa_su_propio_valor` — Fuera de muestra de verdad: cambiar el valor real de una celda no cambia su propia predicción.
-- `test_el_bootstrap_de_bloques_con_predicciones_identicas_da_cero`
-- `test_el_bootstrap_detecta_una_mejora_uniforme_y_es_prudente_si_solo_hay_un_bloque_mejor`
-- `test_decide_publica_solo_si_el_intervalo_queda_por_debajo_de_cero`
-- `test_decide_sin_mejora_clara_no_hay_ganador_y_marca_al_que_empeora`
+- `test_el_bootstrap_de_bloques_con_predicciones_identicas_da_cero` — El bootstrap de bloques con predicciones idénticas da diferencia e intervalo en cero.
+- `test_el_bootstrap_detecta_una_mejora_uniforme_y_es_prudente_si_solo_hay_un_bloque_mejor` — El bootstrap detecta una mejora uniforme y es prudente (el intervalo incluye 0) si la mejora está solo en un bloque; es reproducible con la misma semilla.
+- `test_decide_publica_solo_si_el_intervalo_queda_por_debajo_de_cero` — `decide` declara ganador solo si el intervalo de la diferencia queda por debajo de cero frente al mejor modelo de referencia.
+- `test_decide_sin_mejora_clara_no_hay_ganador_y_marca_al_que_empeora` — Sin mejora clara no hay ganador, y se marca como «peor» al modelo que empeora.
 - `test_decide_no_depende_de_cuantas_repeticiones_se_promedien` — Regresión: antes se promediaban las predicciones entre repeticiones y DESPUÉS se calculaba la desviación. Un candidato muy inestable (cada repetición falla mucho, pero en promedio acierta) salía como 'mejora' solo por ser un conjunto de modelos, y el veredicto cambiaba con el número de repeticiones.
-- `test_la_brecha_relativa_no_premia_solo_a_las_celdas_grandes`
-- `test_auc_y_artefacto_de_cartografia`
-- `test_conteos_de_foursquare_por_celda`
-- `test_zona_mas_cercana`
-- `test_la_herramienta_valida_un_objetivo_de_punta_a_punta`
-- `test_run_target_devuelve_todo_lo_necesario`
-- `test_la_herramienta_sin_foursquare_no_hace_el_contraste`
+- `test_la_brecha_relativa_no_premia_solo_a_las_celdas_grandes` — La brecha relativa no premia solo a las celdas grandes, a diferencia de la brecha absoluta, y es 0 si lo esperado es igual a lo observado.
+- `test_auc_y_artefacto_de_cartografia` — El AUC de presencia da 1 con una puntuación perfecta y NaN si todo es positivo; la proporción de brecha explicada por la cartografía se calcula frente a su referencia.
+- `test_conteos_de_foursquare_por_celda` — Los conteos de Foursquare por celda cuentan solo las categorías pedidas e ignoran los puntos fuera de la rejilla.
+- `test_zona_mas_cercana` — La zona más cercana a la celda de Valletta es Valletta.
+- `test_la_herramienta_valida_un_objetivo_de_punta_a_punta` — La herramienta valida un objetivo de punta a punta: imprime la decisión y el contraste con Foursquare, y no modifica la base de datos.
+- `test_run_target_devuelve_todo_lo_necesario` — `run_target` devuelve esperado, observado, brecha, variables, resumen y decisión, con la brecha igual a esperado menos observado.
+- `test_la_herramienta_sin_foursquare_no_hace_el_contraste` — Sin datos de Foursquare, la herramienta avisa y no hace el contraste.
 
 ## `tests/test_normalize_bronze_timestamps.py`
 
@@ -905,29 +905,29 @@
 > temporal. Los archivos que los módulos escriben en `logs/` (heartbeat, contador de
 > llamadas) se redirigen a `tmp_path`.
 
-- `test_overpass_run_once_guarda_los_pois_y_escribe_el_heartbeat`
-- `test_overpass_run_once_pasa_el_margen_al_cliente`
-- `test_overpass_un_segundo_ciclo_actualiza_en_vez_de_duplicar`
-- `test_overpass_si_la_descarga_falla_devuelve_0_y_no_toca_nada`
-- `test_overpass_heartbeat_contiene_una_fecha_iso_utc`
-- `test_overpass_heartbeat_no_rompe_si_no_puede_escribir`
-- `test_overpass_main_sin_intervalo_hace_un_ciclo_y_cierra_el_cliente`
-- `test_overpass_main_con_intervalo_repite_y_ctrl_c_sale_con_0`
-- `test_overpass_main_un_error_fatal_sale_con_1_y_cierra_el_cliente`
-- `test_contador_nuevo_empieza_en_las_llamadas_dadas_y_guarda_el_mes`
-- `test_contador_acumula_dentro_del_mismo_mes`
-- `test_contador_se_reinicia_al_cambiar_de_mes`
-- `test_contador_corrupto_se_reinicia_sin_fallar`
-- `test_contador_no_rompe_si_no_puede_guardar`
-- `test_foursquare_run_once_guarda_los_pois_cuenta_las_llamadas_y_escribe_el_heartbeat`
-- `test_foursquare_run_once_pide_zonas_y_rutas_al_cliente`
-- `test_foursquare_avisa_al_superar_el_limite_mensual`
-- `test_foursquare_no_avisa_si_queda_margen`
-- `test_foursquare_heartbeat_no_rompe_si_no_puede_escribir`
-- `test_foursquare_main_sin_clave_sale_con_1_sin_crear_el_cliente`
-- `test_foursquare_main_con_clave_hace_un_ciclo_y_cierra_el_cliente`
-- `test_foursquare_main_con_intervalo_repite_y_ctrl_c_sale_con_0`
-- `test_foursquare_main_un_error_fatal_sale_con_1_y_cierra_el_cliente`
+- `test_overpass_run_once_guarda_los_pois_y_escribe_el_heartbeat` — `run_once` de Overpass guarda los POIs en la base y escribe el heartbeat.
+- `test_overpass_run_once_pasa_el_margen_al_cliente` — `run_once` de Overpass pasa el margen indicado al cliente.
+- `test_overpass_un_segundo_ciclo_actualiza_en_vez_de_duplicar` — Un segundo ciclo de Overpass actualiza los POIs existentes en vez de duplicarlos.
+- `test_overpass_si_la_descarga_falla_devuelve_0_y_no_toca_nada` — Si la descarga de Overpass falla, `run_once` devuelve 0, no guarda nada y no escribe el heartbeat.
+- `test_overpass_heartbeat_contiene_una_fecha_iso_utc` — El heartbeat de Overpass contiene una fecha ISO en UTC reciente.
+- `test_overpass_heartbeat_no_rompe_si_no_puede_escribir` — El heartbeat de Overpass no rompe el ciclo si no puede escribirse; deja un aviso en el log.
+- `test_overpass_main_sin_intervalo_hace_un_ciclo_y_cierra_el_cliente` — `main` de Overpass sin intervalo hace un único ciclo con el margen indicado y cierra el cliente.
+- `test_overpass_main_con_intervalo_repite_y_ctrl_c_sale_con_0` — `main` de Overpass con intervalo repite los ciclos esperando el intervalo en horas, y Ctrl+C sale con código 0.
+- `test_overpass_main_un_error_fatal_sale_con_1_y_cierra_el_cliente` — Un error fatal en `main` de Overpass sale con código 1 y cierra el cliente.
+- `test_contador_nuevo_empieza_en_las_llamadas_dadas_y_guarda_el_mes` — El contador mensual nuevo empieza con las llamadas dadas y guarda el mes en curso.
+- `test_contador_acumula_dentro_del_mismo_mes` — El contador mensual acumula las llamadas dentro del mismo mes.
+- `test_contador_se_reinicia_al_cambiar_de_mes` — El contador mensual se reinicia al cambiar de mes.
+- `test_contador_corrupto_se_reinicia_sin_fallar` — Un contador corrupto se reinicia sin fallar.
+- `test_contador_no_rompe_si_no_puede_guardar` — El contador devuelve la cuenta aunque no pueda guardarla y deja un aviso en el log.
+- `test_foursquare_run_once_guarda_los_pois_cuenta_las_llamadas_y_escribe_el_heartbeat` — `run_once` de Foursquare guarda los POIs, suma las llamadas del ciclo al contador y escribe el heartbeat.
+- `test_foursquare_run_once_pide_zonas_y_rutas_al_cliente` — `run_once` de Foursquare pide al cliente las zonas y las rutas.
+- `test_foursquare_avisa_al_superar_el_limite_mensual` — Foursquare avisa al superar el límite mensual del tier gratis.
+- `test_foursquare_no_avisa_si_queda_margen` — Foursquare no avisa si queda margen sobre el límite mensual.
+- `test_foursquare_heartbeat_no_rompe_si_no_puede_escribir` — El heartbeat de Foursquare no rompe el ciclo si no puede escribirse; deja un aviso en el log.
+- `test_foursquare_main_sin_clave_sale_con_1_sin_crear_el_cliente` — Sin `FOURSQUARE_API_KEY`, `main` de Foursquare sale con código 1 sin crear el cliente.
+- `test_foursquare_main_con_clave_hace_un_ciclo_y_cierra_el_cliente` — Con clave, `main` de Foursquare hace un único ciclo y cierra el cliente.
+- `test_foursquare_main_con_intervalo_repite_y_ctrl_c_sale_con_0` — `main` de Foursquare con intervalo repite los ciclos esperando el intervalo en horas, y Ctrl+C sale con código 0.
+- `test_foursquare_main_un_error_fatal_sale_con_1_y_cierra_el_cliente` — Un error fatal en `main` de Foursquare sale con código 1 y cierra el cliente.
 
 ## `tests/test_predictive_modeling_dashboard.py`
 
