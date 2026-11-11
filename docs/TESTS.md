@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**44 archivos · 712 funciones de test · 801 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**44 archivos · 713 funciones de test · 802 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -27,7 +27,7 @@
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 7 | 7 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
-| [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 3 | 3 |
+| [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
 | [`tests/test_foursquare_client.py`](#teststest_foursquare_clientpy) | 12 | 28 |
 | [`tests/test_hybrid_scheduler.py`](#teststest_hybrid_schedulerpy) | 3 | 3 |
 | [`tests/test_location_scoring.py`](#teststest_location_scoringpy) | 22 | 22 |
@@ -429,7 +429,8 @@
 
 - `test_black_tiene_la_misma_version_fijada_en_el_ci_los_requisitos_y_el_readme` — `black==X` aparece con la misma versión en el workflow, en requirements-dev.txt y en el README.
 - `test_isort_tiene_la_misma_version_fijada_en_el_ci_los_requisitos_y_el_readme` — `isort==X` aparece con la misma versión en el workflow, en requirements-dev.txt y en el README.
-- `test_el_ci_formatea_los_mismos_directorios_que_comprueba_flake8_y_black_lee_pyproject` — El job de formato comprueba `src/ tests/ streamlit_app/ tools/` sin repetir opciones (van en pyproject.toml).
+- `test_el_ci_comprueba_el_formato_de_todos_los_archivos_de_codigo_sin_neutralizar_el_paso` — Black e isort se ejecutan en modo comprobación sobre todo el código, sin `|| true` ni opciones propias.
+- `test_los_archivos_formateados_existen_y_pyproject_fija_la_configuracion` — Las rutas que formatea el CI existen, y la línea de 120 y el perfil black salen de pyproject.toml.
 
 ## `tests/test_foursquare_client.py`
 
