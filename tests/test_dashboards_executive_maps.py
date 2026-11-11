@@ -179,6 +179,35 @@ def test_executive_con_la_base_vacia_no_lanza_excepciones(base):
     assert not at.exception, [e.value for e in at.exception]
 
 
+def test_executive_con_la_base_vacia_no_muestra_un_0_por_ciento_ni_una_alerta_falsa(base):
+    """Sin mediciones la fiabilidad no es 0 %: es desconocida. Antes salía «0.0%» y la alerta «Low system reliability»."""
+    at = _abrir(APP_EXEC)
+    assert not at.exception, [e.value for e in at.exception]
+    m = _metricas(at)
+    assert m["System Avg Travel Time"].value == "—" and m["System Reliability"].value == "—"
+    assert m["Total Measurements"].value == "0" and m["Active Routes"].value == "0"
+    avisos = " | ".join(w.value for w in at.warning)                  # los gráficos avisan aparte de que no hay datos
+    assert "Low system reliability" not in avisos and "High average" not in avisos and not at.success
+    assert any("no se evalúan alertas" in i.value for i in at.info)
+
+
+def test_executive_con_datos_sigue_mostrando_las_cifras_y_las_alertas(base):
+    """El aviso de «sin mediciones» no aparece cuando sí las hay."""
+    _, ruta = base
+    _poblar(ruta, dias_atras=[0, 1])
+    at = _abrir(APP_EXEC)
+    m = _metricas(at)
+    assert m["System Reliability"].value.endswith("%") and m["System Avg Travel Time"].value.endswith(" min")
+    assert not any("no se evalúan alertas" in i.value for i in at.info)
+    assert at.success or at.warning
+
+
+@pytest.mark.parametrize("resumen, esperado", [({}, False), ({"total_measurements": 0}, False),
+                                               ({"total_measurements": 1}, True)])
+def test_hay_datos_solo_si_el_resumen_tiene_mediciones(resumen, esperado):
+    assert ex._hay_datos(resumen) is esperado
+
+
 # ---------------------------------------------------------------------------
 # Maps
 # ---------------------------------------------------------------------------

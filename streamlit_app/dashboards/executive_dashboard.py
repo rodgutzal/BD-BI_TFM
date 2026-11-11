@@ -88,6 +88,12 @@ def _delta(current, previous, fmt: str):
     return fmt.format(current - previous)
 
 
+def _hay_datos(summary: dict) -> bool:
+    """¿El resumen se calculó con mediciones? Sin filas en el periodo (una base recién creada, o un colector parado
+    más de 30 días) la capa Gold devuelve ceros, y un 0 % de fiabilidad no es una medición sino la ausencia de ella."""
+    return bool(summary.get('total_measurements'))
+
+
 def render_kpi_cards(summary: dict, comparison: dict = None):
     """Render executive KPI cards.
 
@@ -98,12 +104,13 @@ def render_kpi_cards(summary: dict, comparison: dict = None):
     comparison = comparison or {}
     cur = comparison.get('current') or {}
     prev = comparison.get('previous') or {}
+    hay = _hay_datos(summary)
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric(
             "System Avg Travel Time",
-            f"{summary.get('system_avg_travel_time', 0):.1f} min",
+            f"{summary.get('system_avg_travel_time', 0):.1f} min" if hay else "—",
             delta=_delta(cur.get('avg_travel_time'), prev.get('avg_travel_time'), "{:+.1f} min vs. periodo anterior"),
             delta_color="inverse",  # menos tiempo de viaje es mejor
         )
@@ -111,7 +118,7 @@ def render_kpi_cards(summary: dict, comparison: dict = None):
     with col2:
         st.metric(
             "System Reliability",
-            f"{summary.get('system_reliability', 0):.1f}%",
+            f"{summary.get('system_reliability', 0):.1f}%" if hay else "—",
             delta=_delta(cur.get('reliability'), prev.get('reliability'), "{:+.1f} pts vs. periodo anterior"),
         )
 
@@ -283,6 +290,10 @@ def main():
     st.subheader("⚠️ System Alerts")
     alerts = []
 
+    if not _hay_datos(summary):
+        # Sin mediciones no hay nada que evaluar: antes la fiabilidad 0 % disparaba «Low system reliability».
+        st.info("Sin mediciones en los últimos 30 días: no se evalúan alertas.")
+        return
     if summary.get('system_avg_travel_time', 0) > 30:
         alerts.append("🔴 High average travel time detected (>30 min)")
     if summary.get('system_reliability', 0) < 50:
