@@ -379,6 +379,15 @@ def test_measure_lens_variance_usa_el_contexto_del_paquete(paquete, capsys):
     assert "Contexto de OSM cargado" in salida and "edificio" in salida
 
 
+def test_requirements_fija_scipy_y_statsmodels():
+    """Las dos librerías estadísticas del dashboard van con == (antes >=): una versión nueva puede cambiar resultados o
+    no tener wheels para el Python de Docker y CI."""
+    lineas = [l.split("#")[0].strip().lower() for l in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()]
+    for paquete in ("scipy", "statsmodels"):
+        fijas = [l for l in lineas if l.startswith(paquete)]
+        assert len(fijas) == 1 and fijas[0].startswith(paquete + "=="), f"{paquete} no está fijado con == en requirements.txt"
+
+
 def test_requirements_ml_fija_versiones_exactas():
     """requirements-ml.txt fija con == las librerías que cambian los números, y coinciden con las de requirements.txt
     cuando esta también las fija."""

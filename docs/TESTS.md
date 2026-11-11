@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**42 archivos · 671 funciones de test · 760 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**42 archivos · 672 funciones de test · 761 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -35,7 +35,7 @@
 | [`tests/test_migrations.py`](#teststest_migrationspy) | 18 | 18 |
 | [`tests/test_ml_context.py`](#teststest_ml_contextpy) | 33 | 33+ |
 | [`tests/test_ml_grid.py`](#teststest_ml_gridpy) | 19 | 22 |
-| [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 35 | 35 |
+| [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 36 | 36 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
 | [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 23 | 23 |
@@ -624,6 +624,7 @@
 - `test_validate_location_model_rechaza_un_paquete_alterado` — La herramienta de validación comprueba el paquete antes de entrenar y no sigue si no coincide.
 - `test_measure_lens_variance_da_lo_mismo_con_el_paquete_que_con_la_base` — Los indicadores de las lentes salen idénticos desde la base y desde el paquete (sin contexto en ambos).
 - `test_measure_lens_variance_usa_el_contexto_del_paquete` — Sin --contexto, el contexto que lleva el paquete se suma a los conteos y se informa.
+- `test_requirements_fija_scipy_y_statsmodels` — Las dos librerías estadísticas del dashboard van con == (antes >=): una versión nueva puede cambiar resultados o no tener wheels para el Python de Docker y CI.
 - `test_requirements_ml_fija_versiones_exactas` — requirements-ml.txt fija con == las librerías que cambian los números, y coinciden con las de requirements.txt cuando esta también las fija.
 
 ## `tests/test_ml_lenses.py`
