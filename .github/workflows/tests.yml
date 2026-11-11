@@ -134,17 +134,17 @@ jobs:
 
     - name: Install linting tools
       run: |
-        pip install black==26.10.1 isort==9.0.2 pylint
+        pip install black==26.10.1 isort==9.0.2
 
     # BLOQUEANTES desde que el código se formateó (PR #59). La configuración
     # (línea de 120, perfil black) está en pyproject.toml. Las versiones van
     # fijadas porque cada versión mayor de black puede cambiar el formato.
-    # En local: `black src/ tests/ streamlit_app/ tools/` e `isort` sobre lo mismo (en Windows, con
-    # PYTHONUTF8=1 para que isort lea los archivos con acentos).
+    # En local: `black` e `isort` sobre los mismos archivos que los dos pasos de abajo (en
+    # Windows, con PYTHONUTF8=1 para que isort lea los archivos con acentos).
     - name: Check code formatting
       run: |
-        black src/ tests/ streamlit_app/ tools/ --check
+        black src/ tests/ streamlit_app/ tools/ collect.py setup.py train_ensemble_models.py train_models.py --check
 
     - name: Check import sorting
       run: |
-        isort src/ tests/ streamlit_app/ tools/ --check-only
+        isort src/ tests/ streamlit_app/ tools/ collect.py setup.py train_ensemble_models.py train_models.py --check-only
