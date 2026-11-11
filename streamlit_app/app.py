@@ -77,10 +77,10 @@ def main():
     )
 
     # Dashboard selector
-    st.sidebar.markdown("## 📊 Dashboard Selection")
+    st.sidebar.markdown("## 📊 Selección de dashboard")
 
     dashboard = st.sidebar.radio(
-        "Choose your dashboard:",
+        "Elige tu dashboard:",
         ["Executive", "Operations", "Analyst", "Maps", "Recomendación"],
         index=0,
         label_visibility="collapsed"
@@ -89,22 +89,22 @@ def main():
     # User info
     st.sidebar.markdown("---")
     st.sidebar.markdown("""
-    ### 👤 User Roles
+    ### 👤 Roles de usuario
 
-    **Executive:** High-level KPIs and strategic insights
+    **Executive:** indicadores clave y visión estratégica
 
-    **Operations:** Real-time monitoring and alerts
+    **Operations:** monitoreo en tiempo real y alertas
 
-    **Analyst:** Data exploration and statistical analysis
+    **Analyst:** exploración de datos y análisis estadístico
 
-    **Maps:** Geographic view of monitored routes
+    **Maps:** vista geográfica de las rutas monitorizadas
 
     **Recomendación:** ¿dónde conviene abrir un negocio? (usuario final)
     """)
 
     # System status (derivado del último dato real de tráfico en la base)
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🔋 System Status")
+    st.sidebar.markdown("### 🔋 Estado del sistema")
     render_system_status()
 
     # Route dashboard based on selection
