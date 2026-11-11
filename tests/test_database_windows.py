@@ -53,6 +53,7 @@ def test_el_limit_antiguo_si_recortaba_la_ventana(db_grande):
 
 
 def test_promedio_diario_cubre_toda_la_ventana(db_grande):
+    """El promedio diario cubre toda la ventana, no pierde ninguna fila y sale ordenado por fecha."""
     daily = db_grande.get_daily_average(days=31)
     assert len(daily) >= 30
     assert daily["measurements"].sum() == 12_000      # ninguna fila se pierde
@@ -61,12 +62,14 @@ def test_promedio_diario_cubre_toda_la_ventana(db_grande):
 
 
 def test_promedio_diario_respeta_la_ventana(db_grande):
+    """Con una ventana de 3 días el promedio diario devuelve pocos días y menos filas que con la ventana completa."""
     corto = db_grande.get_daily_average(days=3)
     assert 0 < len(corto) <= 5   # 3 días de ventana + el tramo parcial de cada borde
     assert corto["measurements"].sum() < 12_000
 
 
 def test_promedio_diario_calcula_bien_el_promedio(db):
+    """El promedio diario es la media de los tiempos de viaje del día."""
     hoy = AHORA
     db.save_records_to_sqlite([
         _registro(hoy, minutos=10.0),
@@ -77,10 +80,12 @@ def test_promedio_diario_calcula_bien_el_promedio(db):
 
 
 def test_promedio_diario_base_vacia(db):
+    """Con una base vacía el promedio diario devuelve una tabla vacía."""
     assert db.get_daily_average(days=30).empty
 
 
 def test_promedio_por_ruta_y_hora(db):
+    """El promedio por ruta y hora agrupa por origen, destino y hora, y cuenta las mediciones de cada grupo."""
     base = AHORA.replace(hour=10, minute=0)
     db.save_records_to_sqlite([
         _registro(base, "Msida", "Gzira", 10.0),
@@ -96,12 +101,14 @@ def test_promedio_por_ruta_y_hora(db):
 
 
 def test_promedio_por_ruta_y_hora_no_pierde_filas_con_mucha_data(db_grande):
+    """El promedio por ruta y hora no pierde filas con mucho volumen y las horas están entre 0 y 23."""
     df = db_grande.get_route_hour_average(days=31)
     assert df["measurements"].sum() == 12_000
     assert df["hour"].between(0, 23).all()
 
 
 def test_columnas_numericas_excluyen_el_id_y_el_texto(db):
+    """Las columnas numéricas disponibles excluyen el `id` y las columnas de texto."""
     cols = db.get_numeric_columns()
     assert "travel_time_min" in cols and "origin_temperature" in cols
     assert "id" not in cols
@@ -109,21 +116,25 @@ def test_columnas_numericas_excluyen_el_id_y_el_texto(db):
 
 
 def test_query_columns_trae_solo_lo_pedido_sin_limit(db_grande):
+    """`query_columns` devuelve solo las columnas pedidas y todas las filas de la ventana, sin límite."""
     df = db_grande.query_columns(["travel_time_min", "origin_temperature"], days=31)
     assert list(df.columns) == ["travel_time_min", "origin_temperature"]
     assert len(df) == 12_000
 
 
 def test_query_columns_rechaza_columnas_que_no_existen(db):
+    """`query_columns` lanza `ValueError` si una columna no existe."""
     with pytest.raises(ValueError):
         db.query_columns(["travel_time_min", "no_existe"], days=1)
 
 
 def test_query_columns_no_permite_inyeccion_sql(db_grande):
+    """`query_columns` rechaza un nombre de columna con inyección SQL y no toca la tabla."""
     with pytest.raises(ValueError):
         db_grande.query_columns(["travel_time_min FROM route_measurements; DROP TABLE route_measurements; --"], days=1)
     assert len(db_grande.query_columns(["travel_time_min"], days=31)) == 12_000   # la tabla sigue ahí
 
 
 def test_query_columns_sin_columnas(db):
+    """`query_columns` sin columnas devuelve una tabla vacía."""
     assert db.query_columns([], days=1).empty

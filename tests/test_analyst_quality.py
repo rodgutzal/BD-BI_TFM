@@ -90,6 +90,7 @@ def _metricas(at):
 
 
 def test_abrir_analyst_no_usa_las_consultas_caras(espia):
+    """Abrir el Analyst no lanza `get_available_routes` ni `get_all_routes_statistics`; hace un único `get_data_profile` compartido por todas las pestañas."""
     db, llamadas = espia
     at = _abrir()
     assert not at.exception, [e.value for e in at.exception]
@@ -109,6 +110,7 @@ def test_ninguna_consulta_carga_la_base_entera(espia):
 
 
 def test_las_metricas_de_calidad_son_las_del_perfil(espia):
+    """Total de registros, valores faltantes, duplicados y rango de fechas de la pestaña de calidad coinciden con los del perfil de datos."""
     db, _ = espia
     p = db.get_data_profile()
     m = _metricas(_abrir())
@@ -119,6 +121,7 @@ def test_las_metricas_de_calidad_son_las_del_perfil(espia):
 
 
 def test_la_completitud_por_ruta_sale_del_perfil_y_cubre_todas_las_rutas(espia):
+    """La tabla de completitud sale del perfil, trae todas las rutas y la ruta con `traffic_delay_min` vacío es menos completa que la que lo trae."""
     db, _ = espia
     at = _abrir()
     tablas = [t.value for t in at.dataframe if "Completeness" in getattr(t.value, "columns", [])]
@@ -132,6 +135,7 @@ def test_la_completitud_por_ruta_sale_del_perfil_y_cubre_todas_las_rutas(espia):
 
 
 def test_las_muestras_por_ruta_de_model_performance_son_las_filas_reales(espia):
+    """La tabla de muestras por ruta de Model Performance cuenta las filas reales de cada ruta."""
     db, _ = espia
     at = _abrir()
     tablas = [t.value for t in at.dataframe if "Samples" in getattr(t.value, "columns", [])]

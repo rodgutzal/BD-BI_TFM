@@ -41,12 +41,14 @@ def _datos(n=240, filas_sin_clima=(3, 50, 51), seed=0):
 
 
 def test_clima_ausente_no_se_convierte_en_lluvia():
+    """Una fila sin clima queda como NaN en el grupo de clima, no como «lluvia»."""
     d = pm._engineer_features(_datos())
     assert d.loc[3, "origin_weather_grp"] != d.loc[3, "origin_weather_grp"]   # NaN, no "lluvia"
     assert d["origin_weather_grp"].isna().sum() == 3
 
 
 def test_descripciones_conocidas_y_desconocidas_se_agrupan_como_antes():
+    """Las descripciones de clima conocidas y las desconocidas se agrupan igual que antes del cambio."""
     d = pm._engineer_features(_datos(filas_sin_clima=()))
     por_desc = d.groupby("origin_weather")["origin_weather_grp"].first()
     assert por_desc["clear sky"] == "despejado"
@@ -57,6 +59,7 @@ def test_descripciones_conocidas_y_desconocidas_se_agrupan_como_antes():
 
 
 def test_complete_cases_excluye_solo_las_filas_sin_clima():
+    """`_complete_cases` descarta solo las filas sin clima y no modifica el DataFrame original."""
     d = pm._engineer_features(_datos(n=240, filas_sin_clima=(3, 50, 51)))
     limpio = pm._complete_cases(d)
     assert len(limpio) == 237
@@ -66,11 +69,13 @@ def test_complete_cases_excluye_solo_las_filas_sin_clima():
 
 
 def test_sin_filas_incompletas_no_se_pierde_nada():
+    """Si no hay filas incompletas, `_complete_cases` conserva todas."""
     d = pm._engineer_features(_datos(filas_sin_clima=()))
     assert len(pm._complete_cases(d)) == len(d)
 
 
 def test_regresion_no_falla_con_filas_sin_clima():
+    """La regresión se ajusta sin fallar aunque haya filas sin clima."""
     d = pm._engineer_features(_datos())
     res = pm._fit_regression(d)
     assert res is not None
