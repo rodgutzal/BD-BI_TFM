@@ -20,9 +20,14 @@ AHORA = datetime.now(timezone.utc).replace(minute=30, second=0, microsecond=0)
 
 def _registro(ts, origin="Msida", destination="Gzira", minutos=10.0, source="ors"):
     return {
-        "timestamp": ts.isoformat(), "origin": origin, "destination": destination,
-        "data_source": source, "travel_time_min": minutos, "distance_km": 2.0,
-        "average_speed_kmh": 30.0, "origin_temperature": 20.0,
+        "timestamp": ts.isoformat(),
+        "origin": origin,
+        "destination": destination,
+        "data_source": source,
+        "travel_time_min": minutos,
+        "distance_km": 2.0,
+        "average_speed_kmh": 30.0,
+        "origin_temperature": 20.0,
     }
 
 
@@ -38,7 +43,7 @@ def db_grande(db):
     registros = []
     for dia in range(30):
         for i in range(400):
-            ts = AHORA - timedelta(days=dia, seconds=i * 60)   # i*60s: dentro de las mismas ~7 h
+            ts = AHORA - timedelta(days=dia, seconds=i * 60)  # i*60s: dentro de las mismas ~7 h
             origen, destino = ("Msida", "Gzira") if i % 2 == 0 else ("Msida", "Sliema")
             registros.append(_registro(ts, origen, destino, minutos=10.0 + (dia % 5), source="ors"))
     db.save_records_to_sqlite(registros)
@@ -56,7 +61,7 @@ def test_promedio_diario_cubre_toda_la_ventana(db_grande):
     """El promedio diario cubre toda la ventana, no pierde ninguna fila y sale ordenado por fecha."""
     daily = db_grande.get_daily_average(days=31)
     assert len(daily) >= 30
-    assert daily["measurements"].sum() == 12_000      # ninguna fila se pierde
+    assert daily["measurements"].sum() == 12_000  # ninguna fila se pierde
     assert list(daily.columns) == ["date", "avg_travel_time", "measurements"]
     assert daily["date"].is_monotonic_increasing
 
@@ -64,17 +69,19 @@ def test_promedio_diario_cubre_toda_la_ventana(db_grande):
 def test_promedio_diario_respeta_la_ventana(db_grande):
     """Con una ventana de 3 días el promedio diario devuelve pocos días y menos filas que con la ventana completa."""
     corto = db_grande.get_daily_average(days=3)
-    assert 0 < len(corto) <= 5   # 3 días de ventana + el tramo parcial de cada borde
+    assert 0 < len(corto) <= 5  # 3 días de ventana + el tramo parcial de cada borde
     assert corto["measurements"].sum() < 12_000
 
 
 def test_promedio_diario_calcula_bien_el_promedio(db):
     """El promedio diario es la media de los tiempos de viaje del día."""
     hoy = AHORA
-    db.save_records_to_sqlite([
-        _registro(hoy, minutos=10.0),
-        _registro(hoy - timedelta(minutes=1), minutos=20.0),
-    ])
+    db.save_records_to_sqlite(
+        [
+            _registro(hoy, minutos=10.0),
+            _registro(hoy - timedelta(minutes=1), minutos=20.0),
+        ]
+    )
     daily = db.get_daily_average(days=2)
     assert daily["avg_travel_time"].iloc[-1] == pytest.approx(15.0)
 
@@ -87,12 +94,14 @@ def test_promedio_diario_base_vacia(db):
 def test_promedio_por_ruta_y_hora(db):
     """El promedio por ruta y hora agrupa por origen, destino y hora, y cuenta las mediciones de cada grupo."""
     base = AHORA.replace(hour=10, minute=0)
-    db.save_records_to_sqlite([
-        _registro(base, "Msida", "Gzira", 10.0),
-        _registro(base + timedelta(minutes=5), "Msida", "Gzira", 20.0),
-        _registro(base + timedelta(hours=1), "Msida", "Gzira", 40.0),
-        _registro(base, "Msida", "Sliema", 7.0),
-    ])
+    db.save_records_to_sqlite(
+        [
+            _registro(base, "Msida", "Gzira", 10.0),
+            _registro(base + timedelta(minutes=5), "Msida", "Gzira", 20.0),
+            _registro(base + timedelta(hours=1), "Msida", "Gzira", 40.0),
+            _registro(base, "Msida", "Sliema", 7.0),
+        ]
+    )
     df = db.get_route_hour_average(days=2).set_index(["origin", "destination", "hour"])
     assert df.loc[("Msida", "Gzira", 10), "avg_travel_time"] == pytest.approx(15.0)
     assert df.loc[("Msida", "Gzira", 10), "measurements"] == 2
@@ -132,7 +141,7 @@ def test_query_columns_no_permite_inyeccion_sql(db_grande):
     """`query_columns` rechaza un nombre de columna con inyección SQL y no toca la tabla."""
     with pytest.raises(ValueError):
         db_grande.query_columns(["travel_time_min FROM route_measurements; DROP TABLE route_measurements; --"], days=1)
-    assert len(db_grande.query_columns(["travel_time_min"], days=31)) == 12_000   # la tabla sigue ahí
+    assert len(db_grande.query_columns(["travel_time_min"], days=31)) == 12_000  # la tabla sigue ahí
 
 
 def test_query_columns_sin_columnas(db):

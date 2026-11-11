@@ -21,15 +21,22 @@ HOY = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond
 
 def _df(n=6, origin="Msida", destination="Gzira", base=HOY, no_traffic=None):
     ts = [base + timedelta(hours=i) for i in range(n)]
-    return pd.DataFrame({
-        "timestamp": [t.isoformat() for t in ts],
-        "origin": origin, "destination": destination,
-        "travel_time_min": [10.0, 12.0, 11.0, 15.0, 9.0, 13.0][:n],
-        "no_traffic_time_min": [no_traffic] * n,
-        "average_speed_kmh": 30.0,
-        "origin_temperature": 20.0, "origin_humidity": 50.0, "origin_weather": "clear",
-        "destination_temperature": 20.0, "destination_humidity": 50.0, "destination_weather": "clear",
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": [t.isoformat() for t in ts],
+            "origin": origin,
+            "destination": destination,
+            "travel_time_min": [10.0, 12.0, 11.0, 15.0, 9.0, 13.0][:n],
+            "no_traffic_time_min": [no_traffic] * n,
+            "average_speed_kmh": 30.0,
+            "origin_temperature": 20.0,
+            "origin_humidity": 50.0,
+            "origin_weather": "clear",
+            "destination_temperature": 20.0,
+            "destination_humidity": 50.0,
+            "destination_weather": "clear",
+        }
+    )
 
 
 def _count(db_path, table):
@@ -48,6 +55,7 @@ def db_path(tmp_path):
 # ---------------------------------------------------------------------------
 # Bronze
 # ---------------------------------------------------------------------------
+
 
 def test_bronze_inserta_las_filas_validas(db_path):
     """Bronze inserta todas las filas válidas y devuelve cuántas."""
@@ -92,8 +100,8 @@ def test_bronze_descarta_duplicados_dentro_del_lote(db_path):
 def test_bronze_descarta_tiempos_fuera_de_rango_y_nulos(db_path):
     """Bronze descarta las filas con tiempo de viaje fuera de rango o nulo."""
     df = _df(n=4)
-    df.loc[0, "travel_time_min"] = 9999.0   # fuera de (0, 500)
-    df.loc[1, "travel_time_min"] = None     # nulo en columna crítica
+    df.loc[0, "travel_time_min"] = 9999.0  # fuera de (0, 500)
+    df.loc[1, "travel_time_min"] = None  # nulo en columna crítica
     r = BronzeLayer(db_path).ingest(df)
     assert r["inserted_records"] == 2
 
@@ -111,6 +119,7 @@ def test_bronze_guarda_timestamps_iso_con_t(db_path):
 # ---------------------------------------------------------------------------
 # Silver
 # ---------------------------------------------------------------------------
+
 
 def _bronze_df(db_path):
     conn = sqlite3.connect(db_path)
@@ -133,9 +142,9 @@ def test_silver_transforma_y_agrega_variables_temporales(db_path):
     ).fetchone()
     conn.close()
     assert row[0] == 10.0
-    assert row[1] == pytest.approx(2.0)          # 10 - 8
-    assert row[2] == "moderate"                   # 1 < retraso <= 4
-    assert row[3] == 0                            # la hora de la primera medición
+    assert row[1] == pytest.approx(2.0)  # 10 - 8
+    assert row[2] == "moderate"  # 1 < retraso <= 4
+    assert row[3] == 0  # la hora de la primera medición
 
 
 def test_silver_sin_tiempo_sin_trafico_deja_el_retraso_desconocido(db_path):
@@ -181,6 +190,7 @@ def test_silver_agregacion_horaria(db_path):
 # ---------------------------------------------------------------------------
 # Gold
 # ---------------------------------------------------------------------------
+
 
 def _poblar_hasta_silver(db_path, **kwargs):
     BronzeLayer(db_path).ingest(_df(**kwargs))
@@ -228,7 +238,7 @@ def test_gold_ranking_ordena_por_fiabilidad(db_path):
     """El ranking de Gold ordena las rutas por fiabilidad y pone primero la más estable."""
     BronzeLayer(db_path).ingest(_df(origin="Msida", destination="Gzira"))
     estable = _df(origin="Msida", destination="Sliema", base=HOY)
-    estable["travel_time_min"] = 10.0                       # sin variación -> fiabilidad 100
+    estable["travel_time_min"] = 10.0  # sin variación -> fiabilidad 100
     BronzeLayer(db_path).ingest(estable)
     SilverLayer(db_path).transform_bronze(_bronze_df(db_path))
 
@@ -280,20 +290,28 @@ def test_gold_resumen_ejecutivo_con_datos(db_path):
 # Pipeline completo
 # ---------------------------------------------------------------------------
 
+
 def test_pipeline_completo_es_idempotente(tmp_path):
     """El pipeline completo (Bronze, Silver y Gold) es idempotente: ejecutarlo de nuevo no cambia los recuentos de cada capa."""
     db_path = tmp_path / "t.db"
     db = RouteDatabase(tmp_path / "t.csv", db_path)
-    db.save_records_to_sqlite([
-        {"timestamp": (HOY + timedelta(hours=i)).isoformat(), "origin": "Msida", "destination": "Gzira",
-         "data_source": "tomtom", "travel_time_min": 10.0 + i, "no_traffic_time_min": 8.0,
-         "average_speed_kmh": 30.0}
-        for i in range(5)
-    ])
+    db.save_records_to_sqlite(
+        [
+            {
+                "timestamp": (HOY + timedelta(hours=i)).isoformat(),
+                "origin": "Msida",
+                "destination": "Gzira",
+                "data_source": "tomtom",
+                "travel_time_min": 10.0 + i,
+                "no_traffic_time_min": 8.0,
+                "average_speed_kmh": 30.0,
+            }
+            for i in range(5)
+        ]
+    )
 
     run_pipeline(db_path)
-    cuentas = {t: _count(db_path, t) for t in
-               ("bronze_measurements", "silver_measurements", "gold_route_kpis")}
+    cuentas = {t: _count(db_path, t) for t in ("bronze_measurements", "silver_measurements", "gold_route_kpis")}
     assert cuentas["bronze_measurements"] == 5
     assert cuentas["silver_measurements"] == 5
     assert cuentas["gold_route_kpis"] >= 1

@@ -29,10 +29,7 @@ def backfill(csv_path: Path) -> int:
     try:
         import psycopg2
     except ImportError:
-        logger.error(
-            "psycopg2-binary no está instalado. "
-            "Instálalo con `pip install psycopg2-binary`."
-        )
+        logger.error("psycopg2-binary no está instalado. " "Instálalo con `pip install psycopg2-binary`.")
         return 0
 
     if not csv_path.exists():
@@ -61,19 +58,21 @@ def backfill(csv_path: Path) -> int:
 
     rows = []
     for _, row in df.iterrows():
-        rows.append((
-            row.get("timestamp"),
-            row.get("origin"),
-            row.get("destination"),
-            row.get("distance_km"),
-            row.get("travel_time_min"),
-            row.get("origin_temperature"),
-            row.get("origin_humidity"),
-            row.get("origin_weather"),
-            row.get("mobility_level"),
-            row.get("data_source") or "unknown",
-            row.get("traffic_delay_min"),
-        ))
+        rows.append(
+            (
+                row.get("timestamp"),
+                row.get("origin"),
+                row.get("destination"),
+                row.get("distance_km"),
+                row.get("travel_time_min"),
+                row.get("origin_temperature"),
+                row.get("origin_humidity"),
+                row.get("origin_weather"),
+                row.get("mobility_level"),
+                row.get("data_source") or "unknown",
+                row.get("traffic_delay_min"),
+            )
+        )
 
     conn = None
     try:

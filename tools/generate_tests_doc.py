@@ -30,15 +30,15 @@ OUTPUT = ROOT / "docs" / "TESTS.md"
 
 @dataclass
 class TestInfo:
-    name: str                      # "test_algo" o "TestClase::test_algo"
-    doc: str                       # primer párrafo del docstring, en una línea ("" si no tiene)
-    cases: Optional[int]           # casos que genera parametrize; None si no se pueden contar
+    name: str  # "test_algo" o "TestClase::test_algo"
+    doc: str  # primer párrafo del docstring, en una línea ("" si no tiene)
+    cases: Optional[int]  # casos que genera parametrize; None si no se pueden contar
 
 
 @dataclass
 class FileInfo:
-    path: str                      # "tests/test_x.py"
-    doc: str                       # docstring completo del módulo
+    path: str  # "tests/test_x.py"
+    doc: str  # docstring completo del módulo
     tests: List[TestInfo] = field(default_factory=list)
 
     @property
@@ -80,7 +80,9 @@ def _tests_in(body, prefix: str = "") -> List[TestInfo]:
     found = []
     for node in body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
-            found.append(TestInfo(prefix + node.name, _first_paragraph(ast.get_docstring(node)), parametrize_cases(node)))
+            found.append(
+                TestInfo(prefix + node.name, _first_paragraph(ast.get_docstring(node)), parametrize_cases(node))
+            )
         elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
             found.extend(_tests_in(node.body, prefix=f"{node.name}::"))
     return found
@@ -90,11 +92,13 @@ def collect(tests_dir: Path = TESTS_DIR) -> List[FileInfo]:
     files = []
     for path in sorted(tests_dir.glob("test_*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        files.append(FileInfo(
-            path=f"tests/{path.name}",
-            doc=(ast.get_docstring(tree) or "").strip(),
-            tests=_tests_in(tree.body),
-        ))
+        files.append(
+            FileInfo(
+                path=f"tests/{path.name}",
+                doc=(ast.get_docstring(tree) or "").strip(),
+                tests=_tests_in(tree.body),
+            )
+        )
     return files
 
 

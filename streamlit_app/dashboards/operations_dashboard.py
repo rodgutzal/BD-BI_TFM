@@ -74,18 +74,20 @@ def render_real_time_alerts(db):
     alerts = []
 
     for _, row in stats_df.iterrows():
-        avg_time = _safe(row.get('avg_travel_time'))
+        avg_time = _safe(row.get("avg_travel_time"))
         if avg_time > 30:
-            alerts.append({
-                'route': f"{row['origin']} → {row['destination']}",
-                'severity': 'HIGH' if avg_time > 45 else 'MEDIUM',
-                'travel_time': f"{avg_time:.1f} min",
-                'delay': f"{row.get('avg_delay'):.1f} min" if pd.notna(row.get('avg_delay')) else 'sin dato'
-            })
+            alerts.append(
+                {
+                    "route": f"{row['origin']} → {row['destination']}",
+                    "severity": "HIGH" if avg_time > 45 else "MEDIUM",
+                    "travel_time": f"{avg_time:.1f} min",
+                    "delay": f"{row.get('avg_delay'):.1f} min" if pd.notna(row.get("avg_delay")) else "sin dato",
+                }
+            )
 
     if alerts:
         alerts_df = pd.DataFrame(alerts)
-        st.dataframe(alerts_df, width='stretch', hide_index=True)
+        st.dataframe(alerts_df, width="stretch", hide_index=True)
     else:
         st.info("✅ No critical alerts")
 
@@ -98,10 +100,10 @@ STALE_TRAFFIC_MINUTES = 90
 def _status_label(delay) -> str:
     """Color de estado según el retraso por tráfico (min)."""
     if delay <= 1:
-        return '🟢 Free Flow'
+        return "🟢 Free Flow"
     if delay <= 4:
-        return '🟡 Moderate'
-    return '🔴 Heavy'
+        return "🟡 Moderate"
+    return "🔴 Heavy"
 
 
 def _age_text(ts, now) -> str:
@@ -126,33 +128,37 @@ def build_route_status_grid(latest: pd.DataFrame, latest_traffic: pd.DataFrame, 
     verde. El tiempo de viaje y la velocidad vienen de la última medición.
     """
     now = now if now is not None else pd.Timestamp.now(tz="UTC")
-    traffic_by_route = {
-        (r["origin"], r["destination"]): r for _, r in latest_traffic.iterrows()
-    }
+    traffic_by_route = {(r["origin"], r["destination"]): r for _, r in latest_traffic.iterrows()}
     rows = []
     for _, row in latest.iterrows():
         key = (row["origin"], row["destination"])
         traffic = traffic_by_route.get(key)
 
         if traffic is None:
-            status, delay_txt, traffic_txt = '⚪ Sin dato de tráfico', 'sin dato', 'nunca'
+            status, delay_txt, traffic_txt = "⚪ Sin dato de tráfico", "sin dato", "nunca"
         else:
             minutes = (now - pd.to_datetime(traffic["timestamp"], utc=True)).total_seconds() / 60
             traffic_txt = f"{_age_text(traffic['timestamp'], now)} ({traffic['data_source']})"
             delay_txt = f"{traffic['traffic_delay_min']:.1f} min"
-            status = '⚪ Lectura desactualizada' if minutes > STALE_TRAFFIC_MINUTES else _status_label(traffic['traffic_delay_min'])
+            status = (
+                "⚪ Lectura desactualizada"
+                if minutes > STALE_TRAFFIC_MINUTES
+                else _status_label(traffic["traffic_delay_min"])
+            )
 
-        travel = row.get('travel_time_min')
-        speed = row.get('average_speed_kmh')
-        rows.append({
-            'Route': f'{key[0]} → {key[1]}',
-            'Status': status,
-            'Travel Time': f"{travel:.1f} min" if pd.notna(travel) else 'sin dato',
-            'Delay': delay_txt,
-            'Speed': f"{speed:.1f} km/h" if pd.notna(speed) else 'sin dato',
-            'Traffic reading': traffic_txt,
-            'Last measurement': f"{_age_text(row['timestamp'], now)} ({row['data_source']})",
-        })
+        travel = row.get("travel_time_min")
+        speed = row.get("average_speed_kmh")
+        rows.append(
+            {
+                "Route": f"{key[0]} → {key[1]}",
+                "Status": status,
+                "Travel Time": f"{travel:.1f} min" if pd.notna(travel) else "sin dato",
+                "Delay": delay_txt,
+                "Speed": f"{speed:.1f} km/h" if pd.notna(speed) else "sin dato",
+                "Traffic reading": traffic_txt,
+                "Last measurement": f"{_age_text(row['timestamp'], now)} ({row['data_source']})",
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -164,7 +170,7 @@ def _fetch_route_status_grid(_db):
     RouteDatabase.get_latest_per_route().
     """
     latest = _db.get_latest_per_route()
-    latest_traffic = _db.get_latest_per_route(require_column='traffic_delay_min')
+    latest_traffic = _db.get_latest_per_route(require_column="traffic_delay_min")
     return build_route_status_grid(latest, latest_traffic)
 
 
@@ -174,7 +180,7 @@ def render_route_status_grid(db):
 
     status_df = _fetch_route_status_grid(db)
     if not status_df.empty:
-        st.dataframe(status_df, width='stretch', hide_index=True)
+        st.dataframe(status_df, width="stretch", hide_index=True)
 
 
 def render_last_24h_summary(db):
@@ -194,14 +200,16 @@ def render_last_24h_summary(db):
         st.info("Sin mediciones en las últimas 24 horas.")
         return
 
-    summary_df = pd.DataFrame({
-        'Ruta': stats_df['origin'] + ' → ' + stats_df['destination'],
-        'Mediciones': stats_df['measurements'],
-        'Tiempo promedio (min)': stats_df['avg_travel_time'],
-        'Mínimo (min)': stats_df['min_travel_time'],
-        'Máximo (min)': stats_df['max_travel_time'],
-    })
-    st.dataframe(summary_df, width='stretch', hide_index=True)
+    summary_df = pd.DataFrame(
+        {
+            "Ruta": stats_df["origin"] + " → " + stats_df["destination"],
+            "Mediciones": stats_df["measurements"],
+            "Tiempo promedio (min)": stats_df["avg_travel_time"],
+            "Mínimo (min)": stats_df["min_travel_time"],
+            "Máximo (min)": stats_df["max_travel_time"],
+        }
+    )
+    st.dataframe(summary_df, width="stretch", hide_index=True)
 
 
 def render_performance_heatmap(db):
@@ -214,34 +222,56 @@ def render_performance_heatmap(db):
         st.warning("No data available")
         return
 
-    df['route'] = df['origin'] + ' → ' + df['destination']
+    df["route"] = df["origin"] + " → " + df["destination"]
 
     # Una fila por ruta y hora (ya promediadas en SQL). Se fuerzan las 24
     # columnas: si alguna hora no tiene mediciones, el pivote traía menos
     # columnas que las 24 etiquetas fijas del eje X y el mapa se desalineaba.
-    pivot_data = (
-        df.pivot(index='route', columns='hour', values='avg_travel_time')
-        .reindex(columns=range(24))
-    )
+    pivot_data = df.pivot(index="route", columns="hour", values="avg_travel_time").reindex(columns=range(24))
 
-    fig = go.Figure(data=go.Heatmap(
-        z=pivot_data.values,
-        x=['00:00', '01:00', '02:00', '03:00', '04:00', '05:00', '06:00', '07:00',
-           '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00',
-           '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00', '23:00'],
-        y=pivot_data.index,
-        colorscale='RdYlGn_r'
-    ))
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=pivot_data.values,
+            x=[
+                "00:00",
+                "01:00",
+                "02:00",
+                "03:00",
+                "04:00",
+                "05:00",
+                "06:00",
+                "07:00",
+                "08:00",
+                "09:00",
+                "10:00",
+                "11:00",
+                "12:00",
+                "13:00",
+                "14:00",
+                "15:00",
+                "16:00",
+                "17:00",
+                "18:00",
+                "19:00",
+                "20:00",
+                "21:00",
+                "22:00",
+                "23:00",
+            ],
+            y=pivot_data.index,
+            colorscale="RdYlGn_r",
+        )
+    )
 
     fig.update_layout(
         title="Travel Time by Route and Hour",
         xaxis_title="Hour of Day",
         yaxis_title="Route",
         height=400,
-        template='plotly_dark'
+        template="plotly_dark",
     )
 
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, width="stretch")
 
 
 def main():

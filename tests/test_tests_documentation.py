@@ -15,7 +15,6 @@ import re
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -35,6 +34,7 @@ def _leer(path: Path) -> str:
 # El catálogo generado (docs/TESTS.md)
 # ---------------------------------------------------------------------------
 
+
 def test_el_catalogo_de_tests_esta_al_dia():
     """`docs/TESTS.md` coincide con lo que genera `tools/generate_tests_doc.py` a partir de los tests actuales."""
     esperado = gen.render(gen.collect())
@@ -48,12 +48,7 @@ def test_el_catalogo_de_tests_esta_al_dia():
 def test_el_catalogo_menciona_cada_funcion_de_test():
     """Ninguna función `test_*` puede faltar en el catálogo (aunque el resto del texto cambie)."""
     catalogo = _leer(gen.OUTPUT)
-    faltan = [
-        f"{f.path}::{t.name}"
-        for f in gen.collect()
-        for t in f.tests
-        if f"`{t.name}`" not in catalogo
-    ]
+    faltan = [f"{f.path}::{t.name}" for f in gen.collect() for t in f.tests if f"`{t.name}`" not in catalogo]
     assert not faltan, f"Tests sin documentar en docs/TESTS.md: {faltan}"
 
 
@@ -61,11 +56,12 @@ def test_el_catalogo_menciona_cada_funcion_de_test():
 # La tabla del README
 # ---------------------------------------------------------------------------
 
+
 def _archivos_en_la_tabla_del_readme() -> set:
     texto = _leer(README)
-    assert TABLA_INICIO in texto and TABLA_FIN in texto, (
-        f"Falta el bloque de la tabla de tests en el README (entre {TABLA_INICIO} y {TABLA_FIN})."
-    )
+    assert (
+        TABLA_INICIO in texto and TABLA_FIN in texto
+    ), f"Falta el bloque de la tabla de tests en el README (entre {TABLA_INICIO} y {TABLA_FIN})."
     tabla = texto.split(TABLA_INICIO, 1)[1].split(TABLA_FIN, 1)[0]
     return set(re.findall(r"`(test_[A-Za-z0-9_]+\.py)`", tabla))
 
@@ -90,6 +86,7 @@ def test_la_tabla_del_readme_no_cita_archivos_que_ya_no_existen():
 # ---------------------------------------------------------------------------
 # El propio generador
 # ---------------------------------------------------------------------------
+
 
 def _funcion(codigo: str):
     return ast.parse(codigo).body[0]

@@ -15,8 +15,10 @@ sys.path.insert(0, str(ROOT))
 
 from src import migration, timescale_migration  # noqa: E402
 
-CABECERA = ("timestamp,origin,destination,data_source,distance_km,travel_time_min,traffic_delay_min,"
-            "origin_temperature,origin_humidity,origin_weather,mobility_level")
+CABECERA = (
+    "timestamp,origin,destination,data_source,distance_km,travel_time_min,traffic_delay_min,"
+    "origin_temperature,origin_humidity,origin_weather,mobility_level"
+)
 FILAS_OK = [
     "2026-09-01T10:00:00+00:00,Msida,Gzira,tomtom,3.2,9.5,1.2,22.5,60,cielo claro,Normal",
     "2026-09-01T10:30:00+00:00,Msida,Gzira,ors,3.2,8.0,,22.0,61,cielo claro,Normal",
@@ -42,6 +44,7 @@ def _filas_db(db_path):
 # CSV -> SQLite
 # ---------------------------------------------------------------------------
 
+
 def test_migra_el_csv_a_sqlite(tmp_path):
     """Migra las filas del CSV a SQLite conservando la fuente, el tiempo de viaje, el clima y los nulos."""
     db = tmp_path / "m.db"
@@ -49,7 +52,7 @@ def test_migra_el_csv_a_sqlite(tmp_path):
     filas = _filas_db(db)
     assert [f["data_source"] for f in filas] == ["tomtom", "ors"]
     assert filas[0]["travel_time_min"] == 9.5 and filas[0]["origin_weather"] == "cielo claro"
-    assert filas[1]["traffic_delay_min"] is None                      # celda vacía -> NULL, no 0
+    assert filas[1]["traffic_delay_min"] is None  # celda vacía -> NULL, no 0
 
 
 def test_dry_run_no_crea_la_base(tmp_path):
@@ -61,8 +64,12 @@ def test_dry_run_no_crea_la_base(tmp_path):
 
 def test_descarta_filas_sin_campos_obligatorios(tmp_path):
     """Se descartan las filas a las que les falta el timestamp o el origen."""
-    ruta = _csv(tmp_path, FILAS_OK[0], ",Msida,Gzira,tomtom,3,9,1,20,50,x,Normal",
-                "2026-09-01T11:00:00+00:00,,Gzira,tomtom,3,9,1,20,50,x,Normal")
+    ruta = _csv(
+        tmp_path,
+        FILAS_OK[0],
+        ",Msida,Gzira,tomtom,3,9,1,20,50,x,Normal",
+        "2026-09-01T11:00:00+00:00,,Gzira,tomtom,3,9,1,20,50,x,Normal",
+    )
     assert migration.migrate_csv_to_sqlite(ruta, tmp_path / "m.db") == 1
     assert len(_filas_db(tmp_path / "m.db")) == 1
 
@@ -99,8 +106,9 @@ def test_csv_inexistente_vacio_o_sin_columnas_obligatorias_devuelve_cero(tmp_pat
 
 def test_las_lineas_corruptas_del_csv_se_saltan(tmp_path):
     """Las líneas corruptas del CSV se saltan y se migran las demás."""
-    ruta = _csv(tmp_path, FILAS_OK[0], "esto,no,es,una,fila,valida,porque,tiene,demasiadas,columnas,"
-                                       "a,b,c,d,e,f", FILAS_OK[1])
+    ruta = _csv(
+        tmp_path, FILAS_OK[0], "esto,no,es,una,fila,valida,porque,tiene,demasiadas,columnas," "a,b,c,d,e,f", FILAS_OK[1]
+    )
     assert migration.migrate_csv_to_sqlite(ruta, tmp_path / "m.db") == 2
 
 
@@ -113,6 +121,7 @@ def test_migrar_dos_veces_no_duplica_filas(tmp_path):
 
 
 # ---- CLI (src.migration.main) ----
+
 
 @pytest.fixture
 def cli(monkeypatch):
@@ -171,6 +180,7 @@ def test_cli_devuelve_error_si_no_se_importa_nada_o_falla(cli):
 # CSV -> TimescaleDB (psycopg2 falso)
 # ---------------------------------------------------------------------------
 
+
 class ConexionFalsa:
     def __init__(self, falla=False):
         self.filas, self.sql, self.commits, self.rollbacks, self.cerrada, self.falla = [], None, 0, 0, False, falla
@@ -220,9 +230,20 @@ def test_backfill_inserta_las_filas_con_el_orden_de_columnas_de_traffic_trips(tm
     assert pg.commits == 1 and pg.cerrada
     assert "INSERT INTO traffic_trips" in pg.sql and pg.sql.count("%s") == 11
     # (datetime, origin, destination, distance_km, duration_min, temperature, humidity, weather, level, source, delay)
-    assert pg.filas[0] == ("2026-09-01T10:00:00+00:00", "Msida", "Gzira", 3.2, 9.5, 22.5, 60, "cielo claro",
-                           "Normal", "tomtom", 1.2)
-    assert pg.parametros["dbname"] and pg.parametros["host"]            # se leen de src.config
+    assert pg.filas[0] == (
+        "2026-09-01T10:00:00+00:00",
+        "Msida",
+        "Gzira",
+        3.2,
+        9.5,
+        22.5,
+        60,
+        "cielo claro",
+        "Normal",
+        "tomtom",
+        1.2,
+    )
+    assert pg.parametros["dbname"] and pg.parametros["host"]  # se leen de src.config
 
 
 def test_backfill_celdas_vacias_van_como_null_y_no_como_nan(tmp_path, pg):
@@ -234,7 +255,7 @@ def test_backfill_celdas_vacias_van_como_null_y_no_como_nan(tmp_path, pg):
     datetime_, _, _, dist, dur, temp, hum, clima, nivel, fuente, retraso = pg.filas[0]
     assert (clima, retraso) == (None, None) and fuente == "unknown"
     assert (dist, dur, temp, hum, nivel) == (3.2, 9.5, 22.5, 60, "Normal")
-    assert all(type(v) in (str, float, int, type(None)) for v in pg.filas[0])      # sin numpy ni NaN
+    assert all(type(v) in (str, float, int, type(None)) for v in pg.filas[0])  # sin numpy ni NaN
     assert not any(isinstance(v, float) and v != v for v in pg.filas[0])
 
 
@@ -247,6 +268,7 @@ def test_backfill_con_error_hace_rollback_y_devuelve_cero(tmp_path, pg):
 
 def test_backfill_csv_inexistente_o_vacio_no_se_conecta(tmp_path, monkeypatch):
     """Con un CSV inexistente o vacío, el backfill no abre ninguna conexión."""
+
     def no_debe_conectar(**kwargs):
         raise AssertionError("no debería abrir conexión")
 
@@ -257,7 +279,7 @@ def test_backfill_csv_inexistente_o_vacio_no_se_conecta(tmp_path, monkeypatch):
 
 def test_backfill_sin_psycopg2_instalado_devuelve_cero(tmp_path, monkeypatch):
     """Si `psycopg2` no está instalado, el backfill devuelve 0 en vez de fallar."""
-    monkeypatch.setitem(sys.modules, "psycopg2", None)                  # import -> ImportError
+    monkeypatch.setitem(sys.modules, "psycopg2", None)  # import -> ImportError
     assert timescale_migration.backfill(_csv(tmp_path, *FILAS_OK)) == 0
 
 

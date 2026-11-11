@@ -69,12 +69,16 @@ def _con_sesion(cliente, *respuestas):
 # Sesión con reintentos (común a los cuatro clientes)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("cliente, metodo", [
-    (TomTomClient("k", max_retries=4), "GET"),
-    (WeatherClient("k", max_retries=4), "GET"),
-    (ORSClient("k", max_retries=4), "POST"),
-    (OverpassClient(max_retries=4), "POST"),
-])
+
+@pytest.mark.parametrize(
+    "cliente, metodo",
+    [
+        (TomTomClient("k", max_retries=4), "GET"),
+        (WeatherClient("k", max_retries=4), "GET"),
+        (ORSClient("k", max_retries=4), "POST"),
+        (OverpassClient(max_retries=4), "POST"),
+    ],
+)
 def test_la_sesion_reintenta_solo_errores_transitorios(cliente, metodo):
     """Cada cliente monta reintentos sobre https: 4 intentos, solo para 429/5xx y solo para su método HTTP."""
     estrategia = cliente.session.get_adapter("https://ejemplo.org").max_retries
@@ -94,12 +98,22 @@ def test_close_cierra_la_sesion():
 # TomTom
 # ---------------------------------------------------------------------------
 
-TOMTOM_OK = {"routes": [{
-    "summary": {"lengthInMeters": 5000, "travelTimeInSeconds": 900, "trafficDelayInSeconds": 120,
-                "noTrafficTravelTimeInSeconds": 780, "trafficLengthInMeters": 1500,
-                "departureTime": "2026-11-01T10:00:00+01:00", "arrivalTime": "2026-11-01T10:15:00+01:00"},
-    "legs": [{"points": [{"latitude": 35.9, "longitude": 14.5}]}],
-}]}
+TOMTOM_OK = {
+    "routes": [
+        {
+            "summary": {
+                "lengthInMeters": 5000,
+                "travelTimeInSeconds": 900,
+                "trafficDelayInSeconds": 120,
+                "noTrafficTravelTimeInSeconds": 780,
+                "trafficLengthInMeters": 1500,
+                "departureTime": "2026-11-01T10:00:00+01:00",
+                "arrivalTime": "2026-11-01T10:15:00+01:00",
+            },
+            "legs": [{"points": [{"latitude": 35.9, "longitude": 14.5}]}],
+        }
+    ]
+}
 
 
 def test_tomtom_parsea_la_ruta_y_envia_la_peticion_correcta():
@@ -107,9 +121,14 @@ def test_tomtom_parsea_la_ruta_y_envia_la_peticion_correcta():
     c = _con_sesion(TomTomClient("CLAVE", timeout=7), Respuesta(TOMTOM_OK))
     r = c.calculate_route(35.90, 14.50, 35.88, 14.52, route_type="shortest")
     assert r == {
-        "distance_km": 5.0, "travel_time_min": 15.0, "no_traffic_time_min": 13.0, "traffic_delay_min": 2.0,
-        "traffic_length_km": 1.5, "average_speed_kmh": 20.0,
-        "departure_time": "2026-11-01T10:00:00+01:00", "arrival_time": "2026-11-01T10:15:00+01:00",
+        "distance_km": 5.0,
+        "travel_time_min": 15.0,
+        "no_traffic_time_min": 13.0,
+        "traffic_delay_min": 2.0,
+        "traffic_length_km": 1.5,
+        "average_speed_kmh": 20.0,
+        "departure_time": "2026-11-01T10:00:00+01:00",
+        "arrival_time": "2026-11-01T10:15:00+01:00",
         "polyline": [{"latitude": 35.9, "longitude": 14.5}],
     }
     llamada = c.session.llamadas[0]
@@ -132,14 +151,17 @@ def test_tomtom_con_tiempo_cero_no_divide_por_cero():
     assert _con_sesion(TomTomClient("k"), Respuesta(payload)).calculate_route(0, 0, 1, 1)["average_speed_kmh"] == 0
 
 
-@pytest.mark.parametrize("respuesta, error", [
-    (requests.exceptions.Timeout("lento"), requests.exceptions.Timeout),
-    (requests.exceptions.ConnectionError("sin red"), requests.exceptions.RequestException),
-    (Respuesta(status=403), requests.exceptions.HTTPError),
-    (Respuesta(json_invalido=True), ValueError),
-    (Respuesta({"routes": []}), ValueError),
-    (Respuesta({}), ValueError),
-])
+@pytest.mark.parametrize(
+    "respuesta, error",
+    [
+        (requests.exceptions.Timeout("lento"), requests.exceptions.Timeout),
+        (requests.exceptions.ConnectionError("sin red"), requests.exceptions.RequestException),
+        (Respuesta(status=403), requests.exceptions.HTTPError),
+        (Respuesta(json_invalido=True), ValueError),
+        (Respuesta({"routes": []}), ValueError),
+        (Respuesta({}), ValueError),
+    ],
+)
 def test_tomtom_propaga_los_errores(respuesta, error):
     """Los errores de red y de estado HTTP de TomTom (parametrizado) se propagan al llamador."""
     with pytest.raises(error):
@@ -172,16 +194,19 @@ def test_ors_envia_longitud_antes_que_latitud_y_la_clave_en_la_cabecera():
     c.calculate_route(35.90, 14.50, 35.88, 14.52)
     llamada = c.session.llamadas[0]
     assert llamada["metodo"] == "POST" and llamada["url"] == ORSClient.ROUTE_URL
-    assert llamada["json"] == {"coordinates": [[14.50, 35.90], [14.52, 35.88]]}     # [lon, lat]
+    assert llamada["json"] == {"coordinates": [[14.50, 35.90], [14.52, 35.88]]}  # [lon, lat]
     assert llamada["headers"]["Authorization"] == "CLAVE"
 
 
-@pytest.mark.parametrize("respuesta, error", [
-    (requests.exceptions.Timeout("lento"), requests.exceptions.Timeout),
-    (Respuesta(status=401), requests.exceptions.HTTPError),
-    (Respuesta(json_invalido=True), ValueError),
-    (Respuesta({"routes": []}), ValueError),
-])
+@pytest.mark.parametrize(
+    "respuesta, error",
+    [
+        (requests.exceptions.Timeout("lento"), requests.exceptions.Timeout),
+        (Respuesta(status=401), requests.exceptions.HTTPError),
+        (Respuesta(json_invalido=True), ValueError),
+        (Respuesta({"routes": []}), ValueError),
+    ],
+)
 def test_ors_propaga_los_errores(respuesta, error):
     """Los errores de red y de estado HTTP de ORS (parametrizado) se propagan al llamador."""
     with pytest.raises(error):
@@ -198,8 +223,12 @@ CLIMA_OK = {"main": {"temp": 21.5, "feels_like": 22.0, "humidity": 60}, "weather
 def test_weather_parsea_y_pide_unidades_metricas():
     """El clima se interpreta correctamente y se pide en unidades métricas con la clave en los parámetros."""
     c = _con_sesion(WeatherClient("CLAVE"), Respuesta(CLIMA_OK))
-    assert c.get_current_weather(35.9, 14.5) == {"temperature": 21.5, "feels_like": 22.0, "humidity": 60,
-                                                 "weather": "cielo claro"}
+    assert c.get_current_weather(35.9, 14.5) == {
+        "temperature": 21.5,
+        "feels_like": 22.0,
+        "humidity": 60,
+        "weather": "cielo claro",
+    }
     p = c.session.llamadas[0]["params"]
     assert p == {"lat": 35.9, "lon": 14.5, "appid": "CLAVE", "units": "metric"}
 
@@ -214,12 +243,12 @@ def test_weather_usa_la_cache_por_ubicacion_y_caduca():
     """El clima se cachea por ubicación y caduca pasado el tiempo de vida; `clear_cache` vacía la caché."""
     c = _con_sesion(WeatherClient("k", cache_ttl=300), Respuesta(CLIMA_OK))
     c.get_current_weather(35.9, 14.5)
-    c.get_current_weather(35.9, 14.5)                       # misma ubicación: cache
+    c.get_current_weather(35.9, 14.5)  # misma ubicación: cache
     assert len(c.session.llamadas) == 1
-    c.get_current_weather(35.8, 14.4)                       # otra ubicación: nueva petición
+    c.get_current_weather(35.8, 14.4)  # otra ubicación: nueva petición
     assert len(c.session.llamadas) == 2
     c._weather_cache[(35.9, 14.5)]["timestamp"] -= timedelta(seconds=301)
-    c.get_current_weather(35.9, 14.5)                       # caducada: nueva petición
+    c.get_current_weather(35.9, 14.5)  # caducada: nueva petición
     assert len(c.session.llamadas) == 3
     c.clear_cache()
     assert c._weather_cache == {}
@@ -230,14 +259,17 @@ def test_weather_un_error_no_se_guarda_en_cache():
     c = _con_sesion(WeatherClient("k"), requests.exceptions.ConnectionError("sin red"), Respuesta(CLIMA_OK))
     with pytest.raises(requests.exceptions.RequestException):
         c.get_current_weather(35.9, 14.5)
-    assert c.get_current_weather(35.9, 14.5)["temperature"] == 21.5       # el reintento sí llega a la red
+    assert c.get_current_weather(35.9, 14.5)["temperature"] == 21.5  # el reintento sí llega a la red
 
 
-@pytest.mark.parametrize("respuesta, error", [
-    (requests.exceptions.Timeout("lento"), requests.exceptions.Timeout),
-    (Respuesta(status=500), requests.exceptions.HTTPError),
-    (Respuesta(json_invalido=True), ValueError),
-])
+@pytest.mark.parametrize(
+    "respuesta, error",
+    [
+        (requests.exceptions.Timeout("lento"), requests.exceptions.Timeout),
+        (Respuesta(status=500), requests.exceptions.HTTPError),
+        (Respuesta(json_invalido=True), ValueError),
+    ],
+)
 def test_weather_propaga_los_errores(respuesta, error):
     """Los errores de red y de estado HTTP del clima (parametrizado) se propagan al llamador."""
     with pytest.raises(error):
@@ -248,15 +280,19 @@ def test_weather_propaga_los_errores(respuesta, error):
 # Overpass
 # ---------------------------------------------------------------------------
 
+
 def _zona():
-    return {"a": SimpleNamespace(latitude=35.90, longitude=14.50), "b": SimpleNamespace(latitude=35.80, longitude=14.60)}
+    return {
+        "a": SimpleNamespace(latitude=35.90, longitude=14.50),
+        "b": SimpleNamespace(latitude=35.80, longitude=14.60),
+    }
 
 
 ELEMENTOS = [
     {"type": "node", "id": 1, "lat": 35.9, "lon": 14.5, "tags": {"amenity": "cafe", "name": "Café Uno"}},
     {"type": "way", "id": 2, "center": {"lat": 35.8, "lon": 14.6}, "tags": {"shop": "bakery"}},
-    {"type": "node", "id": 3, "lat": 35.9, "lon": 14.5, "tags": {"highway": "bus_stop"}},        # sin categoría
-    {"type": "way", "id": 4, "tags": {"amenity": "school"}},                                      # sin centro
+    {"type": "node", "id": 3, "lat": 35.9, "lon": 14.5, "tags": {"highway": "bus_stop"}},  # sin categoría
+    {"type": "way", "id": 4, "tags": {"amenity": "school"}},  # sin centro
 ]
 
 
@@ -264,8 +300,8 @@ def test_overpass_clasifica_por_prioridad_y_toma_el_valor_como_subcategoria():
     """Overpass clasifica cada elemento por prioridad entre categorías y toma el valor de la etiqueta como subcategoría; lo que no encaja da `None`."""
     clasificar = OverpassClient._classify
     assert clasificar({"amenity": "cafe"}) == ("food_drink", "cafe")
-    assert clasificar({"shop": "bakery", "amenity": "cafe"}) == ("food_drink", "cafe")      # la específica gana
-    assert clasificar({"shop": "mall"}) == ("mall", "mall")                                  # antes que "business"
+    assert clasificar({"shop": "bakery", "amenity": "cafe"}) == ("food_drink", "cafe")  # la específica gana
+    assert clasificar({"shop": "mall"}) == ("mall", "mall")  # antes que "business"
     assert clasificar({"shop": "bakery"}) == ("business", "bakery")
     assert clasificar({"tourism": "museum", "shop": "gift"}) == ("leisure", "museum")
     assert clasificar({"highway": "bus_stop"}) is None
@@ -277,17 +313,24 @@ def test_overpass_la_query_cubre_todas_las_categorias():
     """La consulta de Overpass cubre todas las categorías: cabecera con el timeout, regex para varios valores y una cláusula de nodo y otra de vía por etiqueta."""
     q = OverpassClient._build_query((35.7, 14.4, 36.0, 14.7), CATEGORY_TAGS, 75)
     assert q.startswith("[out:json][timeout:75];") and q.rstrip().endswith("out center tags;")
-    assert '["amenity"~"^(school|college|university|kindergarten)$"]' in q       # varios valores: una regex
-    assert '["shop"](35.7,14.4,36.0,14.7);' in q                                  # clave sin valor
+    assert '["amenity"~"^(school|college|university|kindergarten)$"]' in q  # varios valores: una regex
+    assert '["shop"](35.7,14.4,36.0,14.7);' in q  # clave sin valor
     assert q.count("node[") == q.count("way[") == sum(len(v) for v in CATEGORY_TAGS.values())
 
 
 def test_overpass_parsea_nodos_y_ways_y_descarta_lo_inutil():
     """Se interpretan nodos y vías y se descartan los elementos sin categoría o sin coordenadas; el que no tiene nombre recibe uno genérico."""
     pois = OverpassClient()._parse_elements(ELEMENTOS)
-    assert [p["osm_id"] for p in pois] == [1, 2]                  # sin categoría (3) y sin coordenadas (4) fuera
-    assert pois[0] == {"osm_type": "node", "osm_id": 1, "category": "food_drink", "subcategory": "cafe",
-                       "name": "Café Uno", "latitude": 35.9, "longitude": 14.5}
+    assert [p["osm_id"] for p in pois] == [1, 2]  # sin categoría (3) y sin coordenadas (4) fuera
+    assert pois[0] == {
+        "osm_type": "node",
+        "osm_id": 1,
+        "category": "food_drink",
+        "subcategory": "cafe",
+        "name": "Café Uno",
+        "latitude": 35.9,
+        "longitude": 14.5,
+    }
     assert pois[1]["latitude"] == 35.8 and pois[1]["name"] == "Business (sin nombre)"
 
 
@@ -297,23 +340,29 @@ def test_overpass_fetch_calcula_el_bbox_con_margen_y_el_timeout_del_servidor():
     pois = c.fetch_pois(_zona(), margin_deg=0.01)
     assert len(pois) == 2
     llamada = c.session.llamadas[0]
-    assert "(35.79,14.49,35.91,14.61)" in llamada["data"]["data"]                  # sur, oeste, norte, este
-    assert "[timeout:75]" in llamada["data"]["data"] and llamada["timeout"] == 90   # servidor < cliente
+    assert "(35.79,14.49,35.91,14.61)" in llamada["data"]["data"]  # sur, oeste, norte, este
+    assert "[timeout:75]" in llamada["data"]["data"] and llamada["timeout"] == 90  # servidor < cliente
 
 
 def test_overpass_prueba_el_siguiente_espejo_si_uno_falla():
     """Si un servidor espejo de Overpass falla (error de red o 504), se prueba el siguiente."""
-    c = _con_sesion(OverpassClient(endpoints=["https://uno", "https://dos", "https://tres"]),
-                    requests.exceptions.ConnectionError("caído"), Respuesta(status=504),
-                    Respuesta({"elements": ELEMENTOS}))
+    c = _con_sesion(
+        OverpassClient(endpoints=["https://uno", "https://dos", "https://tres"]),
+        requests.exceptions.ConnectionError("caído"),
+        Respuesta(status=504),
+        Respuesta({"elements": ELEMENTOS}),
+    )
     assert len(c.fetch_pois(_zona())) == 2
     assert [x["url"] for x in c.session.llamadas] == ["https://uno", "https://dos", "https://tres"]
 
 
 def test_overpass_json_invalido_cuenta_como_fallo_del_espejo():
     """Un JSON inválido cuenta como fallo del espejo y se pasa al siguiente."""
-    c = _con_sesion(OverpassClient(endpoints=["https://uno", "https://dos"]),
-                    Respuesta(json_invalido=True), Respuesta({"elements": []}))
+    c = _con_sesion(
+        OverpassClient(endpoints=["https://uno", "https://dos"]),
+        Respuesta(json_invalido=True),
+        Respuesta({"elements": []}),
+    )
     assert c.fetch_pois(_zona()) == []
     assert len(c.session.llamadas) == 2
 

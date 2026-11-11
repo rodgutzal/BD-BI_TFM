@@ -49,8 +49,11 @@ from src.database import RouteDatabase  # noqa: E402
 
 DATE_CUTOFF = "2026-08-01"  # excluye las pruebas iniciales del pipeline (mayo 2026)
 NUM_COLS = [
-    "distance_km", "origin_temperature", "origin_humidity",
-    "destination_temperature", "destination_humidity",
+    "distance_km",
+    "origin_temperature",
+    "origin_humidity",
+    "destination_temperature",
+    "destination_humidity",
 ]
 WEATHER_GROUPS = {
     "clear sky": "despejado",
@@ -65,6 +68,7 @@ RMD_PATH = "notebooks/Asignatura7_Modelado_Predictivo.Rmd"
 # --------------------------------------------------------------------------
 # Carga y preparación de datos
 # --------------------------------------------------------------------------
+
 
 @st.cache_data(ttl=1800, show_spinner="Cargando datos en vivo desde la base de datos...")
 def load_modeling_data() -> pd.DataFrame:
@@ -147,9 +151,7 @@ def _fit_classification(d: pd.DataFrame):
     X = _design_matrix(d)
     y = (d["mobility_level"] == "Alta demora").astype(int).values
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, stratify=y, random_state=42
-    )
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
 
     scaler = StandardScaler()
     X_train_s, X_test_s = X_train.copy(), X_test.copy()
@@ -162,8 +164,11 @@ def _fit_classification(d: pd.DataFrame):
 
     rf = RandomForestClassifier(n_estimators=300, random_state=42, n_jobs=-1)
     grid = GridSearchCV(
-        rf, {"max_features": ["sqrt", "log2", 0.3, 0.5]},
-        scoring="roc_auc", cv=StratifiedKFold(5, shuffle=True, random_state=42), n_jobs=-1,
+        rf,
+        {"max_features": ["sqrt", "log2", 0.3, 0.5]},
+        scoring="roc_auc",
+        cv=StratifiedKFold(5, shuffle=True, random_state=42),
+        n_jobs=-1,
     )
     grid.fit(X_train_s, y_train)
     rf_best = grid.best_estimator_
@@ -172,11 +177,16 @@ def _fit_classification(d: pd.DataFrame):
     importances = pd.Series(rf_best.feature_importances_, index=X.columns).sort_values(ascending=False)
 
     return {
-        "y_test": y_test, "prob_logit": prob_logit, "prob_rf": prob_rf,
+        "y_test": y_test,
+        "prob_logit": prob_logit,
+        "prob_rf": prob_rf,
         "best_max_features": grid.best_params_["max_features"],
-        "cv_auc": grid.best_score_, "importances": importances,
-        "n_train": len(X_train), "n_test": len(X_test),
-        "model": rf_best, "feature_names": list(X.columns),
+        "cv_auc": grid.best_score_,
+        "importances": importances,
+        "n_train": len(X_train),
+        "n_test": len(X_test),
+        "model": rf_best,
+        "feature_names": list(X.columns),
     }
 
 
@@ -242,8 +252,13 @@ def render_classification(d: pd.DataFrame) -> None:
             auc = roc_auc_score(y_test, prob)
             fig.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines", name=f"{name} (AUC={auc:.3f})"))
         fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines", line=dict(dash="dash", color="gray"), name="Azar"))
-        fig.update_layout(title="Curva ROC", xaxis_title="1 - Especificidad", yaxis_title="Sensibilidad",
-                           template="plotly_dark", height=420)
+        fig.update_layout(
+            title="Curva ROC",
+            xaxis_title="1 - Especificidad",
+            yaxis_title="Sensibilidad",
+            template="plotly_dark",
+            height=420,
+        )
         st.plotly_chart(fig, width="stretch")
 
     with col_imp:
@@ -255,8 +270,11 @@ def render_classification(d: pd.DataFrame) -> None:
     with st.expander("Matriz de confusión — Random Forest"):
         pred_rf = (res["prob_rf"] >= 0.5).astype(int)
         cm = confusion_matrix(y_test, pred_rf, labels=[0, 1])
-        cm_df = pd.DataFrame(cm, index=["Real: Movilidad normal", "Real: Alta demora"],
-                              columns=["Pred: Movilidad normal", "Pred: Alta demora"])
+        cm_df = pd.DataFrame(
+            cm,
+            index=["Real: Movilidad normal", "Real: Alta demora"],
+            columns=["Pred: Movilidad normal", "Pred: Alta demora"],
+        )
         st.dataframe(cm_df, width="stretch")
 
     top_routes = res["importances"][res["importances"].index.str.startswith(("origin_", "destination_"))].head(3)
@@ -274,7 +292,11 @@ def render_classification(d: pd.DataFrame) -> None:
             "ilustrar la forma de las reglas de decisión que aprende el modelo."
         )
         max_depth_view = st.slider(
-            "Profundidad a mostrar", 2, 5, 3, key="pm_tree_depth",
+            "Profundidad a mostrar",
+            2,
+            5,
+            3,
+            key="pm_tree_depth",
             help="Solo limita lo que se dibuja; el árbol entrenado internamente es más profundo.",
         )
         fig_tree = _plot_tree_figure(res["model"], res["feature_names"], max_depth_view)
@@ -284,6 +306,7 @@ def render_classification(d: pd.DataFrame) -> None:
 # --------------------------------------------------------------------------
 # Regresión: travel_time_min
 # --------------------------------------------------------------------------
+
 
 @st.cache_resource(show_spinner="Entrenando regresores (lineal + Gradient Boosting)...", **_CACHE_MODELO)
 def _fit_regression(d: pd.DataFrame):
@@ -316,8 +339,11 @@ def _fit_regression(d: pd.DataFrame):
         }
 
     return {
-        "y_test": y_test, "pred_lm": pred_lm, "pred_gbr": pred_gbr,
-        "metrics_lm": metrics(pred_lm), "metrics_gbr": metrics(pred_gbr),
+        "y_test": y_test,
+        "pred_lm": pred_lm,
+        "pred_gbr": pred_gbr,
+        "metrics_lm": metrics(pred_lm),
+        "metrics_gbr": metrics(pred_gbr),
         "importances": importances,
     }
 
@@ -341,14 +367,24 @@ def render_regression(d: pd.DataFrame) -> None:
     col_scatter, col_imp = st.columns(2)
 
     with col_scatter:
-        fig = go.Figure(go.Scatter(
-            x=res["y_test"], y=res["pred_gbr"], mode="markers",
-            marker=dict(color="#2c7fb8", opacity=0.25, size=5), name="Predicciones",
-        ))
+        fig = go.Figure(
+            go.Scatter(
+                x=res["y_test"],
+                y=res["pred_gbr"],
+                mode="markers",
+                marker=dict(color="#2c7fb8", opacity=0.25, size=5),
+                name="Predicciones",
+            )
+        )
         lims = [float(min(res["y_test"])), float(max(res["y_test"]))]
         fig.add_trace(go.Scatter(x=lims, y=lims, mode="lines", line=dict(color="red", dash="dash"), name="Ideal"))
-        fig.update_layout(title="Gradient Boosting: real vs. predicho", xaxis_title="Real (min)",
-                           yaxis_title="Predicho (min)", template="plotly_dark", height=420)
+        fig.update_layout(
+            title="Gradient Boosting: real vs. predicho",
+            xaxis_title="Real (min)",
+            yaxis_title="Predicho (min)",
+            template="plotly_dark",
+            height=420,
+        )
         st.plotly_chart(fig, width="stretch")
 
     with col_imp:
@@ -361,6 +397,7 @@ def render_regression(d: pd.DataFrame) -> None:
 # --------------------------------------------------------------------------
 # Forecasting horario (extensión temporal)
 # --------------------------------------------------------------------------
+
 
 @st.cache_resource(show_spinner="Ajustando el modelo de series temporales...", **_CACHE_MODELO)
 def _fit_temporal(d: pd.DataFrame, max_gap_hours: int = 3):
@@ -387,9 +424,12 @@ def _fit_temporal(d: pd.DataFrame, max_gap_hours: int = 3):
 
     return {
         "series": s_block.interpolate(limit=max_gap_hours),
-        "order": forecasting.ORDER, "seasonal_order": forecasting.SEASONAL_ORDER,
-        "forecast_mean": fc["mean"], "forecast_ci": fc["ci"],
-        "converged": fc["converged"], "iterations": fc["iterations"],
+        "order": forecasting.ORDER,
+        "seasonal_order": forecasting.SEASONAL_ORDER,
+        "forecast_mean": fc["mean"],
+        "forecast_ci": fc["ci"],
+        "converged": fc["converged"],
+        "iterations": fc["iterations"],
         # Referencia: la media de cada hora del día. Es lo que el ARIMA tiene que mejorar.
         "baseline": forecasting.profile_forecast(s_block, fc["mean"].index),
         "gap_excluded_hours": int((s.index[-1] - s_block.index[0]).total_seconds() / 3600) - len(s_block) + 1,
@@ -406,21 +446,48 @@ def render_temporal(d: pd.DataFrame) -> None:
     res = _fit_temporal(d)
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=res["series"].index, y=res["series"].values, mode="lines",
-                              name="Observado", line=dict(color="#2c7fb8")))
-    fig.add_trace(go.Scatter(x=res["forecast_mean"].index, y=res["forecast_mean"].values, mode="lines",
-                              name="Forecast 24h (SARIMA)", line=dict(color="#1b9e77")))
-    fig.add_trace(go.Scatter(x=res["baseline"].index, y=res["baseline"].values, mode="lines",
-                              name="Referencia: media por hora del día", line=dict(color="#e6ab02", dash="dash")))
-    fig.add_trace(go.Scatter(
-        x=list(res["forecast_ci"].index) + list(res["forecast_ci"].index[::-1]),
-        y=list(res["forecast_ci"].iloc[:, 1]) + list(res["forecast_ci"].iloc[:, 0][::-1]),
-        fill="toself", fillcolor="rgba(27,158,119,0.2)", line=dict(color="rgba(0,0,0,0)"),
-        name="IC 80%", showlegend=True,
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=res["series"].index, y=res["series"].values, mode="lines", name="Observado", line=dict(color="#2c7fb8")
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=res["forecast_mean"].index,
+            y=res["forecast_mean"].values,
+            mode="lines",
+            name="Forecast 24h (SARIMA)",
+            line=dict(color="#1b9e77"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=res["baseline"].index,
+            y=res["baseline"].values,
+            mode="lines",
+            name="Referencia: media por hora del día",
+            line=dict(color="#e6ab02", dash="dash"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=list(res["forecast_ci"].index) + list(res["forecast_ci"].index[::-1]),
+            y=list(res["forecast_ci"].iloc[:, 1]) + list(res["forecast_ci"].iloc[:, 0][::-1]),
+            fill="toself",
+            fillcolor="rgba(27,158,119,0.2)",
+            line=dict(color="rgba(0,0,0,0)"),
+            name="IC 80%",
+            showlegend=True,
+        )
+    )
     p, dd, q = res["order"]
-    fig.update_layout(title=f"SARIMA{(p, dd, q)}x{res['seasonal_order']} — pronóstico a 24 h frente a la referencia",
-                       xaxis_title=None, yaxis_title="% Alta demora", template="plotly_dark", height=450)
+    fig.update_layout(
+        title=f"SARIMA{(p, dd, q)}x{res['seasonal_order']} — pronóstico a 24 h frente a la referencia",
+        xaxis_title=None,
+        yaxis_title="% Alta demora",
+        template="plotly_dark",
+        height=450,
+    )
     st.plotly_chart(fig, width="stretch")
     n_total = len(res["series"])
     n_con_dato = int(res["series"].notna().sum())
@@ -436,20 +503,24 @@ def render_temporal(d: pd.DataFrame) -> None:
         st.warning("El optimizador no convergió en este ajuste: tómese el pronóstico como orientativo.")
     st.info(forecasting.VALIDATION_NOTE)
 
+
 # --------------------------------------------------------------------------
 # Clustering de corredores
 # --------------------------------------------------------------------------
+
 
 @st.cache_data(show_spinner="Ejecutando k-means sobre corredores...")
 def _fit_clustering(d: pd.DataFrame, k: int):
     agg = (
         d.assign(alta=(d["mobility_level"] == "Alta demora").astype(int))
         .groupby(["origin", "destination"])
-        .agg(distancia_media=("distance_km", "mean"),
-             duracion_media=("travel_time_min", "mean"),
-             velocidad_media=("average_speed_kmh", "mean"),
-             pct_alta_demora=("alta", "mean"),
-             n=("alta", "size"))
+        .agg(
+            distancia_media=("distance_km", "mean"),
+            duracion_media=("travel_time_min", "mean"),
+            velocidad_media=("average_speed_kmh", "mean"),
+            pct_alta_demora=("alta", "mean"),
+            n=("alta", "size"),
+        )
         .reset_index()
     )
     agg["ruta"] = agg["origin"] + " → " + agg["destination"]
@@ -483,28 +554,42 @@ def render_clustering(d: pd.DataFrame) -> None:
     with col_elbow:
         fig = go.Figure(go.Scatter(x=list(range(1, res["max_k"] + 1)), y=res["wss"], mode="lines+markers"))
         fig.add_vline(x=k, line_dash="dash", line_color="#d95f02")
-        fig.update_layout(title="Método del codo", xaxis_title="k", yaxis_title="WSS",
-                           template="plotly_dark", height=380)
+        fig.update_layout(
+            title="Método del codo", xaxis_title="k", yaxis_title="WSS", template="plotly_dark", height=380
+        )
         st.plotly_chart(fig, width="stretch")
 
     with col_scatter:
         fig = go.Figure()
         for c in sorted(agg["cluster"].unique()):
             sub = agg[agg["cluster"] == c]
-            fig.add_trace(go.Scatter(
-                x=sub["pc1"], y=sub["pc2"], mode="markers+text", text=sub["ruta"],
-                textposition="top center", marker=dict(size=14), name=f"Cluster {c}",
-            ))
-        fig.update_layout(title="Corredores en espacio PCA (2D)", xaxis_title="PC1", yaxis_title="PC2",
-                           template="plotly_dark", height=380)
+            fig.add_trace(
+                go.Scatter(
+                    x=sub["pc1"],
+                    y=sub["pc2"],
+                    mode="markers+text",
+                    text=sub["ruta"],
+                    textposition="top center",
+                    marker=dict(size=14),
+                    name=f"Cluster {c}",
+                )
+            )
+        fig.update_layout(
+            title="Corredores en espacio PCA (2D)",
+            xaxis_title="PC1",
+            yaxis_title="PC2",
+            template="plotly_dark",
+            height=380,
+        )
         st.plotly_chart(fig, width="stretch")
 
     display_cols = ["ruta", "distancia_media", "duracion_media", "pct_alta_demora", "n", "cluster"]
     st.dataframe(
-        agg[display_cols].sort_values("cluster").style.format(
-            {"distancia_media": "{:.2f}", "duracion_media": "{:.1f}", "pct_alta_demora": "{:.1%}"}
-        ),
-        width="stretch", hide_index=True,
+        agg[display_cols]
+        .sort_values("cluster")
+        .style.format({"distancia_media": "{:.2f}", "duracion_media": "{:.1f}", "pct_alta_demora": "{:.1%}"}),
+        width="stretch",
+        hide_index=True,
     )
 
 
@@ -514,7 +599,11 @@ def render_clustering(d: pd.DataFrame) -> None:
 
 # Secciones que se entrenan bajo demanda: clave -> (nombre, qué hace, coste aproximado).
 SECCIONES = {
-    "clf": ("Clasificación", "regresión logística + Random Forest (300 árboles, búsqueda en rejilla con validación cruzada)", "~25 s con 16 CPUs"),
+    "clf": (
+        "Clasificación",
+        "regresión logística + Random Forest (300 árboles, búsqueda en rejilla con validación cruzada)",
+        "~25 s con 16 CPUs",
+    ),
     "reg": ("Regresión", "regresión lineal + Gradient Boosting", "~20 s con 16 CPUs"),
     "temporal": ("Forecast temporal", "SARIMA con diferenciación estacional de 24 h", "unos segundos"),
     "cluster": ("Clustering", "k-means sobre los corredores", "~3 s"),
@@ -586,9 +675,14 @@ def render() -> None:
             st.session_state[_flag(key)] = True
         st.rerun()
 
-    tab_clf, tab_reg, tab_temporal, tab_cluster = st.tabs([
-        "Clasificación", "Regresión", "Forecast temporal", "Clustering",
-    ])
+    tab_clf, tab_reg, tab_temporal, tab_cluster = st.tabs(
+        [
+            "Clasificación",
+            "Regresión",
+            "Forecast temporal",
+            "Clustering",
+        ]
+    )
 
     with tab_clf:
         if _solicitado("clf"):

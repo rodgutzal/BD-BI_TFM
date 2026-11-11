@@ -15,7 +15,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from src.database import RouteDatabase
-from src.location_scoring import recommend_locations, DEFAULT_WEIGHTS
+from src.location_scoring import DEFAULT_WEIGHTS, recommend_locations
 from src.locations import LOCATIONS
 from streamlit_app.dashboards.maps_dashboard import POI_CATEGORY_STYLE
 from streamlit_app.dashboards.panorama_section import render_panorama_section
@@ -76,31 +76,52 @@ def build_results_table(out):
     zona con menor tiempo de viaje). Una zona sin dato en un factor queda en
     blanco ("sin dato") y el puntaje la trata como neutral (0.5) en ese factor.
     """
-    return out.reset_index()[[
-        "zone_name", "score",
-        "demanda", "demanda_norm",
-        "competencia_cruda", "competencia", "competencia_norm",
-        "tiempo_viaje_prom", "accesibilidad_norm",
-        "dimensiones_con_dato",
-    ]].rename(columns={
-        "zone_name": "Zona", "score": "Puntaje",
-        "demanda": "Población", "demanda_norm": "Demanda (0-1)",
-        "competencia_cruda": "Competencia (conteo real)", "competencia": "Competencia (ajustada)",
-        "competencia_norm": "Baja competencia (0-1)",
-        "tiempo_viaje_prom": "Tiempo de viaje prom. (min)", "accesibilidad_norm": "Accesibilidad (0-1)",
-        "dimensiones_con_dato": "Datos completos (de 3)",
-    })
+    return out.reset_index()[
+        [
+            "zone_name",
+            "score",
+            "demanda",
+            "demanda_norm",
+            "competencia_cruda",
+            "competencia",
+            "competencia_norm",
+            "tiempo_viaje_prom",
+            "accesibilidad_norm",
+            "dimensiones_con_dato",
+        ]
+    ].rename(
+        columns={
+            "zone_name": "Zona",
+            "score": "Puntaje",
+            "demanda": "Población",
+            "demanda_norm": "Demanda (0-1)",
+            "competencia_cruda": "Competencia (conteo real)",
+            "competencia": "Competencia (ajustada)",
+            "competencia_norm": "Baja competencia (0-1)",
+            "tiempo_viaje_prom": "Tiempo de viaje prom. (min)",
+            "accesibilidad_norm": "Accesibilidad (0-1)",
+            "dimensiones_con_dato": "Datos completos (de 3)",
+        }
+    )
 
 
 def render_results_table(out):
     tabla = build_results_table(out)
     st.dataframe(
-        tabla.style.format({
-            "Puntaje": "{:.3f}", "Población": "{:,.0f}", "Competencia (ajustada)": "{:.1f}",
-            "Tiempo de viaje prom. (min)": "{:.1f}",
-            "Demanda (0-1)": "{:.2f}", "Baja competencia (0-1)": "{:.2f}", "Accesibilidad (0-1)": "{:.2f}",
-        }, na_rep="sin dato"),
-        width="stretch", hide_index=True,
+        tabla.style.format(
+            {
+                "Puntaje": "{:.3f}",
+                "Población": "{:,.0f}",
+                "Competencia (ajustada)": "{:.1f}",
+                "Tiempo de viaje prom. (min)": "{:.1f}",
+                "Demanda (0-1)": "{:.2f}",
+                "Baja competencia (0-1)": "{:.2f}",
+                "Accesibilidad (0-1)": "{:.2f}",
+            },
+            na_rep="sin dato",
+        ),
+        width="stretch",
+        hide_index=True,
     )
     st.caption(
         "Las columnas (0-1) son los valores normalizados que entran en el puntaje; en las tres, "
@@ -110,22 +131,26 @@ def render_results_table(out):
 
 
 def render_score_map(out):
-    fig = go.Figure(go.Scattermapbox(
-        lat=[LOCATIONS[z].latitude for z in out.index],
-        lon=[LOCATIONS[z].longitude for z in out.index],
-        mode="markers+text",
-        marker=dict(size=22, color=out["score"], colorscale="RdYlGn", showscale=True,
-                    colorbar=dict(title="Puntaje")),
-        text=list(out.index),
-        textposition="top center",
-        hovertext=[f"{z}<br>Puntaje: {s:.3f}" for z, s in zip(out.index, out["score"])],
-        hoverinfo="text",
-    ))
+    fig = go.Figure(
+        go.Scattermapbox(
+            lat=[LOCATIONS[z].latitude for z in out.index],
+            lon=[LOCATIONS[z].longitude for z in out.index],
+            mode="markers+text",
+            marker=dict(
+                size=22, color=out["score"], colorscale="RdYlGn", showscale=True, colorbar=dict(title="Puntaje")
+            ),
+            text=list(out.index),
+            textposition="top center",
+            hovertext=[f"{z}<br>Puntaje: {s:.3f}" for z, s in zip(out.index, out["score"])],
+            hoverinfo="text",
+        )
+    )
     center_lat = sum(loc.latitude for loc in LOCATIONS.values()) / len(LOCATIONS)
     center_lon = sum(loc.longitude for loc in LOCATIONS.values()) / len(LOCATIONS)
     fig.update_layout(
         mapbox=dict(style="open-street-map", center=dict(lat=center_lat, lon=center_lon), zoom=11.5),
-        height=500, margin=dict(l=0, r=0, t=0, b=0),
+        height=500,
+        margin=dict(l=0, r=0, t=0, b=0),
     )
     st.plotly_chart(fig, width="stretch")
 
@@ -162,7 +187,9 @@ def main():
         out = _cached_recommend(db, texto.strip(), weights["demanda"], weights["competencia"], weights["accesibilidad"])
     except ValueError as e:
         st.error(str(e))
-        st.info("Prueba con palabras más concretas: restaurante, farmacia, gimnasio, escuela, centro comercial, tienda de ropa...")
+        st.info(
+            "Prueba con palabras más concretas: restaurante, farmacia, gimnasio, escuela, centro comercial, tienda de ropa..."
+        )
         return
 
     categoria = out["categoria"].iloc[0]

@@ -4,17 +4,17 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from src.database import RouteDatabase
 from src.analytics import MobilityAnalytics
 from src.data_warehouse.gold_layer import GoldLayer
+from src.database import RouteDatabase
 
 # TTL corto pero no-cero: el collector escribe cada 15-27 min (modo híbrido),
 # así que no hace falta re-consultar en cada clic/interacción para "sentirse"
@@ -76,8 +76,8 @@ def _fetch_period_comparison(_gold, days: int):
     cur_start = (today - timedelta(days=days - 1)).isoformat()
     prev_start = (today - timedelta(days=2 * days - 1)).isoformat()
     return {
-        'current': _gold.get_period_metrics(cur_start, tomorrow),
-        'previous': _gold.get_period_metrics(prev_start, cur_start),
+        "current": _gold.get_period_metrics(cur_start, tomorrow),
+        "previous": _gold.get_period_metrics(prev_start, cur_start),
     }
 
 
@@ -91,7 +91,7 @@ def _delta(current, previous, fmt: str):
 def _hay_datos(summary: dict) -> bool:
     """¿El resumen se calculó con mediciones? Sin filas en el periodo (una base recién creada, o un colector parado
     más de 30 días) la capa Gold devuelve ceros, y un 0 % de fiabilidad no es una medición sino la ausencia de ella."""
-    return bool(summary.get('total_measurements'))
+    return bool(summary.get("total_measurements"))
 
 
 def render_kpi_cards(summary: dict, comparison: dict = None):
@@ -102,8 +102,8 @@ def render_kpi_cards(summary: dict, comparison: dict = None):
     muestra delta, en lugar de inventar uno.
     """
     comparison = comparison or {}
-    cur = comparison.get('current') or {}
-    prev = comparison.get('previous') or {}
+    cur = comparison.get("current") or {}
+    prev = comparison.get("previous") or {}
     hay = _hay_datos(summary)
     col1, col2, col3, col4 = st.columns(4)
 
@@ -111,7 +111,7 @@ def render_kpi_cards(summary: dict, comparison: dict = None):
         st.metric(
             "System Avg Travel Time",
             f"{summary.get('system_avg_travel_time', 0):.1f} min" if hay else "—",
-            delta=_delta(cur.get('avg_travel_time'), prev.get('avg_travel_time'), "{:+.1f} min vs. periodo anterior"),
+            delta=_delta(cur.get("avg_travel_time"), prev.get("avg_travel_time"), "{:+.1f} min vs. periodo anterior"),
             delta_color="inverse",  # menos tiempo de viaje es mejor
         )
 
@@ -119,20 +119,17 @@ def render_kpi_cards(summary: dict, comparison: dict = None):
         st.metric(
             "System Reliability",
             f"{summary.get('system_reliability', 0):.1f}%" if hay else "—",
-            delta=_delta(cur.get('reliability'), prev.get('reliability'), "{:+.1f} pts vs. periodo anterior"),
+            delta=_delta(cur.get("reliability"), prev.get("reliability"), "{:+.1f} pts vs. periodo anterior"),
         )
 
     with col3:
         st.metric(
             "Active Routes",
-            summary.get('total_routes', 0),
+            summary.get("total_routes", 0),
         )
 
     with col4:
-        st.metric(
-            "Total Measurements",
-            f"{summary.get('total_measurements', 0):,}"
-        )
+        st.metric("Total Measurements", f"{summary.get('total_measurements', 0):,}")
 
 
 def render_route_performance(best_routes, worst_routes):
@@ -143,23 +140,15 @@ def render_route_performance(best_routes, worst_routes):
         st.subheader("🏆 Best Performing Routes")
         best_df = pd.DataFrame(best_routes)
         if not best_df.empty:
-            best_df['route'] = best_df['origin'] + ' → ' + best_df['destination']
-            st.dataframe(
-                best_df[['route', 'avg_time', 'avg_reliability']].head(5),
-                width='stretch',
-                hide_index=True
-            )
+            best_df["route"] = best_df["origin"] + " → " + best_df["destination"]
+            st.dataframe(best_df[["route", "avg_time", "avg_reliability"]].head(5), width="stretch", hide_index=True)
 
     with col2:
         st.subheader("⚠️ Routes Needing Attention")
         worst_df = pd.DataFrame(worst_routes)
         if not worst_df.empty:
-            worst_df['route'] = worst_df['origin'] + ' → ' + worst_df['destination']
-            st.dataframe(
-                worst_df[['route', 'avg_time', 'avg_reliability']].tail(5),
-                width='stretch',
-                hide_index=True
-            )
+            worst_df["route"] = worst_df["origin"] + " → " + worst_df["destination"]
+            st.dataframe(worst_df[["route", "avg_time", "avg_reliability"]].tail(5), width="stretch", hide_index=True)
 
 
 def render_trend_chart(days: int = 30):
@@ -172,40 +161,44 @@ def render_trend_chart(days: int = 30):
         st.warning("No data available for trend analysis")
         return
 
-    daily_avg = daily.set_index('date')['avg_travel_time']
+    daily_avg = daily.set_index("date")["avg_travel_time"]
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=daily_avg.index,
-        y=daily_avg.values,
-        mode='lines+markers',
-        name='Avg Travel Time',
-        line=dict(color='#1f77b4', width=3),
-        marker=dict(size=8)
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=daily_avg.index,
+            y=daily_avg.values,
+            mode="lines+markers",
+            name="Avg Travel Time",
+            line=dict(color="#1f77b4", width=3),
+            marker=dict(size=8),
+        )
+    )
 
     # Add trend line
     if len(daily_avg) > 1:
         z = np.polyfit(range(len(daily_avg)), daily_avg.values, 1)
         p = np.poly1d(z)
-        fig.add_trace(go.Scatter(
-            x=daily_avg.index,
-            y=p(range(len(daily_avg))),
-            mode='lines',
-            name='Trend',
-            line=dict(color='red', width=2, dash='dash')
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=daily_avg.index,
+                y=p(range(len(daily_avg))),
+                mode="lines",
+                name="Trend",
+                line=dict(color="red", width=2, dash="dash"),
+            )
+        )
 
     fig.update_layout(
         title=f"System Performance - {days} Day Trend",
         xaxis_title="Date",
         yaxis_title="Avg Travel Time (min)",
-        hovermode='x unified',
-        template='plotly_dark',
-        height=400
+        hovermode="x unified",
+        template="plotly_dark",
+        height=400,
     )
 
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, width="stretch")
 
 
 def render_distribution_chart():
@@ -221,16 +214,18 @@ def render_distribution_chart():
     fig = go.Figure()
 
     # Histogram
-    fig.add_trace(go.Histogram(
-        x=df['travel_time_min'],
-        name='Travel Time Distribution',
-        nbinsx=50,
-        marker=dict(color='rgba(31, 119, 180, 0.7)')
-    ))
+    fig.add_trace(
+        go.Histogram(
+            x=df["travel_time_min"],
+            name="Travel Time Distribution",
+            nbinsx=50,
+            marker=dict(color="rgba(31, 119, 180, 0.7)"),
+        )
+    )
 
     # Add mean and median lines
-    mean_val = df['travel_time_min'].mean()
-    median_val = df['travel_time_min'].median()
+    mean_val = df["travel_time_min"].mean()
+    median_val = df["travel_time_min"].median()
 
     fig.add_vline(x=mean_val, line_dash="dash", line_color="red", annotation_text="Mean")
     fig.add_vline(x=median_val, line_dash="dot", line_color="green", annotation_text="Median")
@@ -239,12 +234,12 @@ def render_distribution_chart():
         title="Travel Time Distribution (30 days)",
         xaxis_title="Travel Time (minutes)",
         yaxis_title="Frequency",
-        template='plotly_dark',
+        template="plotly_dark",
         height=400,
-        showlegend=True
+        showlegend=True,
     )
 
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, width="stretch")
 
 
 def main():
@@ -258,7 +253,7 @@ def main():
     gold = get_gold_layer()
     summary = _fetch_executive_summary(gold, days=30)
 
-    if 'error' in summary:
+    if "error" in summary:
         st.error("Error loading summary data")
         return
 
@@ -270,10 +265,7 @@ def main():
 
     # Route Performance
     st.subheader("Route Performance Analysis")
-    render_route_performance(
-        summary.get('best_routes', []),
-        summary.get('worst_routes', [])
-    )
+    render_route_performance(summary.get("best_routes", []), summary.get("worst_routes", []))
 
     st.divider()
 
@@ -294,9 +286,9 @@ def main():
         # Sin mediciones no hay nada que evaluar: antes la fiabilidad 0 % disparaba «Low system reliability».
         st.info("Sin mediciones en los últimos 30 días: no se evalúan alertas.")
         return
-    if summary.get('system_avg_travel_time', 0) > 30:
+    if summary.get("system_avg_travel_time", 0) > 30:
         alerts.append("🔴 High average travel time detected (>30 min)")
-    if summary.get('system_reliability', 0) < 50:
+    if summary.get("system_reliability", 0) < 50:
         alerts.append("🟡 Low system reliability (<50%)")
 
     if alerts:
@@ -308,4 +300,5 @@ def main():
 
 if __name__ == "__main__":
     import numpy as np
+
     main()

@@ -93,7 +93,7 @@ Examples:
         "--hybrid",
         action="store_true",
         help="Run ORS and TomTom in parallel, each on its own interval, both within their free "
-             "monthly quotas (see PRODUCTION.md). Ignores --source and --interval.",
+        "monthly quotas (see PRODUCTION.md). Ignores --source and --interval.",
     )
     parser.add_argument(
         "--ors-interval",
@@ -169,9 +169,7 @@ Examples:
     data_source = args.source or config.get_data_source()
 
     try:
-        traffic_api_key = (
-            config.get_tomtom_api_key() if data_source == "tomtom" else config.get_ors_api_key()
-        )
+        traffic_api_key = config.get_tomtom_api_key() if data_source == "tomtom" else config.get_ors_api_key()
         weather_api_key = config.get_openweather_api_key()
     except RuntimeError as e:
         logger.error(str(e))

@@ -134,17 +134,17 @@ jobs:
 
     - name: Install linting tools
       run: |
-        pip install black isort pylint
+        pip install black==26.10.1 isort==9.0.2
 
-    # INFORMATIVOS (continue-on-error en vez de `|| true`): el código actual
-    # no está formateado con black/isort. Cuando se aplique el formato, quitar
-    # `continue-on-error` para volverlos bloqueantes.
+    # BLOQUEANTES desde que el código se formateó (PR #59). La configuración
+    # (línea de 120, perfil black) está en pyproject.toml. Las versiones van
+    # fijadas porque cada versión mayor de black puede cambiar el formato.
+    # En local: `black` e `isort` sobre los mismos archivos que los dos pasos de abajo (en
+    # Windows, con PYTHONUTF8=1 para que isort lea los archivos con acentos).
     - name: Check code formatting
-      continue-on-error: true
       run: |
-        black src/ tests/ --check --line-length=120
+        black src/ tests/ streamlit_app/ tools/ collect.py setup.py train_ensemble_models.py train_models.py --check
 
     - name: Check import sorting
-      continue-on-error: true
       run: |
-        isort src/ tests/ --check-only
+        isort src/ tests/ streamlit_app/ tools/ collect.py setup.py train_ensemble_models.py train_models.py --check-only

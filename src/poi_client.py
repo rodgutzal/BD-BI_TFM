@@ -217,15 +217,17 @@ class OverpassClient:
             if lat is None or lon is None:
                 continue
 
-            pois.append({
-                "osm_type": element.get("type"),
-                "osm_id": element.get("id"),
-                "category": category,
-                "subcategory": subcategory,
-                "name": tags.get("name") or f"{category.replace('_', ' ').capitalize()} (sin nombre)",
-                "latitude": lat,
-                "longitude": lon,
-            })
+            pois.append(
+                {
+                    "osm_type": element.get("type"),
+                    "osm_id": element.get("id"),
+                    "category": category,
+                    "subcategory": subcategory,
+                    "name": tags.get("name") or f"{category.replace('_', ' ').capitalize()} (sin nombre)",
+                    "latitude": lat,
+                    "longitude": lon,
+                }
+            )
         return pois
 
     def close(self):

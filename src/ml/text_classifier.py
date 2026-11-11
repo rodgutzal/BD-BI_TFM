@@ -42,11 +42,11 @@ def char_wb_ngrams(texto: str, n_min: int, n_max: int) -> List[str]:
         largo = len(w)
         for n in range(n_min, n_max + 1):
             desplazamiento = 0
-            out.append(w[desplazamiento:desplazamiento + n])
+            out.append(w[desplazamiento : desplazamiento + n])
             while desplazamiento + n < largo:
                 desplazamiento += 1
-                out.append(w[desplazamiento:desplazamiento + n])
-            if desplazamiento == 0:             # palabra más corta que n: no tiene sentido seguir con n mayores
+                out.append(w[desplazamiento : desplazamiento + n])
+            if desplazamiento == 0:  # palabra más corta que n: no tiene sentido seguir con n mayores
                 break
     return out
 
@@ -56,8 +56,16 @@ class ModeloTexto:
 
     FORMATO = 1
 
-    def __init__(self, clases: List[str], vocabulario: Dict[str, int], idf: np.ndarray, coef: np.ndarray,
-                 intercepto: np.ndarray, ngramas: Tuple[int, int], umbral: float = 0.5):
+    def __init__(
+        self,
+        clases: List[str],
+        vocabulario: Dict[str, int],
+        idf: np.ndarray,
+        coef: np.ndarray,
+        intercepto: np.ndarray,
+        ngramas: Tuple[int, int],
+        umbral: float = 0.5,
+    ):
         self.clases = list(clases)
         self.vocabulario = dict(vocabulario)
         self.idf = np.asarray(idf, dtype=float)
@@ -79,7 +87,9 @@ class ModeloTexto:
         if not frecuencias:
             return np.array([], dtype=int), np.array([], dtype=float)
         indices = np.fromiter(frecuencias, dtype=int, count=len(frecuencias))
-        valores = (1.0 + np.log(np.fromiter(frecuencias.values(), dtype=float, count=len(frecuencias)))) * self.idf[indices]
+        valores = (1.0 + np.log(np.fromiter(frecuencias.values(), dtype=float, count=len(frecuencias)))) * self.idf[
+            indices
+        ]
         return indices, valores / np.linalg.norm(valores)
 
     def probabilidades(self, texto: str) -> Dict[str, float]:
@@ -104,16 +114,30 @@ class ModeloTexto:
 
     # -- (de)serialización -------------------------------------------------------------------------------------------
     def to_dict(self) -> dict:
-        return {"formato": self.FORMATO, "clases": self.clases, "ngramas": list(self.ngramas), "umbral": self.umbral,
-                "vocabulario": self.vocabulario, "idf": self.idf.tolist(), "coef": self.coef.tolist(),
-                "intercepto": self.intercepto.tolist()}
+        return {
+            "formato": self.FORMATO,
+            "clases": self.clases,
+            "ngramas": list(self.ngramas),
+            "umbral": self.umbral,
+            "vocabulario": self.vocabulario,
+            "idf": self.idf.tolist(),
+            "coef": self.coef.tolist(),
+            "intercepto": self.intercepto.tolist(),
+        }
 
     @classmethod
     def from_dict(cls, d: dict) -> "ModeloTexto":
         if d.get("formato") != cls.FORMATO:
             raise ValueError(f"formato {d.get('formato')!r}, se esperaba {cls.FORMATO}")
-        return cls(d["clases"], d["vocabulario"], np.array(d["idf"]), np.array(d["coef"]), np.array(d["intercepto"]),
-                   tuple(d["ngramas"]), d["umbral"])
+        return cls(
+            d["clases"],
+            d["vocabulario"],
+            np.array(d["idf"]),
+            np.array(d["coef"]),
+            np.array(d["intercepto"]),
+            tuple(d["ngramas"]),
+            d["umbral"],
+        )
 
     def save(self, ruta) -> None:
         with open(ruta, "w", encoding="utf-8", newline="\n") as f:

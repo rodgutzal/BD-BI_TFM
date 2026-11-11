@@ -10,9 +10,10 @@ el histórico fusionado con el esquema nuevo). Para volver a correrlo tal
 cual necesitarías apuntar DATA_PATH a legacy_ors_traffic_weather_data.csv.
 """
 
-import streamlit as st
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
+import streamlit as st
 
 st.set_page_config(page_title="Urban Mobility Analytics (Classic)", page_icon="🚦", layout="wide")
 

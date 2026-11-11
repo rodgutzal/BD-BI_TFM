@@ -48,7 +48,7 @@ def compute_lenses(counts: CellCounts, profile: BusinessProfile, mask: Optional[
     filas, cols = np.nonzero(mask)
     ids = [grid.cell_id(f, c) for f, c in zip(filas, cols)]
     columnas: Dict[str, np.ndarray] = {}
-    competidores = tuple(profile.competencia_directa) + tuple(profile.competencia_indirecta)   # precedencia, ver abajo
+    competidores = tuple(profile.competencia_directa) + tuple(profile.competencia_indirecta)  # precedencia, ver abajo
 
     def tomar(matriz):
         return matriz[filas, cols]
@@ -79,9 +79,11 @@ def compute_lenses(counts: CellCounts, profile: BusinessProfile, mask: Optional[
             selectores_mercado.extend(sels)
             segmentos_con_datos += 1
         else:
-            valores = np.full(len(ids), np.nan)          # 'sin datos': no es lo mismo que 0 personas
+            valores = np.full(len(ids), np.nan)  # 'sin datos': no es lo mismo que 0 personas
         columnas[f"mercado_{segmento}"] = valores
-    columnas["mercado_total"] = suma_escalada / segmentos_con_datos if segmentos_con_datos else np.full(len(ids), np.nan)
+    columnas["mercado_total"] = (
+        suma_escalada / segmentos_con_datos if segmentos_con_datos else np.full(len(ids), np.nan)
+    )
     columnas["apoyo_mercado"] = apoyo(selectores_mercado, competidores) if selectores_mercado else np.zeros(len(ids))
     datos_mercado = np.full(len(ids), segmentos_con_datos > 0)
 
@@ -120,9 +122,13 @@ def lens_coverage(counts: CellCounts, profile: BusinessProfile) -> pd.DataFrame:
     filas = []
     competidores = tuple(profile.competencia_directa) + tuple(profile.competencia_indirecta)
     for segmento, sels in segment_selectors(profile).items():
-        filas.append({"lente": "mercado", "nombre": segmento, "pois": counts.count_in_area(sels, competidores) if sels else 0})
+        filas.append(
+            {"lente": "mercado", "nombre": segmento, "pois": counts.count_in_area(sels, competidores) if sels else 0}
+        )
     for tipo, sels in supplier_selectors(profile).items():
-        filas.append({"lente": "proveedores", "nombre": tipo, "pois": counts.count_in_area(sels, competidores) if sels else 0})
+        filas.append(
+            {"lente": "proveedores", "nombre": tipo, "pois": counts.count_in_area(sels, competidores) if sels else 0}
+        )
     for nombre, sels in (("directa", profile.competencia_directa), ("indirecta", profile.competencia_indirecta)):
         filas.append({"lente": "competencia", "nombre": nombre, "pois": counts.count_in_area(sels) if sels else 0})
     return pd.DataFrame(filas)

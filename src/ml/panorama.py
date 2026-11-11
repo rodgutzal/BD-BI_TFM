@@ -33,7 +33,7 @@ from src.ml.inputs_bundle import file_hash
 from src.ml.lenses import compute_lenses
 from src.ml.osm_context import CONTEXTO
 
-APOYO_SUFICIENTE = 5          # POIs en la celda y sus 8 vecinas a partir de los cuales una lente se considera bien apoyada
+APOYO_SUFICIENTE = 5  # POIs en la celda y sus 8 vecinas a partir de los cuales una lente se considera bien apoyada
 NIVELES_CONFIANZA = ((2 / 3, "alta"), (1 / 3, "media"), (0.0, "baja"))
 PERCENTILES = ("competencia_directa", "mercado_total", "proveedores_total", "proveedores_diversidad")
 COLUMNAS_BRECHA = ("esperado", "brecha_relativa", "brecha_p10", "brecha_p90")
@@ -56,9 +56,11 @@ def confidence(lentes: pd.DataFrame, pois_vecindad) -> pd.DataFrame:
     casi no hay nada. Si se usara el número de competidores, las celdas sin competencia —justo las que interesan— saldrían
     siempre con confianza baja. Mercado y proveedores sí usan su propio apoyo: sin generadores de consumidores ni
     proveedores cerca, no hay evidencia de que haya mercado o proveedores."""
-    apoyos = {"competencia": np.asarray(pois_vecindad, dtype=float),
-              "mercado": lentes["apoyo_mercado"].to_numpy(dtype=float),
-              "proveedores": lentes["apoyo_proveedores"].to_numpy(dtype=float)}
+    apoyos = {
+        "competencia": np.asarray(pois_vecindad, dtype=float),
+        "mercado": lentes["apoyo_mercado"].to_numpy(dtype=float),
+        "proveedores": lentes["apoyo_proveedores"].to_numpy(dtype=float),
+    }
     soportes = []
     for lente in ("competencia", "mercado", "proveedores"):
         apoyo = np.minimum(apoyos[lente] / APOYO_SUFICIENTE, 1.0)
@@ -79,14 +81,27 @@ def locate(index: pd.Index) -> pd.DataFrame:
     nombres = list(LOCATIONS)
     distancias = np.stack([grid.haversine_m(LOCATIONS[z].latitude, LOCATIONS[z].longitude, lat, lon) for z in nombres])
     cercana = np.argmin(distancias, axis=0)
-    return pd.DataFrame({"fila": filas, "col": cols, "lat": lat, "lon": lon,
-                         "zona_cercana": [nombres[i] for i in cercana],
-                         "dist_zona_m": distancias[cercana, np.arange(len(index))]}, index=index)
+    return pd.DataFrame(
+        {
+            "fila": filas,
+            "col": cols,
+            "lat": lat,
+            "lon": lon,
+            "zona_cercana": [nombres[i] for i in cercana],
+            "dist_zona_m": distancias[cercana, np.arange(len(index))],
+        },
+        index=index,
+    )
 
 
-def build_panorama(counts: CellCounts, profile: BusinessProfile, brecha: Optional[pd.DataFrame] = None,
-                   modelo_brecha: str = "", brecha_validada: bool = False,
-                   mask: Optional[np.ndarray] = None) -> pd.DataFrame:
+def build_panorama(
+    counts: CellCounts,
+    profile: BusinessProfile,
+    brecha: Optional[pd.DataFrame] = None,
+    modelo_brecha: str = "",
+    brecha_validada: bool = False,
+    mask: Optional[np.ndarray] = None,
+) -> pd.DataFrame:
     """Panorama de las celdas activas (o de `mask`) para un perfil. Indexado por cell_id.
 
     `brecha`: tabla indexada por cell_id con `COLUMNAS_BRECHA` (ver validation.gap_from_evaluation), o None. Sin ella
@@ -133,8 +148,9 @@ def write_outputs(out_dir, panorama: pd.DataFrame, counts: CellCounts, manifiest
         ARCHIVOS["panorama"]: {"filas": int(len(panorama)), "sha256": file_hash(ruta_p)},
         ARCHIVOS["cell_counts"]: {"filas": int(len(cuentas)), "sha256": file_hash(ruta_c)},
     }
-    (directorio / ARCHIVOS["manifest"]).write_text(json.dumps(completo, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
-                                                   encoding="utf-8", newline="\n")
+    (directorio / ARCHIVOS["manifest"]).write_text(
+        json.dumps(completo, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+    )
     return completo
 
 
@@ -166,8 +182,9 @@ def read_panorama(out_dir, verificar: bool = True) -> pd.DataFrame:
         problemas = verify_outputs(out_dir)
         if problemas:
             raise ValueError("; ".join(problemas))
-    return pd.read_csv(Path(out_dir) / ARCHIVOS["panorama"], keep_default_na=True, na_values=[""],
-                       dtype={"modelo_brecha": str}).fillna({"modelo_brecha": ""})
+    return pd.read_csv(
+        Path(out_dir) / ARCHIVOS["panorama"], keep_default_na=True, na_values=[""], dtype={"modelo_brecha": str}
+    ).fillna({"modelo_brecha": ""})
 
 
 def read_counts(out_dir, verificar: bool = True) -> CellCounts:

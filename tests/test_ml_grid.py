@@ -27,6 +27,7 @@ def pois_en(*celdas):
 # Geometría de la rejilla
 # ---------------------------------------------------------------------------
 
+
 def test_la_rejilla_es_fija_y_cubre_el_area():
     """La rejilla tiene forma fija (45 por 51 celdas) y cubre los POIs conocidos y los centros de las 7 zonas."""
     assert grid.SHAPE == (45, 51)
@@ -46,10 +47,10 @@ def test_las_celdas_miden_unos_250_m_en_las_dos_direcciones():
 
 def test_un_punto_cae_en_la_celda_cuyo_centro_esta_cerca():
     """Un punto cae en la celda correcta y su centro queda a menos de 0,71 veces el lado de la celda."""
-    fila, col = grid.cell_index(35.8970, 14.4890)             # Msida
+    fila, col = grid.cell_index(35.8970, 14.4890)  # Msida
     assert (fila[0], col[0]) == (25, 17)
     lat, lon = grid.cell_center(fila[0], col[0])
-    assert grid.haversine_m(35.8970, 14.4890, lat, lon) < 250 * 0.71 + 1      # a lo sumo media diagonal
+    assert grid.haversine_m(35.8970, 14.4890, lat, lon) < 250 * 0.71 + 1  # a lo sumo media diagonal
 
 
 def test_puntos_fuera_de_la_rejilla_o_sin_coordenadas_dan_menos_uno():
@@ -60,7 +61,7 @@ def test_puntos_fuera_de_la_rejilla_o_sin_coordenadas_dan_menos_uno():
 
 def test_los_bordes_de_la_rejilla():
     """Los bordes de la rejilla: la esquina suroeste está dentro y justo fuera da -1."""
-    assert grid.cell_index(grid.SOUTH, grid.WEST) == (np.array([0]), np.array([0]))          # esquina suroeste incluida
+    assert grid.cell_index(grid.SOUTH, grid.WEST) == (np.array([0]), np.array([0]))  # esquina suroeste incluida
     fila, _ = grid.cell_index(grid.SOUTH - 1e-6, grid.WEST)
     assert fila[0] == -1
     fila, col = grid.cell_index(grid.SOUTH + grid.N_ROWS * grid.DLAT + 1e-6, grid.WEST + grid.N_COLS * grid.DLON + 1e-6)
@@ -101,8 +102,8 @@ def test_la_suma_por_anillos_pondera_la_vecindad():
     una = np.zeros(grid.SHAPE)
     una[20, 20] = 1.0
     ponderada = grid.neighborhood_sum(una)
-    assert ponderada[20, 20] == 1.0 and ponderada[20, 21] == 0.5 and ponderada[21, 21] == 0.5     # anillo 1
-    assert ponderada[20, 22] == 0.25 and ponderada[22, 22] == 0.25                                 # anillo 2
+    assert ponderada[20, 20] == 1.0 and ponderada[20, 21] == 0.5 and ponderada[21, 21] == 0.5  # anillo 1
+    assert ponderada[20, 22] == 0.25 and ponderada[22, 22] == 0.25  # anillo 2
     assert ponderada[20, 23] == 0.0 and ponderada.sum() == pytest.approx(1 + 8 * 0.5 + 16 * 0.25)
 
 
@@ -112,7 +113,7 @@ def test_los_bordes_no_dan_la_vuelta():
     una[0, 0] = 1.0
     ponderada = grid.neighborhood_sum(una)
     assert ponderada[0, 0] == 1.0 and ponderada[grid.N_ROWS - 1, grid.N_COLS - 1] == 0.0
-    assert ponderada.sum() < 1 + 8 * 0.5 + 16 * 0.25                       # parte de la vecindad cae fuera
+    assert ponderada.sum() < 1 + 8 * 0.5 + 16 * 0.25  # parte de la vecindad cae fuera
 
 
 def test_activas_son_las_celdas_con_algun_poi_en_ella_o_en_su_vecindad():
@@ -127,10 +128,13 @@ def test_activas_son_las_celdas_con_algun_poi_en_ella_o_en_su_vecindad():
 # Selector
 # ---------------------------------------------------------------------------
 
+
 def test_selector_toda_la_categoria_un_subconjunto_o_todo_menos_algo():
     """Un selector puede abarcar toda una categoría, un subconjunto de subcategorías o todo salvo algunas."""
     assert Selector("food_drink").matches("food_drink", "cafe") and not Selector("food_drink").matches("school", "cafe")
-    assert selector("business", "bakery").matches("business", "bakery") and not selector("business", "bakery").matches("business", "butcher")
+    assert selector("business", "bakery").matches("business", "bakery") and not selector("business", "bakery").matches(
+        "business", "butcher"
+    )
     todo_menos = selector_except("business", "company", "government")
     assert todo_menos.matches("business", "bakery") and not todo_menos.matches("business", "company")
     assert not todo_menos.matches("school", "bakery")
@@ -140,10 +144,17 @@ def test_selector_toda_la_categoria_un_subconjunto_o_todo_menos_algo():
 # CellCounts
 # ---------------------------------------------------------------------------
 
+
 def test_los_conteos_se_separan_por_categoria_y_subcategoria():
     """Los conteos por celda se separan por categoría y subcategoría y se pueden agregar con un selector."""
-    cc = CellCounts.from_pois(pois_en((10, 10, "food_drink", "cafe"), (10, 10, "food_drink", "cafe"),
-                                      (10, 10, "food_drink", "bar"), (10, 11, "business", "bakery")))
+    cc = CellCounts.from_pois(
+        pois_en(
+            (10, 10, "food_drink", "cafe"),
+            (10, 10, "food_drink", "cafe"),
+            (10, 10, "food_drink", "bar"),
+            (10, 11, "business", "bakery"),
+        )
+    )
     assert cc.pairs() == [("business", "bakery"), ("food_drink", "bar"), ("food_drink", "cafe")]
     assert cc.arrays[("food_drink", "cafe")][10, 10] == 2 and cc.arrays[("business", "bakery")][10, 11] == 1
     assert cc.grid([Selector("food_drink")])[10, 10] == 3 and cc.total_grid().sum() == 4
@@ -159,12 +170,22 @@ def test_subcategoria_vacia_o_nula_se_cuenta_como_cadena_vacia():
 
 def test_los_pois_fuera_de_la_rejilla_se_cuentan_aparte():
     """Los POIs fuera de la rejilla o sin categoría no entran en la cuenta de celdas y los de fuera se cuentan aparte."""
-    df = pd.concat([pois_en((5, 5, "school", "school")),
-                    pd.DataFrame([{"category": "school", "subcategory": "school", "latitude": 40.0, "longitude": 14.5},
-                                  {"category": None, "subcategory": "x", "latitude": 35.9, "longitude": 14.5}])],
-                   ignore_index=True)
+    df = pd.concat(
+        [
+            pois_en((5, 5, "school", "school")),
+            pd.DataFrame(
+                [
+                    {"category": "school", "subcategory": "school", "latitude": 40.0, "longitude": 14.5},
+                    {"category": None, "subcategory": "x", "latitude": 35.9, "longitude": 14.5},
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
     cc = CellCounts.from_pois(df)
-    assert cc.n_total == 2 and cc.n_fuera == 1 and cc.total_grid().sum() == 1       # sin categoría se descarta; el de fuera, aparte
+    assert (
+        cc.n_total == 2 and cc.n_fuera == 1 and cc.total_grid().sum() == 1
+    )  # sin categoría se descarta; el de fuera, aparte
 
 
 def test_sin_pois_los_conteos_estan_vacios_pero_las_consultas_funcionan():
@@ -183,10 +204,12 @@ def test_exclude_quita_del_conteo_lo_que_cumple_el_objetivo():
 
 def test_la_tabla_celda_por_subcategoria():
     """La tabla celda por subcategoría tiene solo las celdas activas, con conteos enteros y una columna por subcategoría."""
-    cc = CellCounts.from_pois(pois_en((10, 10, "food_drink", "cafe"), (10, 10, "food_drink", "cafe"), (30, 30, "school", "school")))
+    cc = CellCounts.from_pois(
+        pois_en((10, 10, "food_drink", "cafe"), (10, 10, "food_drink", "cafe"), (30, 30, "school", "school"))
+    )
     activas = grid.active_mask(cc.total_grid(), anillo=0)
     tabla = cc.to_frame(activas)
     assert list(tabla.index) == ["r10c10", "r30c30"] and tabla.index.name == "cell_id"
     assert tabla.loc["r10c10", "food_drink|cafe"] == 2 and tabla.loc["r30c30", "school|school"] == 1
     assert tabla.to_numpy().sum() == 3 and tabla.dtypes.map(lambda d: d.kind).eq("i").all()
-    assert len(cc.to_frame()) == 2295                                               # sin máscara: todas las celdas
+    assert len(cc.to_frame()) == 2295  # sin máscara: todas las celdas

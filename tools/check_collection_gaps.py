@@ -31,7 +31,7 @@ DEFAULT_DB = ROOT / "data" / "mobility.db"
 
 def load_cycle_times(db_path, since: pd.Timestamp) -> pd.DataFrame:
     """Instantes DISTINTOS de recolección (UTC), con su fuente, desde `since`."""
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)   # solo lectura
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)  # solo lectura
     try:
         df = pd.read_sql("SELECT timestamp, data_source FROM route_measurements", conn)
     finally:
@@ -68,20 +68,31 @@ def report(df: pd.DataFrame, now: pd.Timestamp, days: int, min_gap: pd.Timedelta
         out(f"    {src:<8} último: {g['ts'].max():%Y-%m-%d %H:%M} UTC")
 
     if age > min_gap:
-        out(f"  >> AHORA MISMO no está llegando tráfico (sin datos hace {fmt_h(age)}). "
-            f"Revisa: docker compose ps  /  docker compose up -d")
+        out(
+            f"  >> AHORA MISMO no está llegando tráfico (sin datos hace {fmt_h(age)}). "
+            f"Revisa: docker compose ps  /  docker compose up -d"
+        )
 
     first = df["ts"].min()
     window = max(last - first, pd.Timedelta(seconds=1))
     gaps = find_gaps(df["ts"], min_gap)
     missing = gaps["duration"].sum() if len(gaps) else pd.Timedelta(0)
-    out(f"\nVentana con datos: {first:%Y-%m-%d %H:%M} -> {last:%Y-%m-%d %H:%M} UTC "
-        f"({df['ts'].nunique()} instantes de recolección distintos)")
-    out(f"Huecos de más de {fmt_h(min_gap)}: {len(gaps)}"
-        + (f"   |   tiempo total sin datos dentro de la ventana: {fmt_h(missing)} "
-           f"({100 * missing / window:.1f}%)" if len(gaps) else ""))
+    out(
+        f"\nVentana con datos: {first:%Y-%m-%d %H:%M} -> {last:%Y-%m-%d %H:%M} UTC "
+        f"({df['ts'].nunique()} instantes de recolección distintos)"
+    )
+    out(
+        f"Huecos de más de {fmt_h(min_gap)}: {len(gaps)}"
+        + (
+            f"   |   tiempo total sin datos dentro de la ventana: {fmt_h(missing)} " f"({100 * missing / window:.1f}%)"
+            if len(gaps)
+            else ""
+        )
+    )
     for _, r in gaps.sort_values("start").tail(15).iterrows():
-        out(f"    {pd.Timestamp(r['start']):%Y-%m-%d %H:%M}  ->  {pd.Timestamp(r['end']):%Y-%m-%d %H:%M} UTC   ({fmt_h(r['duration'])})")
+        out(
+            f"    {pd.Timestamp(r['start']):%Y-%m-%d %H:%M}  ->  {pd.Timestamp(r['end']):%Y-%m-%d %H:%M} UTC   ({fmt_h(r['duration'])})"
+        )
     if len(gaps) > 15:
         out(f"    ... (se muestran los 15 más recientes de {len(gaps)})")
     return {"gaps": len(gaps), "missing": missing, "age": age}

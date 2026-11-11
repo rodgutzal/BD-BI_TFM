@@ -36,7 +36,7 @@ _LECTURAS = {
     "pois_foursquare": "SELECT category, subcategory, name, latitude, longitude FROM pois_foursquare",
     "zone_demographics": "SELECT zone_name, population FROM zone_demographics",
     "route_measurements": "SELECT origin, destination, AVG(travel_time_min) AS travel_time_min, COUNT(*) AS n_mediciones "
-                          "FROM route_measurements GROUP BY origin, destination",
+    "FROM route_measurements GROUP BY origin, destination",
 }
 _VACIAS = {
     "pois_foursquare": _POIS,
@@ -79,12 +79,19 @@ def library_versions() -> Dict[str, str]:
     import numpy
     import scipy
     import sklearn
-    return {"python": platform.python_version(), "pandas": pd.__version__, "numpy": numpy.__version__,
-            "scikit-learn": sklearn.__version__, "scipy": scipy.__version__}
+
+    return {
+        "python": platform.python_version(),
+        "pandas": pd.__version__,
+        "numpy": numpy.__version__,
+        "scikit-learn": sklearn.__version__,
+        "scipy": scipy.__version__,
+    }
 
 
-def export_bundle(db_path, out_path, contexto: Optional[pd.DataFrame] = None, commit: str = "",
-                  sobrescribir: bool = False) -> Dict[str, str]:
+def export_bundle(
+    db_path, out_path, contexto: Optional[pd.DataFrame] = None, commit: str = "", sobrescribir: bool = False
+) -> Dict[str, str]:
     """Escribe el paquete en `out_path` leyendo `db_path` en solo lectura. `contexto` es el DataFrame del contexto de
     OSM (ver `osm_context.load_context`); si es None o está vacío, la tabla `osm_context` queda vacía.
 
@@ -101,13 +108,16 @@ def export_bundle(db_path, out_path, contexto: Optional[pd.DataFrame] = None, co
         try:
             tablas[nombre] = _leer(db_path, sql)
         except Exception:
-            if nombre not in _VACIAS:               # `pois` es obligatoria; las demás son opcionales
+            if nombre not in _VACIAS:  # `pois` es obligatoria; las demás son opcionales
                 raise
-            tablas[nombre] = pd.DataFrame(columns=_VACIAS[nombre])   # tabla opcional ausente en la base de origen
+            tablas[nombre] = pd.DataFrame(columns=_VACIAS[nombre])  # tabla opcional ausente en la base de origen
     if tablas["pois"].empty:
         raise ValueError(f"{db_path} no tiene POIs: no hay nada que exportar")
-    tablas["osm_context"] = (contexto[COLUMNAS_CONTEXTO].reset_index(drop=True)
-                             if contexto is not None and not contexto.empty else pd.DataFrame(columns=COLUMNAS_CONTEXTO))
+    tablas["osm_context"] = (
+        contexto[COLUMNAS_CONTEXTO].reset_index(drop=True)
+        if contexto is not None and not contexto.empty
+        else pd.DataFrame(columns=COLUMNAS_CONTEXTO)
+    )
 
     if out.exists():
         out.unlink()
@@ -120,16 +130,23 @@ def export_bundle(db_path, out_path, contexto: Optional[pd.DataFrame] = None, co
     finally:
         conn.close()
 
-    manifiesto = {"formato": str(FORMATO), "creado": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                  "commit": commit or "desconocido", "origen": Path(db_path).name, "sistema": platform.system()}
+    manifiesto = {
+        "formato": str(FORMATO),
+        "creado": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "commit": commit or "desconocido",
+        "origen": Path(db_path).name,
+        "sistema": platform.system(),
+    }
     manifiesto.update({f"version.{k}": v for k, v in library_versions().items()})
-    for nombre in TABLAS:                       # los hashes se calculan LEYENDO el paquete, igual que al verificar
+    for nombre in TABLAS:  # los hashes se calculan LEYENDO el paquete, igual que al verificar
         df = _leer(out, f"SELECT * FROM {nombre}")
         manifiesto[f"tabla.{nombre}.filas"] = str(len(df))
         manifiesto[f"tabla.{nombre}.sha256"] = table_hash(df)
     conn = sqlite3.connect(out)
     try:
-        pd.DataFrame({"clave": list(manifiesto), "valor": list(manifiesto.values())}).to_sql("manifest", conn, index=False)
+        pd.DataFrame({"clave": list(manifiesto), "valor": list(manifiesto.values())}).to_sql(
+            "manifest", conn, index=False
+        )
         conn.commit()
     finally:
         conn.close()
@@ -182,8 +199,12 @@ def load_context_table(path) -> pd.DataFrame:
 def provenance(path, commit: str = "") -> Dict[str, str]:
     """Procedencia de un resultado: qué paquete (hash del archivo y de su manifiesto) y qué versiones lo produjeron.
     Es lo que cada tabla de salida de la máquina de entrenamiento guarda junto a sus números."""
-    prov = {"entrada_sha256": file_hash(path), "commit": commit or "desconocido",
-            "ejecutado": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "python_exe": Path(sys.executable).name}
+    prov = {
+        "entrada_sha256": file_hash(path),
+        "commit": commit or "desconocido",
+        "ejecutado": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "python_exe": Path(sys.executable).name,
+    }
     prov.update({f"version.{k}": v for k, v in library_versions().items()})
     if is_bundle(path):
         m = read_manifest(path)

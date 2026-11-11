@@ -21,7 +21,12 @@ from streamlit.testing.v1 import AppTest
 from streamlit_app.dashboards import predictive_modeling_dashboard as pm
 from tests.test_predictive_modeling_dashboard import _datos
 
-FIT = {"clf": "_fit_classification", "reg": "_fit_regression", "temporal": "_fit_temporal", "cluster": "_fit_clustering"}
+FIT = {
+    "clf": "_fit_classification",
+    "reg": "_fit_regression",
+    "temporal": "_fit_temporal",
+    "cluster": "_fit_clustering",
+}
 
 APP = f"""
 import sys
@@ -38,7 +43,13 @@ def llamadas(monkeypatch):
     df = _datos()
     # 5 corredores: el clustering por defecto agrupa en 3 y necesita al menos esa cantidad
     # (la base real tiene 12).
-    pares = [("Msida", "Gzira"), ("Msida", "Sliema"), ("Valletta", "Sliema"), ("Msida", "Valletta"), ("Gzira", "Sliema")]
+    pares = [
+        ("Msida", "Gzira"),
+        ("Msida", "Sliema"),
+        ("Valletta", "Sliema"),
+        ("Msida", "Valletta"),
+        ("Gzira", "Sliema"),
+    ]
     df["origin"] = [pares[i % 5][0] for i in range(len(df))]
     df["destination"] = [pares[i % 5][1] for i in range(len(df))]
     monkeypatch.setattr(pm, "load_modeling_data", lambda: df)
@@ -94,9 +105,9 @@ def test_lo_pedido_se_mantiene_en_la_sesion(llamadas):
     at = _app()
     at.button(key="pm_btn_cluster").click().run()
     llamadas.clear()
-    at.run()                                     # cualquier otro rerun (otro clic, un slider...)
+    at.run()  # cualquier otro rerun (otro clic, un slider...)
     assert "pm_btn_cluster" not in _botones(at)
-    assert set(llamadas) == {"cluster"}          # la sección sigue visible; nada más se entrena
+    assert set(llamadas) == {"cluster"}  # la sección sigue visible; nada más se entrena
 
 
 def test_el_boton_de_todos_entrena_las_cuatro_secciones(llamadas):

@@ -25,11 +25,21 @@ from src.database import RouteDatabase
 def _make_ors_only_route_db(tmp_path):
     """Crea una DB temporal con una sola medición ORS (traffic_delay_min NULL)."""
     db = RouteDatabase(tmp_path / "test.csv", tmp_path / "test.db")
-    db.save_records_to_sqlite([{
-        "timestamp": "2026-08-16T20:00:00+00:00", "origin": "Msida", "destination": "Valletta",
-        "data_source": "ors", "distance_km": 4.24, "travel_time_min": 10.37,
-        "traffic_delay_min": None, "no_traffic_time_min": None, "average_speed_kmh": 24.5,
-    }])
+    db.save_records_to_sqlite(
+        [
+            {
+                "timestamp": "2026-08-16T20:00:00+00:00",
+                "origin": "Msida",
+                "destination": "Valletta",
+                "data_source": "ors",
+                "distance_km": 4.24,
+                "travel_time_min": 10.37,
+                "traffic_delay_min": None,
+                "no_traffic_time_min": None,
+                "average_speed_kmh": 24.5,
+            }
+        ]
+    )
     return db
 
 
@@ -51,6 +61,7 @@ def test_ors_row_traffic_delay_is_none_not_nan(tmp_path):
 def test_safe_helper_handles_none_and_nan():
     """El helper _safe() (duplicado en operations_dashboard.py y
     legacy_reference/components.py) debe neutralizar tanto None como NaN."""
+
     def _safe(value, default=0.0):
         return default if pd.isna(value) else value
 

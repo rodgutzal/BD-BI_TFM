@@ -26,8 +26,8 @@ import pandas as pd
 SEASONAL_PERIOD = 24
 ORDER = (1, 0, 1)
 SEASONAL_ORDER = (0, 1, 1, SEASONAL_PERIOD)
-SCALE = 100          # la serie (0-1) se ajusta en escala 0-100: con 0-1, sigma2 ~ 1e-4 y el optimizador sufre
-MAXITER = 200        # converge en 11-35 iteraciones; el tope solo es una red de seguridad
+SCALE = 100  # la serie (0-1) se ajusta en escala 0-100: con 0-1, sigma2 ~ 1e-4 y el optimizador sufre
+MAXITER = 200  # converge en 11-35 iteraciones; el tope solo es una red de seguridad
 HORIZON = 24
 
 # Resultado de tools/validate_forecast.py sobre la base real (35 cortes diarios, ago-oct 2026). Es una

@@ -22,6 +22,13 @@ sys.path.insert(0, str(ROOT_DIR))
 from src.analytics import MobilityAnalytics
 from src.database import RouteDatabase
 from src.locations import LOCATIONS
+from streamlit_app.legacy_reference.charts import (
+    create_humidity_chart,
+    create_speed_chart,
+    create_temperature_chart,
+    create_traffic_delay_chart,
+    create_travel_time_chart,
+)
 from streamlit_app.legacy_reference.components import (
     render_alerts,
     render_export_buttons,
@@ -31,13 +38,6 @@ from streamlit_app.legacy_reference.components import (
     render_metric_cards,
     render_sidebar_filters,
     render_traffic_status,
-)
-from streamlit_app.legacy_reference.charts import (
-    create_travel_time_chart,
-    create_traffic_delay_chart,
-    create_speed_chart,
-    create_temperature_chart,
-    create_humidity_chart,
 )
 
 DB_PATH = ROOT_DIR / "data" / "mobility.db"
@@ -169,12 +169,7 @@ def main():
 
     st.divider()
 
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📈 Travel Time",
-        "🚗 Traffic Analysis",
-        "🌡️ Weather Impact",
-        "📊 Rankings"
-    ])
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Travel Time", "🚗 Traffic Analysis", "🌡️ Weather Impact", "📊 Rankings"])
 
     with tab1:
         col1, col2 = st.columns(2)
@@ -188,10 +183,12 @@ def main():
         with col1:
             st.plotly_chart(create_traffic_delay_chart(df), use_container_width=True)
         with col2:
-            st.info("🚦 **Interpretación de Colores:**\n\n"
-                   "🟢 **Verde** = Sin retraso (0-1 min)\n"
-                   "🟡 **Amarillo** = Tráfico moderado (1-4 min)\n"
-                   "🔴 **Rojo** = Tráfico pesado (>4 min)")
+            st.info(
+                "🚦 **Interpretación de Colores:**\n\n"
+                "🟢 **Verde** = Sin retraso (0-1 min)\n"
+                "🟡 **Amarillo** = Tráfico moderado (1-4 min)\n"
+                "🔴 **Rojo** = Tráfico pesado (>4 min)"
+            )
 
     with tab3:
         col1, col2 = st.columns(2)
@@ -211,14 +208,16 @@ def main():
 
             rank_data = []
             for idx, row in routes_stats_sorted.iterrows():
-                rank_data.append({
-                    "Rank": len(rank_data) + 1,
-                    "Route": f"{row['origin']} → {row['destination']}",
-                    "Travel Time": f"{row['avg_travel_time']:.1f}min",
-                    "Delay": f"{row['avg_delay']:.1f}min",
-                    "Speed": f"{row['avg_speed']:.1f}km/h",
-                    "Distance": f"{row.get('distance_km', 'N/A')}km",
-                })
+                rank_data.append(
+                    {
+                        "Rank": len(rank_data) + 1,
+                        "Route": f"{row['origin']} → {row['destination']}",
+                        "Travel Time": f"{row['avg_travel_time']:.1f}min",
+                        "Delay": f"{row['avg_delay']:.1f}min",
+                        "Speed": f"{row['avg_speed']:.1f}km/h",
+                        "Distance": f"{row.get('distance_km', 'N/A')}km",
+                    }
+                )
 
             st.dataframe(
                 pd.DataFrame(rank_data),

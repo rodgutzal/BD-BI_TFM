@@ -1,10 +1,11 @@
 """Silver layer: Cleaned and transformed data."""
 
-import pandas as pd
+import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict
-import sqlite3
+
+import pandas as pd
 
 
 class SilverLayer:
@@ -96,43 +97,41 @@ class SilverLayer:
         # `raw_timestamp`, no `timestamp`, así que la línea original
         # `pd.to_datetime(df['timestamp'], ...)` fallaba con KeyError antes
         # de siquiera llegar al rename.
-        df = df.rename(columns={
-            'raw_timestamp': 'timestamp'
-        })
+        df = df.rename(columns={"raw_timestamp": "timestamp"})
         # format='mixed': robustez ante timestamps guardados con distinto
         # formato en distintos momentos (ver bug del separador T-vs-espacio
         # en bronze_layer.py) — sin esto, pd.to_datetime() infiere un solo
         # formato para todo el lote y falla en cuanto encuentra una fila
         # que no coincide, en vez de parsear cada una individualmente.
-        df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True, format='mixed')
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, format="mixed")
 
         # 2. Calculate derived metrics
-        df['traffic_delay_min'] = df['travel_time_min'] - df.get('no_traffic_time_min', df['travel_time_min'])
-        df['traffic_delay_min'] = df['traffic_delay_min'].clip(lower=0)
+        df["traffic_delay_min"] = df["travel_time_min"] - df.get("no_traffic_time_min", df["travel_time_min"])
+        df["traffic_delay_min"] = df["traffic_delay_min"].clip(lower=0)
 
         # 3. Classify congestion level
         def classify_congestion(delay):
             if pd.isna(delay):
-                return 'unknown'
+                return "unknown"
             if delay <= 1:
-                return 'free_flow'
+                return "free_flow"
             elif delay <= 4:
-                return 'moderate'
+                return "moderate"
             else:
-                return 'heavy'
+                return "heavy"
 
-        df['congestion_level'] = df['traffic_delay_min'].apply(classify_congestion)
+        df["congestion_level"] = df["traffic_delay_min"].apply(classify_congestion)
 
         # 4. Add temporal features
-        df['hour'] = df['timestamp'].dt.hour
-        df['day_of_week'] = df['timestamp'].dt.dayofweek
-        df['day_of_month'] = df['timestamp'].dt.day
-        df['month'] = df['timestamp'].dt.month
-        df['is_peak_hour'] = (df['hour'].isin([7, 8, 9, 17, 18, 19])).astype(int)
-        df['is_weekend'] = (df['day_of_week'].isin([5, 6])).astype(int)
+        df["hour"] = df["timestamp"].dt.hour
+        df["day_of_week"] = df["timestamp"].dt.dayofweek
+        df["day_of_month"] = df["timestamp"].dt.day
+        df["month"] = df["timestamp"].dt.month
+        df["is_peak_hour"] = (df["hour"].isin([7, 8, 9, 17, 18, 19])).astype(int)
+        df["is_weekend"] = (df["day_of_week"].isin([5, 6])).astype(int)
 
         # 5. Store in silver
-        df['transformation_timestamp'] = datetime.utcnow().isoformat()
+        df["transformation_timestamp"] = datetime.utcnow().isoformat()
 
         # BD_BI_TFM fix: el df que llega de bronze_measurements trae
         # columnas propias de esa capa (id, ingestion_timestamp,
@@ -141,12 +140,27 @@ class SilverLayer:
         # filtra explícitamente a las columnas del esquema silver antes
         # de insertar (created_at usa su propio DEFAULT, no se envía).
         silver_columns = [
-            'timestamp', 'origin', 'destination', 'travel_time_min',
-            'no_traffic_time_min', 'traffic_delay_min', 'average_speed_kmh',
-            'congestion_level', 'origin_temperature', 'origin_humidity',
-            'origin_weather', 'destination_temperature', 'destination_humidity',
-            'destination_weather', 'hour', 'day_of_week', 'day_of_month',
-            'month', 'is_peak_hour', 'is_weekend', 'transformation_timestamp',
+            "timestamp",
+            "origin",
+            "destination",
+            "travel_time_min",
+            "no_traffic_time_min",
+            "traffic_delay_min",
+            "average_speed_kmh",
+            "congestion_level",
+            "origin_temperature",
+            "origin_humidity",
+            "origin_weather",
+            "destination_temperature",
+            "destination_humidity",
+            "destination_weather",
+            "hour",
+            "day_of_week",
+            "day_of_month",
+            "month",
+            "is_peak_hour",
+            "is_weekend",
+            "transformation_timestamp",
         ]
         for col in silver_columns:
             if col not in df.columns:
@@ -154,9 +168,7 @@ class SilverLayer:
         df_to_insert = df[silver_columns].copy()
         # sqlite3 no sabe bindear pandas.Timestamp directamente; se guarda
         # como texto ISO 8601 (igual que el resto del proyecto).
-        df_to_insert['timestamp'] = df_to_insert['timestamp'].apply(
-            lambda t: t.isoformat() if pd.notna(t) else None
-        )
+        df_to_insert["timestamp"] = df_to_insert["timestamp"].apply(lambda t: t.isoformat() if pd.notna(t) else None)
 
         conn = sqlite3.connect(self.db_path)
         try:
@@ -164,8 +176,8 @@ class SilverLayer:
             # destination): reejecutar el pipeline sobre datos ya
             # transformados no duplica filas.
             cursor = conn.cursor()
-            placeholders = ','.join(['?'] * len(silver_columns))
-            col_list = ','.join(silver_columns)
+            placeholders = ",".join(["?"] * len(silver_columns))
+            col_list = ",".join(silver_columns)
             rows = [tuple(r) for r in df_to_insert.itertuples(index=False, name=None)]
             cursor.executemany(
                 f"INSERT OR IGNORE INTO silver_measurements ({col_list}) VALUES ({placeholders})",
@@ -175,15 +187,15 @@ class SilverLayer:
             inserted = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else len(rows)
         except Exception as e:
             inserted = 0
-            return {'error': str(e), 'inserted': 0}
+            return {"error": str(e), "inserted": 0}
         finally:
             conn.close()
 
         return {
-            'status': 'success',
-            'records_transformed': inserted,
-            'mean_travel_time': float(df['travel_time_min'].mean()),
-            'mean_delay': float(df['traffic_delay_min'].mean())
+            "status": "success",
+            "records_transformed": inserted,
+            "mean_travel_time": float(df["travel_time_min"].mean()),
+            "mean_delay": float(df["traffic_delay_min"].mean()),
         }
 
     def aggregate_hourly(self) -> Dict:
@@ -198,38 +210,49 @@ class SilverLayer:
 
         try:
             raw = pd.read_sql_query(
-                "SELECT timestamp, origin, destination, travel_time_min, average_speed_kmh "
-                "FROM silver_measurements",
+                "SELECT timestamp, origin, destination, travel_time_min, average_speed_kmh " "FROM silver_measurements",
                 conn,
             )
 
             if raw.empty:
-                return {'status': 'no_data', 'hourly_records_created': 0}
+                return {"status": "no_data", "hourly_records_created": 0}
 
-            raw['timestamp'] = pd.to_datetime(raw['timestamp'], utc=True)
-            raw['hour_bucket'] = raw['timestamp'].dt.strftime('%Y-%m-%d %H:00')
+            raw["timestamp"] = pd.to_datetime(raw["timestamp"], utc=True)
+            raw["hour_bucket"] = raw["timestamp"].dt.strftime("%Y-%m-%d %H:00")
 
-            grouped = raw.groupby(['hour_bucket', 'origin', 'destination']).agg(
-                avg_travel_time=('travel_time_min', 'mean'),
-                median_travel_time=('travel_time_min', 'median'),
-                std_travel_time=('travel_time_min', 'std'),
-                min_travel_time=('travel_time_min', 'min'),
-                max_travel_time=('travel_time_min', 'max'),
-                sample_count=('travel_time_min', 'count'),
-                avg_speed=('average_speed_kmh', 'mean'),
-            ).reset_index()
+            grouped = (
+                raw.groupby(["hour_bucket", "origin", "destination"])
+                .agg(
+                    avg_travel_time=("travel_time_min", "mean"),
+                    median_travel_time=("travel_time_min", "median"),
+                    std_travel_time=("travel_time_min", "std"),
+                    min_travel_time=("travel_time_min", "min"),
+                    max_travel_time=("travel_time_min", "max"),
+                    sample_count=("travel_time_min", "count"),
+                    avg_speed=("average_speed_kmh", "mean"),
+                )
+                .reset_index()
+            )
 
-            grouped = grouped.rename(columns={'hour_bucket': 'timestamp'})
-            grouped['created_at'] = datetime.utcnow().isoformat()
+            grouped = grouped.rename(columns={"hour_bucket": "timestamp"})
+            grouped["created_at"] = datetime.utcnow().isoformat()
 
             cursor = conn.cursor()
             columns = [
-                'timestamp', 'origin', 'destination', 'avg_travel_time',
-                'median_travel_time', 'std_travel_time', 'min_travel_time',
-                'max_travel_time', 'sample_count', 'avg_speed', 'created_at',
+                "timestamp",
+                "origin",
+                "destination",
+                "avg_travel_time",
+                "median_travel_time",
+                "std_travel_time",
+                "min_travel_time",
+                "max_travel_time",
+                "sample_count",
+                "avg_speed",
+                "created_at",
             ]
-            placeholders = ','.join(['?'] * len(columns))
-            col_list = ','.join(columns)
+            placeholders = ",".join(["?"] * len(columns))
+            col_list = ",".join(columns)
             rows = [tuple(r) for r in grouped[columns].itertuples(index=False, name=None)]
             cursor.executemany(
                 f"INSERT OR IGNORE INTO silver_route_hourly ({col_list}) VALUES ({placeholders})",
@@ -237,12 +260,9 @@ class SilverLayer:
             )
             conn.commit()
 
-            return {
-                'status': 'success',
-                'hourly_records_created': len(grouped)
-            }
+            return {"status": "success", "hourly_records_created": len(grouped)}
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
         finally:
             conn.close()
 
@@ -267,17 +287,17 @@ class SilverLayer:
         try:
             raw = pd.read_sql_query(query, conn, params=(origin, destination, start_time))
             df = (
-                raw.groupby(['hour', 'day_of_week'])['travel_time_min']
-                .agg(avg_time='mean', std_time='std', count='count')
+                raw.groupby(["hour", "day_of_week"])["travel_time_min"]
+                .agg(avg_time="mean", std_time="std", count="count")
                 .reset_index()
             )
             return {
-                'status': 'success',
-                'route': f'{origin} -> {destination}',
-                'days': days,
-                'profiles': df.to_dict('records')
+                "status": "success",
+                "route": f"{origin} -> {destination}",
+                "days": days,
+                "profiles": df.to_dict("records"),
             }
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
         finally:
             conn.close()

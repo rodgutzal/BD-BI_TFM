@@ -2,8 +2,8 @@
 """Train ensemble predictive models for all routes."""
 
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 
@@ -37,11 +37,7 @@ def train_all_routes():
         print(f"Training model for: {origin} → {destination}")
 
         # Get route data
-        df = db.query_measurements(
-            origin=origin,
-            destination=destination,
-            limit=10000
-        )
+        df = db.query_measurements(origin=origin, destination=destination, limit=10000)
 
         if df.empty:
             print(f"  ❌ No data available")
@@ -55,10 +51,10 @@ def train_all_routes():
 
         result = predictor.train(df)
 
-        if result.get('status') == 'success':
+        if result.get("status") == "success":
             print(f"  ✅ Training successful")
-            for model_info in result.get('models_trained', []):
-                if 'r2' in model_info:
+            for model_info in result.get("models_trained", []):
+                if "r2" in model_info:
                     print(f"    - {model_info['model']}: R² = {model_info['r2']:.3f}")
                 else:
                     print(f"    - {model_info['model']}: {model_info.get('status', 'trained')}")
@@ -71,9 +67,11 @@ def train_all_routes():
             X, y, _ = predictor.prepare_features(df)
             if X is not None and len(X) > 0:
                 pred = predictor.predict(X[0:1])
-                if 'ensemble_prediction' in pred:
+                if "ensemble_prediction" in pred:
                     print(f"  🎯 Sample prediction: {pred['ensemble_prediction']:.1f} min")
-                    print(f"     Confidence (95%): [{pred['confidence_interval_95']['lower']:.1f}, {pred['confidence_interval_95']['upper']:.1f}]")
+                    print(
+                        f"     Confidence (95%): [{pred['confidence_interval_95']['lower']:.1f}, {pred['confidence_interval_95']['upper']:.1f}]"
+                    )
 
             trained_count += 1
         else:

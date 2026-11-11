@@ -34,8 +34,12 @@ DEFAULT_OUT = ROOT / "data" / "ml_inputs.sqlite"
 def git_commit() -> str:
     """Commit actual del repositorio ('desconocido' si no hay git); con '+' si hay cambios sin confirmar."""
     try:
-        h = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
-        sucio = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+        h = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        sucio = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True
+        ).stdout.strip()
         return h + ("+" if sucio else "")
     except Exception:
         return "desconocido"
@@ -56,11 +60,18 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--db", default=str(DEFAULT_DB), help=f"base de origen (default: {DEFAULT_DB})")
     ap.add_argument("--out", default=str(DEFAULT_OUT), help=f"paquete a escribir (default: {DEFAULT_OUT})")
-    ap.add_argument("--contexto", default=None,
-                    help="directorio con el contexto de OSM de tools/download_osm_context.py (fase 1b); sin él la tabla va vacía")
+    ap.add_argument(
+        "--contexto",
+        default=None,
+        help="directorio con el contexto de OSM de tools/download_osm_context.py (fase 1b); sin él la tabla va vacía",
+    )
     ap.add_argument("--force", action="store_true", help="reemplazar el paquete si ya existe")
-    ap.add_argument("--verify", metavar="PAQUETE", default=None,
-                    help="solo comprueba un paquete contra su manifiesto (no necesita la base) y sale")
+    ap.add_argument(
+        "--verify",
+        metavar="PAQUETE",
+        default=None,
+        help="solo comprueba un paquete contra su manifiesto (no necesita la base) y sale",
+    )
     args = ap.parse_args(argv)
 
     if args.verify:
@@ -70,7 +81,9 @@ def main(argv=None) -> int:
     if args.contexto and (contexto is None or contexto.empty):
         print(f"AVISO: {args.contexto} no tiene contexto válido; la tabla osm_context irá vacía.")
     try:
-        manifiesto = inputs_bundle.export_bundle(args.db, args.out, contexto, commit=git_commit(), sobrescribir=args.force)
+        manifiesto = inputs_bundle.export_bundle(
+            args.db, args.out, contexto, commit=git_commit(), sobrescribir=args.force
+        )
     except (FileExistsError, ValueError) as e:
         print(f"Error: {e}")
         return 1
