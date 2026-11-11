@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -45,8 +44,9 @@ def test_both_sources_fire_immediately_on_first_tick():
     assert calls["tomtom"] == 1
 
 
-def test_signal_handler_closes_both_collectors():
-    """Ctrl+C debe cerrar traffic_client y weather de AMBOS collectors."""
+def test_signal_handler_requests_stop_and_close_closes_both_collectors():
+    """La señal (Ctrl+C o SIGTERM) solo pide parar, sin salir: el ciclo en curso termina. Al salir del bucle,
+    close() cierra los clientes (traffic_client y weather) de AMBOS collectors."""
     ors_collector = MagicMock()
     tomtom_collector = MagicMock()
 
@@ -57,14 +57,13 @@ def test_signal_handler_closes_both_collectors():
     ]
     scheduler.running = True
 
-    with pytest.raises(SystemExit):
-        scheduler._signal_handler(None, None)
-
-    assert ors_collector.traffic_client.close.called
-    assert ors_collector.weather.close.called
-    assert tomtom_collector.traffic_client.close.called
-    assert tomtom_collector.weather.close.called
+    scheduler._signal_handler(None, None)  # no lanza SystemExit ni cierra todavía
     assert scheduler.running is False
+    ors_collector.close.assert_not_called()
+
+    scheduler.close()
+    ors_collector.close.assert_called_once()
+    tomtom_collector.close.assert_called_once()
 
 
 if __name__ == "__main__":
