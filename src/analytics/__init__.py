@@ -26,17 +26,13 @@ class MobilityAnalytics:
 
     def get_route_trend(self, origin: str, destination: str, hours: int = 24) -> dict:
         """Analiza la tendencia de tiempo de viaje en una ruta."""
-        df = self.db.get_time_series(
-            origin, destination,
-            metric="travel_time_min",
-            hours=hours
-        )
+        df = self.db.get_time_series(origin, destination, metric="travel_time_min", hours=hours)
 
         if df.empty:
             return {"status": "no_data"}
 
-        first_third = df["value"].iloc[:len(df)//3].mean()
-        last_third = df["value"].iloc[-len(df)//3:].mean()
+        first_third = df["value"].iloc[: len(df) // 3].mean()
+        last_third = df["value"].iloc[-len(df) // 3 :].mean()
 
         if last_third > first_third * 1.1:
             trend = "increasing"
@@ -138,7 +134,9 @@ class MobilityAnalytics:
                 consistency = self.get_consistency_score(route["origin"], route["destination"], hours=24)
                 report.append(f"  {route['origin']} → {route['destination']}")
                 report.append(f"    Measurements: {route['measurements']}")
-                report.append(f"    Travel Time: {route['avg_travel_time']}min (range: {route['min_travel_time']}-{route['max_travel_time']}min)")
+                report.append(
+                    f"    Travel Time: {route['avg_travel_time']}min (range: {route['min_travel_time']}-{route['max_travel_time']}min)"
+                )
                 report.append(f"    Traffic Delay: {route['avg_delay']}min")
                 report.append(f"    Average Speed: {route['avg_speed']} km/h")
                 report.append(f"    Consistency Score: {consistency}%")
@@ -250,4 +248,5 @@ Examples:
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

@@ -76,8 +76,7 @@ class DemographicsClient:
             from datacommons_client import DataCommonsClient
         except ImportError as e:
             raise ImportError(
-                "Falta el paquete datacommons-client. Instalar con: "
-                "pip install 'datacommons-client[Pandas]'"
+                "Falta el paquete datacommons-client. Instalar con: " "pip install 'datacommons-client[Pandas]'"
             ) from e
 
         # La key se pasa de forma EXPLÍCITA al constructor. La primera versión
@@ -88,8 +87,7 @@ class DemographicsClient:
         # no romper si otra versión lo llama distinto.
         params = [p for p in inspect.signature(DataCommonsClient.__init__).parameters if p != "self"]
         logger.info(
-            f"Data Commons: key configurada ({len(api_key)} caracteres); "
-            f"parámetros del cliente instalado: {params}"
+            f"Data Commons: key configurada ({len(api_key)} caracteres); " f"parámetros del cliente instalado: {params}"
         )
         if "api_key" in params:
             self._client = DataCommonsClient(api_key=api_key)

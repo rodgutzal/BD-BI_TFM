@@ -21,14 +21,63 @@ import pandas as pd
 CONTEXTO = ("edificio", "alojamiento", "transporte", "industria")
 
 # Valores de `building` que claramente NO son vivienda (se excluyen al aproximar 'residentes').
-NO_RESIDENCIALES = frozenset({
-    "industrial", "warehouse", "factory", "commercial", "retail", "office", "supermarket", "school", "kindergarten",
-    "university", "college", "hospital", "clinic", "church", "chapel", "cathedral", "mosque", "synagogue", "temple",
-    "religious", "civic", "public", "government", "fire_station", "police", "prison", "military", "roof", "garage",
-    "garages", "carport", "shed", "service", "storage_tank", "transformer_tower", "greenhouse", "farm_auxiliary",
-    "barn", "hangar", "parking", "train_station", "transportation", "toilets", "construction", "ruins", "fuel_station",
-    "kiosk", "stable", "cowshed", "bunker", "tower", "silo", "water_tower",
-})
+NO_RESIDENCIALES = frozenset(
+    {
+        "industrial",
+        "warehouse",
+        "factory",
+        "commercial",
+        "retail",
+        "office",
+        "supermarket",
+        "school",
+        "kindergarten",
+        "university",
+        "college",
+        "hospital",
+        "clinic",
+        "church",
+        "chapel",
+        "cathedral",
+        "mosque",
+        "synagogue",
+        "temple",
+        "religious",
+        "civic",
+        "public",
+        "government",
+        "fire_station",
+        "police",
+        "prison",
+        "military",
+        "roof",
+        "garage",
+        "garages",
+        "carport",
+        "shed",
+        "service",
+        "storage_tank",
+        "transformer_tower",
+        "greenhouse",
+        "farm_auxiliary",
+        "barn",
+        "hangar",
+        "parking",
+        "train_station",
+        "transportation",
+        "toilets",
+        "construction",
+        "ruins",
+        "fuel_station",
+        "kiosk",
+        "stable",
+        "cowshed",
+        "bunker",
+        "tower",
+        "silo",
+        "water_tower",
+    }
+)
 
 _TRANSPORTE_VALIDO = {"bus_stop", "ferry", "station", "platform"}
 
@@ -73,7 +122,7 @@ def elements_to_pois(tema: str, elementos: List[dict]) -> pd.DataFrame:
         elif tema == "industria":
             fila = _fila("industria", "wholesale" if tags.get("shop") == "wholesale" else "industrial", e)
         else:
-            fila = None                            # p. ej. suelo_residencial: no se usa (los edificios lo cubren mejor)
+            fila = None  # p. ej. suelo_residencial: no se usa (los edificios lo cubren mejor)
         if fila:
             filas.append(fila)
     return pd.DataFrame(filas, columns=["category", "subcategory", "latitude", "longitude"])
@@ -83,6 +132,7 @@ def load_context(directorio) -> pd.DataFrame:
     """Lee todos los JSON de `directorio` (los que escribe tools/download_osm_context.py) y devuelve el contexto como
     POIs. Un directorio sin archivos válidos da un DataFrame vacío."""
     import json
+
     partes = []
     for archivo in sorted(Path(directorio).glob("*.json")):
         try:

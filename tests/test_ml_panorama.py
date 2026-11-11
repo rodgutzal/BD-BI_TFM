@@ -83,13 +83,13 @@ def test_cell_counts_incluye_el_contexto_de_celdas_inactivas(tmp_path):
     suma en las lentes de la activa. Si cell_counts.csv solo trajera las activas, recalcular daría otros números."""
     pois = pd.DataFrame([punto(10, 10, "food_drink", "restaurant"), punto(10, 12, "edificio", "apartments")])
     c = CellCounts.from_pois(pois)
-    assert not c.active_mask()[10, 12]                                 # a 2 celdas del restaurante: inactiva
+    assert not c.active_mask()[10, 12]  # a 2 celdas del restaurante: inactiva
     p = panorama.build_panorama(c, PERFIL)
     panorama.write_outputs(tmp_path, p, c, {})
     leidos = panorama.read_counts(tmp_path)
     assert leidos.arrays[("edificio", "apartments")][10, 12] == 1
     pd.testing.assert_frame_equal(compute_lenses(c, PERFIL), compute_lenses(leidos, PERFIL))
-    assert p.loc["r10c10", "mercado_residentes"] > 0                   # el edificio vecino sí cuenta
+    assert p.loc["r10c10", "mercado_residentes"] > 0  # el edificio vecino sí cuenta
 
 
 def test_from_frame_conserva_la_subcategoria_vacia():
@@ -116,7 +116,7 @@ def test_percentile_rank_conserva_los_nan_y_es_monotono():
 def test_percentile_rank_empates_reciben_el_rango_medio():
     """Valores iguales tienen el mismo percentil."""
     p = panorama.percentile_rank(pd.Series([2.0, 2.0, 2.0, 9.0]))
-    assert p[0] == p[1] == p[2] == 0.5 and p[3] == 1.0          # rango medio de las posiciones 1-3 = 2 de 4
+    assert p[0] == p[1] == p[2] == 0.5 and p[3] == 1.0  # rango medio de las posiciones 1-3 = 2 de 4
 
 
 # ---- confianza ---------------------------------------------------------------------------------------------------
@@ -147,9 +147,9 @@ def test_confianza_competencia_usa_los_pois_de_la_vecindad_no_los_competidores()
     """Una celda sin competidores pero rodeada de POIs tiene confianza ALTA en competencia: cero competidores es una
     observación creíble donde hay mucho mapeado. (Con el número de competidores saldría baja, y penalizaría justo las
     celdas de oportunidad.)"""
-    lentes = _lentes([[0], [20], [20]], [True, True, True])           # cero competidores
+    lentes = _lentes([[0], [20], [20]], [True, True, True])  # cero competidores
     assert panorama.confidence(lentes, [40])["confianza"].iloc[0] == 1.0
-    assert panorama.confidence(lentes, [0])["confianza"].iloc[0] == pytest.approx(2 / 3)   # nada mapeado alrededor
+    assert panorama.confidence(lentes, [0])["confianza"].iloc[0] == pytest.approx(2 / 3)  # nada mapeado alrededor
 
 
 def test_confianza_niveles_en_los_umbrales():
@@ -198,9 +198,16 @@ def test_panorama_percentiles_entre_cero_y_uno(counts):
 def test_panorama_con_brecha_se_alinea_por_celda(counts):
     """La brecha se une por cell_id: las celdas sin brecha quedan en NaN y las sobrantes se ignoran."""
     base = panorama.build_panorama(counts, PERFIL)
-    ids = list(base.index[:3]) + ["r00c00"]                       # r00c00 no está en el panorama
-    brecha = pd.DataFrame({"esperado": [1.0, 2.0, 3.0, 9.0], "brecha_relativa": [0.5, -0.5, 1.5, 9.9],
-                           "brecha_p10": [0.0, -1.0, 1.0, 9.0], "brecha_p90": [1.0, 0.0, 2.0, 10.0]}, index=ids)
+    ids = list(base.index[:3]) + ["r00c00"]  # r00c00 no está en el panorama
+    brecha = pd.DataFrame(
+        {
+            "esperado": [1.0, 2.0, 3.0, 9.0],
+            "brecha_relativa": [0.5, -0.5, 1.5, 9.9],
+            "brecha_p10": [0.0, -1.0, 1.0, 9.0],
+            "brecha_p90": [1.0, 0.0, 2.0, 10.0],
+        },
+        index=ids,
+    )
     p = panorama.build_panorama(counts, PERFIL, brecha, "boosting", brecha_validada=False)
     assert len(p) == len(base) and "r00c00" not in p.index
     assert p["brecha_relativa"].iloc[:3].tolist() == [0.5, -0.5, 1.5]
@@ -211,8 +218,10 @@ def test_panorama_con_brecha_se_alinea_por_celda(counts):
 def test_pois_vecindad_cuenta_solo_pois_de_overpass_no_el_contexto():
     """El apoyo general de la confianza son POIs de Overpass en la celda y sus 8 vecinas; los edificios del contexto de
     OSM no cuentan (no dicen cuán completo está el mapa de comercios)."""
-    pois = pd.DataFrame([punto(10, 10, "food_drink", "restaurant"), punto(10, 11, "business", "bakery")]
-                        + [punto(10, 10, "edificio", "yes")] * 30)
+    pois = pd.DataFrame(
+        [punto(10, 10, "food_drink", "restaurant"), punto(10, 11, "business", "bakery")]
+        + [punto(10, 10, "edificio", "yes")] * 30
+    )
     p = panorama.build_panorama(CellCounts.from_pois(pois), PERFIL)
     assert p.loc["r10c10", "pois_vecindad"] == 2 and p.loc["r10c11", "pois_vecindad"] == 2
 
@@ -222,14 +231,16 @@ def test_la_brecha_no_modifica_ninguna_otra_columna(counts):
     sin = panorama.build_panorama(counts, PERFIL)
     brecha = pd.DataFrame({c: np.ones(len(sin)) for c in panorama.COLUMNAS_BRECHA}, index=sin.index)
     con = panorama.build_panorama(counts, PERFIL, brecha, "boosting")
-    otras = [c for c in sin.columns if c not in panorama.COLUMNAS_BRECHA and c not in ("modelo_brecha", "brecha_validada")]
+    otras = [
+        c for c in sin.columns if c not in panorama.COLUMNAS_BRECHA and c not in ("modelo_brecha", "brecha_validada")
+    ]
     pd.testing.assert_frame_equal(sin[otras], con[otras])
 
 
 def test_brecha_validada_se_propaga_solo_si_hay_brecha(counts):
     """brecha_validada=True solo se refleja cuando se entrega una brecha; sin ella el panorama no afirma nada."""
     sin = panorama.build_panorama(counts, PERFIL, None, "boosting", brecha_validada=True)
-    assert not sin["brecha_validada"].any() and (sin["modelo_brecha"] == "").all()      # sin brecha no hay modelo
+    assert not sin["brecha_validada"].any() and (sin["modelo_brecha"] == "").all()  # sin brecha no hay modelo
     brecha = pd.DataFrame({c: [0.0] for c in panorama.COLUMNAS_BRECHA}, index=[sin.index[0]])
     assert panorama.build_panorama(counts, PERFIL, brecha, "boosting", brecha_validada=True)["brecha_validada"].all()
 
@@ -237,8 +248,10 @@ def test_brecha_validada_se_propaga_solo_si_hay_brecha(counts):
 def test_el_modulo_del_panorama_no_importa_scikit_learn():
     """El dashboard debe poder importar el panorama sin cargar scikit-learn (el contenedor tiene 1 GiB). scipy sí: la
     rejilla ya lo usa y está en requirements.txt."""
-    codigo = ("import sys; sys.path.insert(0, sys.argv[1]); import src.ml.panorama, src.ml.cell_counts, src.ml.lenses; "
-              "bad = [m for m in sys.modules if m.split('.')[0] == 'sklearn']; print(bad[:3]); sys.exit(1 if bad else 0)")
+    codigo = (
+        "import sys; sys.path.insert(0, sys.argv[1]); import src.ml.panorama, src.ml.cell_counts, src.ml.lenses; "
+        "bad = [m for m in sys.modules if m.split('.')[0] == 'sklearn']; print(bad[:3]); sys.exit(1 if bad else 0)"
+    )
     r = subprocess.run([sys.executable, "-c", codigo, str(ROOT)], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
 
@@ -251,9 +264,11 @@ def test_gap_from_evaluation_calcula_esperado_brecha_y_percentiles():
     ev = validation.Evaluation(["m"], y, {"m": oof}, np.zeros(3, dtype=int), pd.DataFrame(), 1)
     g = validation.gap_from_evaluation(ev, "m")
     assert g["esperado"].tolist() == [3.0, 4.0, 4.0]
-    assert g["brecha_relativa"].tolist() == pytest.approx(((np.array([3.0, 4.0, 4.0]) - y) / np.sqrt(np.array([3.0, 4.0, 4.0]) + 1)).tolist())
+    assert g["brecha_relativa"].tolist() == pytest.approx(
+        ((np.array([3.0, 4.0, 4.0]) - y) / np.sqrt(np.array([3.0, 4.0, 4.0]) + 1)).tolist()
+    )
     assert (g["brecha_p10"] <= g["brecha_p90"]).all()
-    assert g["brecha_p10"].iloc[1] == g["brecha_p90"].iloc[1] == 0.0       # misma predicción en las dos repeticiones
+    assert g["brecha_p10"].iloc[1] == g["brecha_p90"].iloc[1] == 0.0  # misma predicción en las dos repeticiones
     celda0 = [validation.brecha_relativa(oof[r][0], y[0]) for r in range(2)]
     assert g["brecha_p10"].iloc[0] == pytest.approx(np.percentile(celda0, 10))
     assert g["brecha_p90"].iloc[0] == pytest.approx(np.percentile(celda0, 90))
@@ -271,7 +286,9 @@ def test_gap_from_evaluation_una_repeticion_no_tiene_dispersion():
 # ---- archivos de salida ------------------------------------------------------------------------------------------
 @pytest.fixture
 def salida(tmp_path, counts):
-    p = pd.concat([panorama.build_panorama(counts, PERFIL), panorama.build_panorama(counts, bp.get_default_profile("school"))])
+    p = pd.concat(
+        [panorama.build_panorama(counts, PERFIL), panorama.build_panorama(counts, bp.get_default_profile("school"))]
+    )
     panorama.write_outputs(tmp_path, p, counts, {"procedencia": {"commit": "abc"}})
     return tmp_path, p
 
@@ -282,7 +299,9 @@ def test_los_archivos_se_escriben_y_se_verifican(salida):
     assert sorted(x.name for x in d.iterdir()) == sorted(panorama.ARCHIVOS.values())
     assert panorama.verify_outputs(d) == []
     m = json.loads((d / "panorama_manifest.json").read_text(encoding="utf-8"))
-    assert m["archivos"]["panorama.csv"]["filas"] == len(p) and m["procedencia"]["commit"] == "abc" and m["formato"] == 1
+    assert (
+        m["archivos"]["panorama.csv"]["filas"] == len(p) and m["procedencia"]["commit"] == "abc" and m["formato"] == 1
+    )
 
 
 def test_el_panorama_leido_coincide_con_el_escrito(salida):
@@ -291,7 +310,9 @@ def test_el_panorama_leido_coincide_con_el_escrito(salida):
     leido = panorama.read_panorama(d)
     assert list(leido["cell_id"]) == list(p.index) and set(p.columns) <= set(leido.columns)
     for col in ("competencia_directa", "mercado_total", "confianza", "dist_zona_m"):
-        np.testing.assert_allclose(leido[col].to_numpy(dtype=float), p[col].to_numpy(dtype=float), rtol=1e-5, equal_nan=True)
+        np.testing.assert_allclose(
+            leido[col].to_numpy(dtype=float), p[col].to_numpy(dtype=float), rtol=1e-5, equal_nan=True
+        )
     assert leido["brecha_validada"].dtype == bool and leido["modelo_brecha"].eq("").all()
 
 
@@ -385,8 +406,13 @@ def test_la_tabla_versionada_recalcula_las_mismas_lentes():
         nuevo = panorama.build_panorama(c, perfil)
         assert list(nuevo.index) == list(guardado.index)
         for col in ("competencia_directa", "mercado_total", "proveedores_total", "apoyo_mercado", "pois_vecindad"):
-            np.testing.assert_allclose(nuevo[col].to_numpy(dtype=float), guardado[col].to_numpy(dtype=float),
-                                       rtol=1e-5, equal_nan=True, err_msg=f"{clave}.{col}")
+            np.testing.assert_allclose(
+                nuevo[col].to_numpy(dtype=float),
+                guardado[col].to_numpy(dtype=float),
+                rtol=1e-5,
+                equal_nan=True,
+                err_msg=f"{clave}.{col}",
+            )
 
 
 # ---- herramienta -------------------------------------------------------------------------------------------------
@@ -394,13 +420,18 @@ def test_la_tabla_versionada_recalcula_las_mismas_lentes():
 def paquete(tmp_path):
     """Paquete de entrada pequeño, con contexto, construido con la misma librería que el exportador real."""
     import sqlite3
+
     db = tmp_path / "m.db"
     pois = pois_sinteticos()
     solo_pois = pois[~pois["category"].isin(["edificio", "alojamiento"])]
     conn = sqlite3.connect(db)
-    conn.execute("CREATE TABLE pois (id INTEGER PRIMARY KEY, category TEXT, subcategory TEXT, name TEXT, latitude REAL, longitude REAL)")
-    conn.executemany("INSERT INTO pois (category, subcategory, name, latitude, longitude) VALUES (?,?,?,?,?)",
-                     [(r.category, r.subcategory, "x", r.latitude, r.longitude) for r in solo_pois.itertuples()])
+    conn.execute(
+        "CREATE TABLE pois (id INTEGER PRIMARY KEY, category TEXT, subcategory TEXT, name TEXT, latitude REAL, longitude REAL)"
+    )
+    conn.executemany(
+        "INSERT INTO pois (category, subcategory, name, latitude, longitude) VALUES (?,?,?,?,?)",
+        [(r.category, r.subcategory, "x", r.latitude, r.longitude) for r in solo_pois.itertuples()],
+    )
     conn.commit()
     conn.close()
     out = tmp_path / "p.sqlite"
@@ -425,7 +456,9 @@ def test_build_panorama_con_brecha_la_etiqueta_como_exploratoria(tmp_path, paque
     """Con brecha, solo food_drink y business la llevan; el manifiesto declara la decisión y la advertencia, y la
     columna brecha_validada solo es True si un candidato superó a la línea base."""
     out = tmp_path / "ml"
-    assert bpn.main(["--db", str(paquete), "--out-dir", str(out), "--repeats", "1", "--folds", "2", "--boot", "30"]) == 0
+    assert (
+        bpn.main(["--db", str(paquete), "--out-dir", str(out), "--repeats", "1", "--folds", "2", "--boot", "30"]) == 0
+    )
     p = panorama.read_panorama(out)
     con = p[p["esperado"].notna()]
     assert set(con["perfil"]) == {"food_drink", "business"}
@@ -441,6 +474,7 @@ def test_build_panorama_con_brecha_la_etiqueta_como_exploratoria(tmp_path, paque
 def test_build_panorama_rechaza_un_paquete_alterado(tmp_path, paquete, capsys):
     """Antes de calcular se verifica el paquete; si no coincide, no se escribe nada."""
     import sqlite3
+
     conn = sqlite3.connect(paquete)
     conn.execute("DELETE FROM pois WHERE rowid = 1")
     conn.commit()

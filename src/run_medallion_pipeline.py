@@ -31,8 +31,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from src.data_warehouse.bronze_layer import BronzeLayer  # noqa: E402
-from src.data_warehouse.silver_layer import SilverLayer  # noqa: E402
 from src.data_warehouse.gold_layer import GoldLayer  # noqa: E402
+from src.data_warehouse.silver_layer import SilverLayer  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -41,9 +41,18 @@ DB_PATH = ROOT_DIR / "data" / "mobility.db"
 
 # Columnas de route_measurements que Bronze espera (el resto se descarta).
 BRONZE_INPUT_COLUMNS = [
-    "timestamp", "origin", "destination", "travel_time_min", "no_traffic_time_min",
-    "average_speed_kmh", "origin_temperature", "origin_humidity", "origin_weather",
-    "destination_temperature", "destination_humidity", "destination_weather",
+    "timestamp",
+    "origin",
+    "destination",
+    "travel_time_min",
+    "no_traffic_time_min",
+    "average_speed_kmh",
+    "origin_temperature",
+    "origin_humidity",
+    "origin_weather",
+    "destination_temperature",
+    "destination_humidity",
+    "destination_weather",
 ]
 
 
@@ -96,8 +105,7 @@ def run(db_path: Path = DB_PATH) -> dict:
             kpi_result = gold.calculate_kpis(date=date)
             rank_result = gold.calculate_rankings(date=date)
             summary["gold_dates"].append({"date": date, "kpis": kpi_result, "rankings": rank_result})
-            logger.info(f"Gold [{date}]: {kpi_result.get('status')} "
-                        f"({kpi_result.get('kpis_calculated', 0)} rutas)")
+            logger.info(f"Gold [{date}]: {kpi_result.get('status')} " f"({kpi_result.get('kpis_calculated', 0)} rutas)")
         except Exception as e:
             logger.warning(f"Gold [{date}] falló (probablemente ya estaba calculada): {e}")
 
@@ -107,8 +115,6 @@ def run(db_path: Path = DB_PATH) -> dict:
 
 if __name__ == "__main__":
     result = run()
-    total_kpi_dates = sum(
-        1 for d in result["gold_dates"] if d["kpis"].get("status") == "success"
-    )
+    total_kpi_dates = sum(1 for d in result["gold_dates"] if d["kpis"].get("status") == "success")
     print(f"\n✓ Fechas con KPIs calculadas: {total_kpi_dates}/{len(result['gold_dates'])}")
     sys.exit(0)

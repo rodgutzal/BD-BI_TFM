@@ -1,9 +1,9 @@
 """Pruebas para el módulo de análisis."""
 
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import tempfile
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 

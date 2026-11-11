@@ -69,7 +69,7 @@ load_dotenv(ENV_PATH)
 DEFAULT_INTERVAL_HOURS = 168
 
 FREE_TIER_MONTHLY_LIMIT = 500  # tier Pro, vigente desde jun-2026 — verificar
-                                # en la consola de Foursquare si cambia
+# en la consola de Foursquare si cambia
 
 
 def _write_heartbeat() -> None:
@@ -121,9 +121,7 @@ def run_once(db: RouteDatabase, client: FoursquareClient) -> int:
 
     calls_this_month = _bump_call_counter(n_calls)
     pct = 100 * calls_this_month / FREE_TIER_MONTHLY_LIMIT
-    logger.info(
-        f"Llamadas a Foursquare este mes: {calls_this_month}/{FREE_TIER_MONTHLY_LIMIT} ({pct:.0f}%)"
-    )
+    logger.info(f"Llamadas a Foursquare este mes: {calls_this_month}/{FREE_TIER_MONTHLY_LIMIT} ({pct:.0f}%)")
     if calls_this_month > FREE_TIER_MONTHLY_LIMIT:
         logger.warning(
             "Se superó el estimado del tier gratis de Foursquare este mes — "
@@ -151,7 +149,7 @@ Examples:
         type=float,
         default=None,
         help=f"Hours between refresh cycles for continuous mode. If not provided, runs once. "
-             f"Recommended: {DEFAULT_INTERVAL_HOURS} (weekly) since POI data changes rarely.",
+        f"Recommended: {DEFAULT_INTERVAL_HOURS} (weekly) since POI data changes rarely.",
     )
 
     args = parser.parse_args()

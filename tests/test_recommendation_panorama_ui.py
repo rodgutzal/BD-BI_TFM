@@ -44,8 +44,10 @@ def limpiar():
 
 
 def abrir(categoria, datos=None):
-    at = AppTest.from_string(APP_SECCION.format(raiz=str(ROOT), categoria=categoria,
-                                                 datos=str(datos) if datos else None), default_timeout=120)
+    at = AppTest.from_string(
+        APP_SECCION.format(raiz=str(ROOT), categoria=categoria, datos=str(datos) if datos else None),
+        default_timeout=120,
+    )
     at.run()
     assert not at.exception, [e.value for e in at.exception]
     return at
@@ -65,8 +67,12 @@ def test_la_seccion_abre_para_cada_categoria(categoria):
     """Las siete categorías muestran el mapa, la lista de celdas y los cuatro controles de perfil."""
     at = abrir(categoria)
     assert len(at.get("plotly_chart")) == 1 and len(at.selectbox) == 1
-    assert [m.label for m in at.multiselect] == ["Le vendes a…", "Competencia directa", "Competencia indirecta (sustitutos)",
-                                                  "Proveedores que te importan"]
+    assert [m.label for m in at.multiselect] == [
+        "Le vendes a…",
+        "Competencia directa",
+        "Competencia indirecta (sustitutos)",
+        "Proveedores que te importan",
+    ]
     assert at.subheader[0].value.endswith("Panorama por celda de 250 m")
 
 
@@ -89,7 +95,11 @@ def test_las_capas_son_las_tres_lentes_y_la_brecha_solo_donde_existe():
     con, sin = abrir("food_drink"), abrir("hospital")
     assert con.radio[0].options[-1].startswith("Brecha de oferta — EXPLORATORIA")
     assert not any("Brecha" in o for o in sin.radio[0].options)
-    assert con.radio[0].options[:3] == ["Competencia directa (conteo ponderado)", "Mercado (índice 0-1)", "Proveedores (conteo ponderado)"]
+    assert con.radio[0].options[:3] == [
+        "Competencia directa (conteo ponderado)",
+        "Mercado (índice 0-1)",
+        "Proveedores (conteo ponderado)",
+    ]
 
 
 def test_la_lista_de_celdas_empieza_por_las_de_mercado_alto_y_competencia_baja():
@@ -102,6 +112,7 @@ def test_la_lista_de_celdas_empieza_por_las_de_mercado_alto_y_competencia_baja()
 def test_el_porcentaje_de_candidatas_no_se_redondea_a_cero():
     """5 de 1139 es 0,4 %: con cero decimales se leía «0%», que parece «ninguna celda». Se muestra con un decimal."""
     from streamlit_app.dashboards.panorama_section import porcentaje
+
     assert porcentaje(5, 1139) == "0.4%"
     assert porcentaje(0, 1139) == "0.0%"
     assert porcentaje(1139, 1139) == "100.0%"
@@ -109,9 +120,10 @@ def test_el_porcentaje_de_candidatas_no_se_redondea_a_cero():
 
 
 def _vista_y_mapa(capa=None, elegida="auto"):
-    from src.ml.business_profiles import DEFAULT_PROFILES
     from src.ml import panorama_view as pv
+    from src.ml.business_profiles import DEFAULT_PROFILES
     from streamlit_app.dashboards import panorama_section as ps
+
     guardado, counts, _ = ps.load_data(ROOT / "data" / "ml")
     vista = pv.compute_view(counts, DEFAULT_PROFILES["food_drink"], guardado, "food_drink")
     capa = capa or pv.available_layers(vista)[0]
@@ -144,14 +156,21 @@ def test_la_ficha_muestra_las_tres_lentes_y_la_confianza():
     """La ficha de la celda elegida trae competencia, mercado, proveedores y la confianza (que no es una probabilidad)."""
     at = abrir("food_drink")
     md = " ".join(textos(at.markdown))
-    assert "Ficha de la celda" in md and "**Competencia**" in md and "**Mercado consumidor**" in md and "**Proveedores**" in md
+    assert (
+        "Ficha de la celda" in md
+        and "**Competencia**" in md
+        and "**Mercado consumidor**" in md
+        and "**Proveedores**" in md
+    )
     assert any("Confianza de datos" in t and "no es una probabilidad" in t for t in textos(at.caption))
 
 
 def test_el_mapa_y_la_ficha_usan_el_perfil_elegido():
     """Una celda con competencia indirecta la pierde al quitar ese tipo de competencia: las lentes se recalculan con el
     perfil del usuario, no con el de por defecto."""
-    from src.ml import panorama, panorama_view as pv
+    from src.ml import panorama
+    from src.ml import panorama_view as pv
+
     guardado, counts = panorama.read_panorama(ROOT / "data" / "ml"), panorama.read_counts(ROOT / "data" / "ml")
     base = pv.compute_view(counts, bp.get_default_profile("food_drink"), guardado, "food_drink")
     celda = base.index[base["competencia_indirecta"] > 0][0]
@@ -226,15 +245,16 @@ def test_cambiar_el_perfil_no_cambia_la_brecha_y_la_pantalla_lo_dice():
     """La brecha de la misma celda es idéntica con el perfil por defecto y con uno personalizado, y la ficha avisa de que
     usa las categorías estándar."""
     at = abrir("food_drink")
+
     def aviso(a):
         return next(w.value for w in a.warning if w.value.startswith("**Brecha de oferta EXPLORATORIA"))
 
     antes = aviso(at)
     celda = at.selectbox[0].value
     multiselect(at, "Competencia indirecta (sustitutos)").set_value([]).run()
-    at.selectbox[0].set_value(celda).run()                    # la misma celda: la lista se reordena con el perfil
+    at.selectbox[0].set_value(celda).run()  # la misma celda: la lista se reordena con el perfil
     despues = aviso(at)
-    cifras = lambda t: t[:t.index("Positiva")]                # brecha, esperado e intervalo
+    cifras = lambda t: t[: t.index("Positiva")]  # brecha, esperado e intervalo
     assert cifras(antes) == cifras(despues)
     assert "Usa las categorías estándar, no tu perfil." not in antes
     assert "Usa las categorías estándar, no tu perfil." in despues
@@ -264,8 +284,20 @@ def pagina(tmp_path, monkeypatch):
     db = RouteDatabase(tmp_path / "t.csv", tmp_path / "t.db")
     db.save_demographics([{"zone_name": z, "population": 1000 * (i + 1)} for i, z in enumerate(LOCATIONS)])
     loc = LOCATIONS["Sliema"]
-    db.save_pois([{"osm_type": "node", "osm_id": i, "category": "food_drink", "subcategory": "restaurant", "name": f"p{i}",
-                   "latitude": loc.latitude + 0.0001 * i, "longitude": loc.longitude} for i in range(1, 6)])
+    db.save_pois(
+        [
+            {
+                "osm_type": "node",
+                "osm_id": i,
+                "category": "food_drink",
+                "subcategory": "restaurant",
+                "name": f"p{i}",
+                "latitude": loc.latitude + 0.0001 * i,
+                "longitude": loc.longitude,
+            }
+            for i in range(1, 6)
+        ]
+    )
     monkeypatch.setattr(rd, "get_database", lambda: db)
     return AppTest.from_string(APP_PAGINA.format(raiz=str(ROOT)), default_timeout=120)
 
@@ -303,7 +335,7 @@ def test_buscar_con_texto_vacio_avisa_y_no_deja_resultados_viejos(pagina):
     next(b for b in pagina.button if "Buscar" in b.label).click().run()
     assert any("Escribe una descripción" in w.value for w in pagina.warning)
     assert not any("Panorama por celda" in s.value for s in pagina.subheader)
-    pagina.run()                                              # otra ejecución (p. ej. al tocar un control): sigue sin resultados
+    pagina.run()  # otra ejecución (p. ej. al tocar un control): sigue sin resultados
     assert not any("Panorama por celda" in s.value for s in pagina.subheader)
 
 

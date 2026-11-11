@@ -66,18 +66,19 @@ class TravelTimePredictor:
             logger.warning("no_traffic_time_min column not found")
             return pd.DataFrame(), pd.Series()
 
-        df_feat["travel_time_min_lag"] = df_feat["travel_time_min"].rolling(
-            window=5, min_periods=1
-        ).mean()
+        df_feat["travel_time_min_lag"] = df_feat["travel_time_min"].rolling(window=5, min_periods=1).mean()
 
-        features_df = df_feat[[
-            "hour_of_day", "day_of_week", temp_col,
-            humid_col, "no_traffic_time_min", "travel_time_min_lag"
-        ]].copy()
+        features_df = df_feat[
+            ["hour_of_day", "day_of_week", temp_col, humid_col, "no_traffic_time_min", "travel_time_min_lag"]
+        ].copy()
 
         features_df.columns = [
-            "hour_of_day", "day_of_week", "temperature",
-            "humidity", "no_traffic_time_min", "travel_time_min_lag"
+            "hour_of_day",
+            "day_of_week",
+            "temperature",
+            "humidity",
+            "no_traffic_time_min",
+            "travel_time_min_lag",
         ]
 
         features_df = features_df.fillna(0)
@@ -94,10 +95,7 @@ class TravelTimePredictor:
             True si el entrenamiento fue exitoso, False en caso contrario.
         """
         if len(df) < self.min_samples:
-            logger.warning(
-                f"Insufficient data for training: {len(df)} samples "
-                f"(minimum: {self.min_samples})"
-            )
+            logger.warning(f"Insufficient data for training: {len(df)} samples " f"(minimum: {self.min_samples})")
             return False
 
         try:
@@ -150,14 +148,18 @@ class TravelTimePredictor:
             # Los nombres y el orden de las columnas deben ser EXACTAMENTE los del ajuste
             # (prepare_features las renombra a temperature/humidity): con otros nombres sklearn rechazaba
             # la entrada y este método devolvía siempre None.
-            X = pd.DataFrame([{
-                "hour_of_day": hour,
-                "day_of_week": day_of_week,
-                "temperature": temperature,
-                "humidity": humidity,
-                "no_traffic_time_min": no_traffic_time,
-                "travel_time_min_lag": historical_avg or no_traffic_time,
-            }])[self.feature_names]
+            X = pd.DataFrame(
+                [
+                    {
+                        "hour_of_day": hour,
+                        "day_of_week": day_of_week,
+                        "temperature": temperature,
+                        "humidity": humidity,
+                        "no_traffic_time_min": no_traffic_time,
+                        "travel_time_min_lag": historical_avg or no_traffic_time,
+                    }
+                ]
+            )[self.feature_names]
 
             X_scaled = self.scaler.transform(X)
             prediction = self.model.predict(X_scaled)[0]
@@ -190,11 +192,14 @@ class TravelTimePredictor:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "wb") as f:
-                pickle.dump({
-                    "model": self.model,
-                    "scaler": self.scaler,
-                    "feature_names": self.feature_names,
-                }, f)
+                pickle.dump(
+                    {
+                        "model": self.model,
+                        "scaler": self.scaler,
+                        "feature_names": self.feature_names,
+                    },
+                    f,
+                )
             logger.info(f"Model saved to {path}")
             return True
         except Exception as e:

@@ -30,7 +30,7 @@ def migrate_csv_to_sqlite(csv_path: Path, db_path: Path, dry_run: bool = False) 
     logger.info(f"Reading CSV: {csv_path}")
 
     try:
-        df = pd.read_csv(csv_path, on_bad_lines='skip', engine='python')
+        df = pd.read_csv(csv_path, on_bad_lines="skip", engine="python")
     except Exception as e:
         logger.error(f"Failed to read CSV: {e}")
         return 0
@@ -48,20 +48,32 @@ def migrate_csv_to_sqlite(csv_path: Path, db_path: Path, dry_run: bool = False) 
         return 0
 
     numeric_cols = [
-        "distance_km", "travel_time_min", "no_traffic_time_min",
-        "traffic_delay_min", "traffic_length_km", "average_speed_kmh",
-        "origin_temperature", "origin_feels_like", "origin_humidity",
-        "destination_temperature", "destination_feels_like", "destination_humidity",
+        "distance_km",
+        "travel_time_min",
+        "no_traffic_time_min",
+        "traffic_delay_min",
+        "traffic_length_km",
+        "average_speed_kmh",
+        "origin_temperature",
+        "origin_feels_like",
+        "origin_humidity",
+        "destination_temperature",
+        "destination_feels_like",
+        "destination_humidity",
     ]
     text_cols = [
-        "data_source", "departure_time", "arrival_time", "origin_weather",
-        "destination_weather", "mobility_level", "polyline",
+        "data_source",
+        "departure_time",
+        "arrival_time",
+        "origin_weather",
+        "destination_weather",
+        "mobility_level",
+        "polyline",
     ]
 
     records = []
     for idx, row in df.iterrows():
-        record = {"timestamp": row.get("timestamp"), "origin": row.get("origin"),
-                   "destination": row.get("destination")}
+        record = {"timestamp": row.get("timestamp"), "origin": row.get("origin"), "destination": row.get("destination")}
 
         for col in numeric_cols:
             record[col] = pd.to_numeric(row.get(col), errors="coerce") if col in df.columns else None
@@ -97,6 +109,7 @@ def migrate_csv_to_sqlite(csv_path: Path, db_path: Path, dry_run: bool = False) 
     verify_count = 0
     try:
         import sqlite3
+
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM route_measurements")
@@ -124,10 +137,8 @@ Examples:
         """,
     )
 
-    parser.add_argument("--dry-run", action="store_true",
-                         help="Show what would be imported without actually importing")
-    parser.add_argument("--skip-confirmation", action="store_true",
-                         help="Skip confirmation prompt")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be imported without actually importing")
+    parser.add_argument("--skip-confirmation", action="store_true", help="Skip confirmation prompt")
 
     args = parser.parse_args()
 

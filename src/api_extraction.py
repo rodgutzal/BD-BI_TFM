@@ -97,9 +97,7 @@ routes = [
 records = []
 
 for route in routes:
-    body = {
-        "coordinates": [route["origin"], route["destination"]]
-    }
+    body = {"coordinates": [route["origin"], route["destination"]]}
 
     route_response = requests.post(route_url, json=body, headers=headers)
     route_data = route_response.json()

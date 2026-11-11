@@ -49,25 +49,35 @@ def via(fila, col, **tags):
 # Conversión del contexto
 # ---------------------------------------------------------------------------
 
+
 def test_edificios_se_convierten_con_su_tipo_y_yes_por_defecto():
     """Los edificios de OSM se convierten en POIs de categoría «edificio» con su tipo como subcategoría, y «yes» si no tienen tipo."""
-    df = osm_context.elements_to_pois("edificios", [via(20, 20, building="apartments"), via(20, 21, building="yes"),
-                                                    via(20, 22)])
+    df = osm_context.elements_to_pois(
+        "edificios", [via(20, 20, building="apartments"), via(20, 21, building="yes"), via(20, 22)]
+    )
     assert list(df["category"].unique()) == ["edificio"] and df["subcategory"].tolist() == ["apartments", "yes", "yes"]
 
 
 def test_los_elementos_sin_coordenadas_se_descartan():
     """Los elementos de OSM sin coordenadas se descartan."""
-    df = osm_context.elements_to_pois("edificios", [{"type": "way", "id": 3, "tags": {"building": "yes"}},
-                                                    via(20, 20, building="yes")])
+    df = osm_context.elements_to_pois(
+        "edificios", [{"type": "way", "id": 3, "tags": {"building": "yes"}}, via(20, 20, building="yes")]
+    )
     assert len(df) == 1
 
 
 def test_transporte_conserva_paradas_y_descarta_las_posiciones_duplicadas():
     """En transporte se conservan paradas, estaciones, andenes y terminales de ferry, y se descartan las posiciones de parada duplicadas."""
-    df = osm_context.elements_to_pois("transporte", [
-        nodo(20, 20, highway="bus_stop"), nodo(20, 21, public_transport="stop_position"),
-        nodo(20, 22, amenity="ferry_terminal"), nodo(20, 23, railway="station"), nodo(20, 24, public_transport="platform")])
+    df = osm_context.elements_to_pois(
+        "transporte",
+        [
+            nodo(20, 20, highway="bus_stop"),
+            nodo(20, 21, public_transport="stop_position"),
+            nodo(20, 22, amenity="ferry_terminal"),
+            nodo(20, 23, railway="station"),
+            nodo(20, 24, public_transport="platform"),
+        ],
+    )
     assert sorted(df["subcategory"]) == ["bus_stop", "ferry", "platform", "station"]
 
 
@@ -87,8 +97,12 @@ def test_un_tema_desconocido_o_sin_uso_da_un_dataframe_vacio_con_las_columnas():
 
 def test_load_context_lee_los_json_ignora_los_corruptos_y_un_directorio_vacio_da_vacio(tmp_path):
     """`load_context` lee los JSON de la carpeta, ignora los corruptos y devuelve una tabla vacía si el directorio no tiene datos."""
-    (tmp_path / "edificios_0.json").write_text(json.dumps({"tema": "edificios", "trozo": 0, "elements": [via(20, 20, building="house")]}))
-    (tmp_path / "alojamiento_0.json").write_text(json.dumps({"tema": "alojamiento", "trozo": 0, "elements": [nodo(21, 21, tourism="hotel")]}))
+    (tmp_path / "edificios_0.json").write_text(
+        json.dumps({"tema": "edificios", "trozo": 0, "elements": [via(20, 20, building="house")]})
+    )
+    (tmp_path / "alojamiento_0.json").write_text(
+        json.dumps({"tema": "alojamiento", "trozo": 0, "elements": [nodo(21, 21, tourism="hotel")]})
+    )
     (tmp_path / "roto.json").write_text("{esto no es json")
     df = osm_context.load_context(tmp_path)
     assert sorted(df["category"]) == ["alojamiento", "edificio"]
@@ -107,10 +121,14 @@ def test_no_residenciales_excluye_lo_que_no_es_vivienda():
 # Efecto en los conteos, las lentes y las variables
 # ---------------------------------------------------------------------------
 
+
 def _con_contexto():
     pois = pd.DataFrame([punto(20, 20, "food_drink", "cafe"), punto(20, 21, "school", "school")])
-    filas_ctx = ([punto(20, 20, "edificio", "yes")] * 6
-                 + [punto(20, 20, "edificio", "industrial"), punto(20, 20, "alojamiento", "hotel"), punto(5, 5, "edificio", "yes")])
+    filas_ctx = [punto(20, 20, "edificio", "yes")] * 6 + [
+        punto(20, 20, "edificio", "industrial"),
+        punto(20, 20, "alojamiento", "hotel"),
+        punto(5, 5, "edificio", "yes"),
+    ]
     ctx = pd.DataFrame(filas_ctx)
     return CellCounts.from_pois(pd.concat([pois, ctx], ignore_index=True))
 
@@ -126,7 +144,7 @@ def test_las_celdas_activas_no_cambian_al_cargar_el_contexto():
 def test_residentes_cuenta_edificios_pero_no_los_industriales():
     """La lente de residentes cuenta los edificios de vivienda de la celda pero no los industriales."""
     lentes = compute_lenses(_con_contexto(), bp.get_default_profile("food_drink"))
-    assert lentes.loc["r20c20", "mercado_residentes"] == 6.0               # 6 'yes'; el industrial no cuenta
+    assert lentes.loc["r20c20", "mercado_residentes"] == 6.0  # 6 'yes'; el industrial no cuenta
     assert lentes["mercado_estudiantes"].notna().all()
 
 
@@ -146,18 +164,27 @@ def test_sin_contexto_residentes_y_turistas_siguen_sin_datos():
 def test_el_indice_de_mercado_va_de_0_a_1_y_los_edificios_no_aplastan_a_los_demas_segmentos():
     """Regresión: mercado_total sumaba conteos en bruto, y con ~90 edificios por celda frente a ~1 colegio el índice era
     solo 'cuántos edificios hay'. Ahora cada segmento se escala por su máximo antes de promediar."""
-    filas = [punto(30, 30, "school", "school")] + [punto(10, 10, "edificio", "yes")] * 200 + [punto(10, 10, "food_drink", "cafe")]
+    filas = (
+        [punto(30, 30, "school", "school")]
+        + [punto(10, 10, "edificio", "yes")] * 200
+        + [punto(10, 10, "food_drink", "cafe")]
+    )
     cc = CellCounts.from_pois(pd.DataFrame(filas))
     lentes = compute_lenses(cc, bp.get_default_profile("food_drink"), np.ones(grid.SHAPE, dtype=bool))
     assert lentes["mercado_total"].between(0, 1).all()
     colegio, edificios = lentes.loc["r30c30", "mercado_total"], lentes.loc["r10c10", "mercado_total"]
-    assert colegio == pytest.approx(edificios, rel=0.01)        # cada segmento en su máximo vale lo mismo (media de 2 segmentos)
+    assert colegio == pytest.approx(
+        edificios, rel=0.01
+    )  # cada segmento en su máximo vale lo mismo (media de 2 segmentos)
 
 
 def test_el_indice_de_mercado_es_una_media_y_no_una_suma():
     """Una celda que es el máximo en TODOS los segmentos con datos vale exactamente 1 (con una suma valdría 2)."""
-    cc = CellCounts.from_pois(pd.DataFrame([punto(10, 10, "school", "school"), punto(10, 10, "edificio", "yes"),
-                                            punto(10, 10, "food_drink", "cafe")]))
+    cc = CellCounts.from_pois(
+        pd.DataFrame(
+            [punto(10, 10, "school", "school"), punto(10, 10, "edificio", "yes"), punto(10, 10, "food_drink", "cafe")]
+        )
+    )
     lentes = compute_lenses(cc, bp.get_default_profile("food_drink"), np.ones(grid.SHAPE, dtype=bool))
     assert lentes.loc["r10c10", "mercado_total"] == pytest.approx(1.0)
 
@@ -169,20 +196,27 @@ def test_las_variables_incluyen_el_contexto_solo_si_se_piden():
     con = features.build_features(cc, [Selector("food_drink")], categorias=features.CATEGORIAS + osm_context.CONTEXTO)
     assert not any(c.startswith("edificio_") for c in sin.columns)
     assert con.loc["r20c20", "edificio_celda"] == 7 and con.loc["r20c20", "alojamiento_celda"] == 1
-    assert list(con.index) == list(sin.index)                       # las mismas celdas
+    assert list(con.index) == list(sin.index)  # las mismas celdas
 
 
 # ---------------------------------------------------------------------------
 # Modelos y validación con contexto
 # ---------------------------------------------------------------------------
 
+
 def _x_con_contexto():
     rng = np.random.default_rng(0)
     f, c = np.meshgrid(np.arange(16) + 10, np.arange(20) + 10, indexing="ij")
     ids = [grid.cell_id(a, b) for a, b in zip(f.ravel(), c.ravel())]
     cats = features.CATEGORIAS + osm_context.CONTEXTO
-    X = pd.DataFrame({f"{cat}_{z}": rng.poisson(1.5, len(ids)).astype(float) for cat in cats for z in ("celda", "anillo1", "anillo2")},
-                     index=pd.Index(ids, name="cell_id"))
+    X = pd.DataFrame(
+        {
+            f"{cat}_{z}": rng.poisson(1.5, len(ids)).astype(float)
+            for cat in cats
+            for z in ("celda", "anillo1", "anillo2")
+        },
+        index=pd.Index(ids, name="cell_id"),
+    )
     X["dist_centro_m"], X["pob_suavizada"], X["tiempo_viaje_suavizado"] = rng.uniform(0, 3000, len(ids)), 9000.0, 10.0
     y = rng.poisson(0.2 + 0.9 * X["edificio_celda"].to_numpy()).astype(float)
     return X, y
@@ -193,7 +227,11 @@ def test_boosting_poi_no_usa_las_variables_de_contexto_y_solo_edificios_solo_esa
     X, _ = _x_con_contexto()
     poi = models.columnas_de("boosting_poi", X)
     assert not any(c.startswith(osm_context.CONTEXTO) for c in poi.columns) and "school_celda" in poi.columns
-    assert list(models.columnas_de("solo_edificios", X).columns) == ["edificios_celda", "edificios_anillo1", "edificios_anillo2"]
+    assert list(models.columnas_de("solo_edificios", X).columns) == [
+        "edificios_celda",
+        "edificios_anillo1",
+        "edificios_anillo2",
+    ]
 
 
 @pytest.mark.parametrize("nombre", models.OPCIONALES)
@@ -224,12 +262,16 @@ def _db_y_contexto(tmp_path):
     db = tmp_path / "t.db"
     rng = np.random.default_rng(0)
     con = sqlite3.connect(db)
-    con.execute("CREATE TABLE pois (id INTEGER PRIMARY KEY, category TEXT, subcategory TEXT, latitude REAL, longitude REAL)")
+    con.execute(
+        "CREATE TABLE pois (id INTEGER PRIMARY KEY, category TEXT, subcategory TEXT, latitude REAL, longitude REAL)"
+    )
     for _ in range(600):
         f, c = int(rng.integers(12, 34)), int(rng.integers(10, 32))
         p = punto(f, c, ["food_drink", "business", "school", "sport"][int(rng.integers(0, 4))], "x")
-        con.execute("INSERT INTO pois (category, subcategory, latitude, longitude) VALUES (?,?,?,?)",
-                    (p["category"], p["subcategory"], p["latitude"], p["longitude"]))
+        con.execute(
+            "INSERT INTO pois (category, subcategory, latitude, longitude) VALUES (?,?,?,?)",
+            (p["category"], p["subcategory"], p["latitude"], p["longitude"]),
+        )
     con.execute("CREATE TABLE zone_demographics (zone_name TEXT, population INTEGER)")
     con.execute("CREATE TABLE route_measurements (origin TEXT, destination TEXT, travel_time_min REAL)")
     con.commit()
@@ -245,7 +287,25 @@ def test_validate_location_model_con_contexto_informa_si_el_contexto_aporta(tmp_
     """El script de validación con contexto informa de si el contexto aporta y no modifica la base de datos."""
     db, ctx = _db_y_contexto(tmp_path)
     antes = db.read_bytes()
-    assert vlm.main(["--db", str(db), "--contexto", str(ctx), "--target", "food_drink", "--repeats", "2", "--folds", "3", "--boot", "50"]) == 0
+    assert (
+        vlm.main(
+            [
+                "--db",
+                str(db),
+                "--contexto",
+                str(ctx),
+                "--target",
+                "food_drink",
+                "--repeats",
+                "2",
+                "--folds",
+                "3",
+                "--boot",
+                "50",
+            ]
+        )
+        == 0
+    )
     salida = capsys.readouterr().out
     assert "Contexto de OSM (fase 1b)" in salida and "¿Aporta el contexto" in salida
     assert "boosting_poi" in salida and "solo_edificios" in salida
@@ -265,7 +325,25 @@ def test_validate_location_model_con_un_directorio_de_contexto_vacio_valida_sin_
     db, _ = _db_y_contexto(tmp_path)
     vacio = tmp_path / "vacio"
     vacio.mkdir()
-    assert vlm.main(["--db", str(db), "--contexto", str(vacio), "--target", "business", "--repeats", "2", "--folds", "3", "--boot", "30"]) == 0
+    assert (
+        vlm.main(
+            [
+                "--db",
+                str(db),
+                "--contexto",
+                str(vacio),
+                "--target",
+                "business",
+                "--repeats",
+                "2",
+                "--folds",
+                "3",
+                "--boot",
+                "30",
+            ]
+        )
+        == 0
+    )
     assert "directorio sin datos válidos" in capsys.readouterr().out
 
 
@@ -280,6 +358,7 @@ def test_measure_lens_variance_con_contexto_da_datos_a_residentes(tmp_path, caps
 # ---------------------------------------------------------------------------
 # Herramienta de descarga (sin red)
 # ---------------------------------------------------------------------------
+
 
 class Respuesta:
     def __init__(self, datos=None, error=False):
@@ -312,7 +391,7 @@ def test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes():
     franjas = dl.bbox_franjas(3)
     assert franjas[0][0] == grid.SOUTH and franjas[-1][2] == grid.NORTH
     for a, b in zip(franjas, franjas[1:]):
-        assert a[2] == pytest.approx(b[0])                       # el norte de una es el sur de la siguiente
+        assert a[2] == pytest.approx(b[0])  # el norte de una es el sur de la siguiente
     assert all(f[1] == grid.WEST and f[3] == grid.EAST for f in franjas)
     with pytest.raises(ValueError):
         dl.bbox_franjas(0)
@@ -321,7 +400,11 @@ def test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes():
 def test_la_consulta_lleva_el_bbox_el_timeout_del_servidor_y_pide_centro_y_etiquetas():
     """La consulta lleva el rectángulo, el timeout del servidor y pide el centro y las etiquetas."""
     q = dl.construir_consulta(['way["building"]({bbox});'], (35.84, 14.44, 35.9, 14.5))
-    assert "(35.840000,14.440000,35.900000,14.500000)" in q and "[timeout:150]" in q and q.rstrip().endswith("out center tags;")
+    assert (
+        "(35.840000,14.440000,35.900000,14.500000)" in q
+        and "[timeout:150]" in q
+        and q.rstrip().endswith("out center tags;")
+    )
 
 
 def test_el_plan_pide_siete_trozos_y_el_edificado_va_en_franjas():
@@ -347,16 +430,20 @@ def test_se_espera_entre_peticiones_pero_no_despues_de_la_ultima(tmp_path, monke
     monkeypatch.setattr(dl.time, "sleep", lambda s: esperas.append(s))
     cliente = ClienteFalso(lambda url, q: Respuesta({"elements": []}))
     dl.descargar(cliente, tmp_path, ["alojamiento", "industria", "transporte"], pausa_s=7, log=lambda *_: None)
-    assert esperas == [7, 7]                                       # 3 peticiones -> 2 pausas
+    assert esperas == [7, 7]  # 3 peticiones -> 2 pausas
 
 
 def test_si_un_espejo_falla_se_prueba_el_siguiente():
     """Si un espejo de Overpass falla, se prueba el siguiente."""
+
     def responder(url, q):
         return Respuesta(error=True) if url == "https://uno" else Respuesta({"elements": [1, 2]})
 
     cliente = ClienteFalso(responder)
-    assert dl.pedir(cliente, "q") == {"elements": [1, 2]} and [c[0] for c in cliente.session.llamadas] == ["https://uno", "https://dos"]
+    assert dl.pedir(cliente, "q") == {"elements": [1, 2]} and [c[0] for c in cliente.session.llamadas] == [
+        "https://uno",
+        "https://dos",
+    ]
 
 
 def test_si_todos_los_espejos_fallan_lanza_runtimeerror():
@@ -367,10 +454,13 @@ def test_si_todos_los_espejos_fallan_lanza_runtimeerror():
 
 def test_un_trozo_fallido_se_anota_y_el_resto_se_descarga(tmp_path):
     """Un trozo fallido se anota en el resumen y el resto se descarga."""
+
     def responder(url, q):
         return Respuesta(error=True) if "wholesale" in q else Respuesta({"elements": [nodo(20, 20, tourism="hotel")]})
 
-    resumen = dl.descargar(ClienteFalso(responder), tmp_path, ["industria", "alojamiento"], pausa_s=0, log=lambda *_: None)
+    resumen = dl.descargar(
+        ClienteFalso(responder), tmp_path, ["industria", "alojamiento"], pausa_s=0, log=lambda *_: None
+    )
     assert resumen["industria"]["trozos_fallidos"] == 1 and resumen["alojamiento"]["trozos_ok"] == 1
     assert [p.name for p in tmp_path.iterdir()] == ["alojamiento_0.json"]
 

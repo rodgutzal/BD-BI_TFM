@@ -21,14 +21,17 @@ class Selector:
 
     `Selector("food_drink")` = cualquier subcategoría de food_drink; `Selector("business", frozenset({"bakery"}))`
     = solo las panaderías; `Selector("business", None, frozenset({"company"}))` = todo `business` salvo `company`."""
+
     category: str
     subcategories: Optional[FrozenSet[str]] = None
     excluding: Optional[FrozenSet[str]] = None
 
     def matches(self, category: str, subcategory: str) -> bool:
-        return (category == self.category
-                and (self.subcategories is None or subcategory in self.subcategories)
-                and (self.excluding is None or subcategory not in self.excluding))
+        return (
+            category == self.category
+            and (self.subcategories is None or subcategory in self.subcategories)
+            and (self.excluding is None or subcategory not in self.excluding)
+        )
 
 
 def selector(category: str, *subcategories: str) -> Selector:
@@ -46,7 +49,7 @@ class CellCounts:
 
     def __init__(self, arrays: Dict[Tuple[str, str], np.ndarray], n_fuera: int = 0, n_total: int = 0):
         self.arrays = arrays
-        self.n_fuera = n_fuera           # POIs con coordenadas fuera de la rejilla (auditoría)
+        self.n_fuera = n_fuera  # POIs con coordenadas fuera de la rejilla (auditoría)
         self.n_total = n_total
 
     @classmethod

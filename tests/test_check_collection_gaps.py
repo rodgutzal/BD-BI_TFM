@@ -71,11 +71,14 @@ def _db_con_ciclos(tmp_path, ciclos):
 
 def test_load_cycle_times_filtra_por_fecha_y_descarta_timestamps_invalidos(tmp_path):
     """`load_cycle_times` descarta lo anterior a la fecha de inicio y los timestamps que no son fechas."""
-    path = _db_con_ciclos(tmp_path, [
-        ((T0 - 100 * H).isoformat(), "ors"),   # antes de la ventana
-        ((T0 + 1 * H).isoformat(), "ors"),
-        ("no-es-una-fecha", "tomtom"),          # inválido
-    ])
+    path = _db_con_ciclos(
+        tmp_path,
+        [
+            ((T0 - 100 * H).isoformat(), "ors"),  # antes de la ventana
+            ((T0 + 1 * H).isoformat(), "ors"),
+            ("no-es-una-fecha", "tomtom"),  # inválido
+        ],
+    )
     df = gaps.load_cycle_times(path, since=T0)
     assert len(df) == 1 and df.iloc[0]["data_source"] == "ors"
 
@@ -94,7 +97,7 @@ def test_report_avisa_si_ahora_mismo_no_llega_trafico():
     """El informe avisa «AHORA MISMO» si el último dato es antiguo y devuelve su edad."""
     df = pd.DataFrame({"ts": [T0, T0 + 1 * H], "data_source": ["ors", "ors"]})
     salida = []
-    now = T0 + 30 * H   # 29 h después del último dato
+    now = T0 + 30 * H  # 29 h después del último dato
     r = gaps.report(df, now, days=30, min_gap=pd.Timedelta(hours=2), out=salida.append)
     assert any("AHORA MISMO" in linea for linea in salida)
     assert r["age"] == pd.Timedelta(hours=29)
@@ -102,10 +105,12 @@ def test_report_avisa_si_ahora_mismo_no_llega_trafico():
 
 def test_report_mide_el_tiempo_total_sin_datos():
     """El informe cuenta los huecos y suma el tiempo total sin datos, sin avisar de sequía actual si los datos son recientes."""
-    df = pd.DataFrame({
-        "ts": [T0, T0 + 1 * H, T0 + 11 * H, T0 + 12 * H],  # un hueco de 10 h
-        "data_source": ["ors"] * 4,
-    })
+    df = pd.DataFrame(
+        {
+            "ts": [T0, T0 + 1 * H, T0 + 11 * H, T0 + 12 * H],  # un hueco de 10 h
+            "data_source": ["ors"] * 4,
+        }
+    )
     salida = []
     r = gaps.report(df, T0 + 12 * H, days=30, min_gap=pd.Timedelta(hours=2), out=salida.append)
     assert r["gaps"] == 1
@@ -116,7 +121,8 @@ def test_report_mide_el_tiempo_total_sin_datos():
 def test_report_sin_datos():
     """Sin datos, el informe devuelve cero huecos y escribe «Sin datos»."""
     salida = []
-    r = gaps.report(pd.DataFrame(columns=["ts", "data_source"]), T0, days=30,
-                    min_gap=pd.Timedelta(hours=2), out=salida.append)
+    r = gaps.report(
+        pd.DataFrame(columns=["ts", "data_source"]), T0, days=30, min_gap=pd.Timedelta(hours=2), out=salida.append
+    )
     assert r == {"gaps": 0}
     assert "Sin datos" in salida[0]

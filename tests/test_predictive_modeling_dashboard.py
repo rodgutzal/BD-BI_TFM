@@ -19,23 +19,25 @@ from streamlit_app.dashboards import predictive_modeling_dashboard as pm
 def _datos(n=240, filas_sin_clima=(3, 50, 51), seed=0):
     rng = np.random.default_rng(seed)
     descripciones = ["clear sky", "few clouds", "broken clouds", "light rain", "mist"]
-    df = pd.DataFrame({
-        "timestamp": pd.date_range("2026-09-01", periods=n, freq="h", tz="UTC"),
-        "origin": np.where(np.arange(n) % 2 == 0, "Msida", "Valletta"),
-        "destination": np.where(np.arange(n) % 2 == 0, "Gzira", "Sliema"),
-        "data_source": np.where(np.arange(n) % 3 == 0, "tomtom", "ors"),
-        "distance_km": np.where(np.arange(n) % 2 == 0, 2.0, 4.0),
-        "origin_temperature": rng.uniform(15, 30, n),
-        "origin_humidity": rng.uniform(40, 90, n),
-        "destination_temperature": rng.uniform(15, 30, n),
-        "destination_humidity": rng.uniform(40, 90, n),
-        "origin_weather": [descripciones[i % 5] for i in range(n)],
-        "destination_weather": [descripciones[(i + 1) % 5] for i in range(n)],
-        "travel_time_min": rng.uniform(5, 30, n),
-        "average_speed_kmh": rng.uniform(20, 50, n),
-    })
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2026-09-01", periods=n, freq="h", tz="UTC"),
+            "origin": np.where(np.arange(n) % 2 == 0, "Msida", "Valletta"),
+            "destination": np.where(np.arange(n) % 2 == 0, "Gzira", "Sliema"),
+            "data_source": np.where(np.arange(n) % 3 == 0, "tomtom", "ors"),
+            "distance_km": np.where(np.arange(n) % 2 == 0, 2.0, 4.0),
+            "origin_temperature": rng.uniform(15, 30, n),
+            "origin_humidity": rng.uniform(40, 90, n),
+            "destination_temperature": rng.uniform(15, 30, n),
+            "destination_humidity": rng.uniform(40, 90, n),
+            "origin_weather": [descripciones[i % 5] for i in range(n)],
+            "destination_weather": [descripciones[(i + 1) % 5] for i in range(n)],
+            "travel_time_min": rng.uniform(5, 30, n),
+            "average_speed_kmh": rng.uniform(20, 50, n),
+        }
+    )
     df["mobility_level"] = np.where(df["travel_time_min"] > 20, "Alta demora", "Movilidad normal")
-    for i in filas_sin_clima:   # OpenWeather no respondió en ese ciclo
+    for i in filas_sin_clima:  # OpenWeather no respondió en ese ciclo
         df.loc[i, ["origin_temperature", "origin_humidity", "origin_weather"]] = np.nan
     return df
 
@@ -43,7 +45,7 @@ def _datos(n=240, filas_sin_clima=(3, 50, 51), seed=0):
 def test_clima_ausente_no_se_convierte_en_lluvia():
     """Una fila sin clima queda como NaN en el grupo de clima, no como «lluvia»."""
     d = pm._engineer_features(_datos())
-    assert d.loc[3, "origin_weather_grp"] != d.loc[3, "origin_weather_grp"]   # NaN, no "lluvia"
+    assert d.loc[3, "origin_weather_grp"] != d.loc[3, "origin_weather_grp"]  # NaN, no "lluvia"
     assert d["origin_weather_grp"].isna().sum() == 3
 
 
@@ -54,7 +56,7 @@ def test_descripciones_conocidas_y_desconocidas_se_agrupan_como_antes():
     assert por_desc["clear sky"] == "despejado"
     assert por_desc["few clouds"] == "parcialmente_nublado"
     assert por_desc["broken clouds"] == "nublado"
-    assert por_desc["light rain"] == "lluvia"      # no está en WEATHER_GROUPS
+    assert por_desc["light rain"] == "lluvia"  # no está en WEATHER_GROUPS
     assert por_desc["mist"] == "lluvia"
 
 
@@ -92,4 +94,4 @@ def test_el_temporal_y_el_clustering_conservan_las_filas_sin_clima():
     """Su tiempo de viaje es válido: no deben pasar por _complete_cases."""
     d = pm._engineer_features(_datos())
     res = pm._fit_clustering(d, 2)
-    assert res["agg"]["n"].sum() == len(d)      # contó las 240 filas, no 237
+    assert res["agg"]["n"].sum() == len(d)  # contó las 240 filas, no 237

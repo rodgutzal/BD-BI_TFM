@@ -13,8 +13,14 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
-from src.ml.business_profiles import (PROVEEDORES_POI, SEGMENTOS_POI, BusinessProfile, _elementos, apply_overrides,
-                                      desviacion_competencia)
+from src.ml.business_profiles import (
+    PROVEEDORES_POI,
+    SEGMENTOS_POI,
+    BusinessProfile,
+    _elementos,
+    apply_overrides,
+    desviacion_competencia,
+)
 from src.ml.cell_counts import CellCounts, Selector, selector
 from src.ml.osm_context import CONTEXTO
 from src.ml.panorama import COLUMNAS_BRECHA, build_panorama
@@ -60,7 +66,8 @@ def available_pairs(counts: CellCounts) -> Dict[str, Selector]:
         if categoria in CONTEXTO or counts.arrays[(categoria, sub)].sum() <= 0:
             continue
         out[f"{categoria}: {sub}" if sub else f"{categoria}: (sin subcategoría)"] = (
-            selector(categoria, sub) if sub else Selector(categoria, frozenset({""})))
+            selector(categoria, sub) if sub else Selector(categoria, frozenset({""}))
+        )
     return out
 
 
@@ -75,13 +82,22 @@ def competition_options(base: BusinessProfile, counts: CellCounts):
 
 def same_profile(a: BusinessProfile, b: BusinessProfile) -> bool:
     """¿Definen lo mismo? Compara los elementos atómicos de la competencia, y los segmentos y proveedores como conjuntos."""
-    return (_elementos(a.competencia_directa) == _elementos(b.competencia_directa)
-            and _elementos(a.competencia_indirecta) == _elementos(b.competencia_indirecta)
-            and set(a.segmentos) == set(b.segmentos) and set(a.proveedores) == set(b.proveedores))
+    return (
+        _elementos(a.competencia_directa) == _elementos(b.competencia_directa)
+        and _elementos(a.competencia_indirecta) == _elementos(b.competencia_indirecta)
+        and set(a.segmentos) == set(b.segmentos)
+        and set(a.proveedores) == set(b.proveedores)
+    )
 
 
-def custom_profile(base: BusinessProfile, opciones: Dict[str, Selector], directa: Sequence[str], indirecta: Sequence[str],
-                   segmentos: Sequence[str], proveedores: Sequence[str]) -> Tuple[BusinessProfile, List[str]]:
+def custom_profile(
+    base: BusinessProfile,
+    opciones: Dict[str, Selector],
+    directa: Sequence[str],
+    indirecta: Sequence[str],
+    segmentos: Sequence[str],
+    proveedores: Sequence[str],
+) -> Tuple[BusinessProfile, List[str]]:
     """Perfil con los ajustes del usuario y los avisos que corresponden. Si no cambia nada respecto al por defecto,
     devuelve el perfil por defecto (no personalizado) y ningún aviso.
 
@@ -90,13 +106,19 @@ def custom_profile(base: BusinessProfile, opciones: Dict[str, Selector], directa
     avisos: List[str] = []
     en_ambas = [e for e in directa if e in set(indirecta)]
     if en_ambas:
-        avisos.append("Elegiste como competencia directa e indirecta a la vez: " + ", ".join(en_ambas)
-                      + ". Cuenta solo como directa.")
+        avisos.append(
+            "Elegiste como competencia directa e indirecta a la vez: "
+            + ", ".join(en_ambas)
+            + ". Cuenta solo como directa."
+        )
     ind = [e for e in indirecta if e not in set(directa)]
     perfil, extra = apply_overrides(
-        base, competencia_directa=tuple(opciones[e] for e in directa),
+        base,
+        competencia_directa=tuple(opciones[e] for e in directa),
         competencia_indirecta=tuple(opciones[e] for e in ind),
-        segmentos=tuple(segmentos), proveedores=tuple(proveedores))
+        segmentos=tuple(segmentos),
+        proveedores=tuple(proveedores),
+    )
     avisos += extra
     if same_profile(perfil, base) and not avisos:
         return base, []
@@ -117,8 +139,11 @@ def gap_table(guardado: pd.DataFrame, categoria: str) -> Tuple[Optional[pd.DataF
     sub = guardado[guardado["perfil"] == categoria]
     if sub.empty or sub["esperado"].isna().all():
         return None, "", False
-    return (sub.set_index("cell_id")[list(COLUMNAS_BRECHA)], str(sub["modelo_brecha"].iloc[0]),
-            bool(sub["brecha_validada"].iloc[0]))
+    return (
+        sub.set_index("cell_id")[list(COLUMNAS_BRECHA)],
+        str(sub["modelo_brecha"].iloc[0]),
+        bool(sub["brecha_validada"].iloc[0]),
+    )
 
 
 def compute_view(counts: CellCounts, perfil: BusinessProfile, guardado: pd.DataFrame, categoria: str) -> pd.DataFrame:
@@ -132,9 +157,11 @@ def opportunity_mask(vista: pd.DataFrame) -> pd.Series:
     """Celdas de mercado alto y competencia baja: percentil de mercado ≥ 0,75, percentil de competencia directa ≤ 0,25 y
     confianza no baja. Es un FILTRO, no un puntaje: lo que se pide, a la vista. Como las lentes están muy correlacionadas
     (miden sobre todo cuán urbana es la celda), pocas celdas lo cumplen."""
-    return ((vista["pct_mercado_total"] >= UMBRAL_MERCADO_ALTO)
-            & (vista["pct_competencia_directa"] <= UMBRAL_COMPETENCIA_BAJA)
-            & (vista["confianza_nivel"] != "baja"))
+    return (
+        (vista["pct_mercado_total"] >= UMBRAL_MERCADO_ALTO)
+        & (vista["pct_competencia_directa"] <= UMBRAL_COMPETENCIA_BAJA)
+        & (vista["confianza_nivel"] != "baja")
+    )
 
 
 def cell_label(cell_id: str, fila: pd.Series) -> str:

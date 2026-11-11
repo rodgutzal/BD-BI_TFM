@@ -20,22 +20,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.database import RouteDatabase
 
 AHORA = datetime.now(timezone.utc)
-POLILINEA = [[35.9 + i * 1e-4, 14.5 + i * 1e-4] for i in range(400)]     # ~12 KB en JSON
+POLILINEA = [[35.9 + i * 1e-4, 14.5 + i * 1e-4] for i in range(400)]  # ~12 KB en JSON
 
 
 def _registro(minutos_atras, origin="Msida", destination="Gzira", minutos=10.0):
     return {
         "timestamp": (AHORA - timedelta(minutes=minutos_atras)).isoformat(),
-        "origin": origin, "destination": destination, "data_source": "tomtom",
-        "travel_time_min": minutos, "distance_km": 3.0, "polyline": POLILINEA,
+        "origin": origin,
+        "destination": destination,
+        "data_source": "tomtom",
+        "travel_time_min": minutos,
+        "distance_km": 3.0,
+        "polyline": POLILINEA,
     }
 
 
 @pytest.fixture
 def db(tmp_path):
     base = RouteDatabase(tmp_path / "t.csv", tmp_path / "t.db")
-    base.save_records_to_sqlite([_registro(i, minutos=10.0 + i) for i in range(40)]
-                                + [_registro(5, "Valletta", "Sliema", 20.0)])
+    base.save_records_to_sqlite(
+        [_registro(i, minutos=10.0 + i) for i in range(40)] + [_registro(5, "Valletta", "Sliema", 20.0)]
+    )
     return base
 
 
@@ -73,7 +78,7 @@ def test_los_filtros_y_el_orden_no_cambian(db):
     """Los filtros por origen, destino y fecha y el orden (más reciente primero) siguen igual que antes."""
     solo_msida = db.query_measurements(origin="Msida", destination="Gzira", limit=1000)
     assert len(solo_msida) == 40 and set(solo_msida["origin"]) == {"Msida"}
-    assert solo_msida["timestamp"].is_monotonic_decreasing       # más reciente primero
+    assert solo_msida["timestamp"].is_monotonic_decreasing  # más reciente primero
     assert len(db.query_measurements(limit=5)) == 5
 
     desde = (AHORA - timedelta(minutes=10)).isoformat()

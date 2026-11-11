@@ -28,7 +28,7 @@ class WeatherClient:
             total=self.max_retries,
             backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET"]
+            allowed_methods=["GET"],
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
@@ -88,11 +88,7 @@ class WeatherClient:
         main_data = payload.get("main", {})
         weather_items = payload.get("weather", [])
 
-        weather_description = (
-            weather_items[0].get("description", "Unknown")
-            if weather_items
-            else "Unknown"
-        )
+        weather_description = weather_items[0].get("description", "Unknown") if weather_items else "Unknown"
 
         data = {
             "temperature": main_data.get("temp"),

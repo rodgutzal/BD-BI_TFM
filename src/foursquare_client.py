@@ -99,6 +99,7 @@ def build_search_points(
 
     return search_points
 
+
 # Categorización por NOMBRE de categoría devuelto (no por ID numérico): los
 # IDs de la taxonomía de Foursquare son ~1500 y cambian de vez en cuando;
 # emparejar por palabra completa es más simple de mantener y de auditar a
@@ -120,24 +121,94 @@ def build_search_points(
 # Burger Joint, Trattoria, etc. (~la mitad de "other" era comida).
 _CATEGORY_RULES: List[Tuple[str, tuple]] = [
     ("retail", ("retail",)),
-    ("restaurant", (
-        "restaurant", "café", "cafe", "cafeteria", "coffee", "bar", "pub", "lounge",
-        "speakeasy", "beer garden", "brewery", "winery", "gastropub", "bakery", "bistro",
-        "pizzeria", "trattoria", "taverna", "steakhouse", "diner", "deli", "eatery",
-        "joint", "grill", "sandwich", "burger", "snack", "breakfast", "creperie",
-        "dessert", "ice cream", "gelato", "pastry", "pie", "donut", "smoothie", "juice",
-        "food court", "food truck", "food stand", "fast food",
-    )),
-    ("entertainment", (
-        "theater", "theatre", "cinema", "museum", "gym", "fitness", "nightlife",
-        "night club", "nightclub", "casino", "betting", "arcade", "stadium",
-        "art gallery", "concert", "jazz", "swimming pool", "sports and recreation",
+    (
+        "restaurant",
+        (
+            "restaurant",
+            "café",
+            "cafe",
+            "cafeteria",
+            "coffee",
+            "bar",
+            "pub",
+            "lounge",
+            "speakeasy",
+            "beer garden",
+            "brewery",
+            "winery",
+            "gastropub",
+            "bakery",
+            "bistro",
+            "pizzeria",
+            "trattoria",
+            "taverna",
+            "steakhouse",
+            "diner",
+            "deli",
+            "eatery",
+            "joint",
+            "grill",
+            "sandwich",
+            "burger",
+            "snack",
+            "breakfast",
+            "creperie",
+            "dessert",
+            "ice cream",
+            "gelato",
+            "pastry",
+            "pie",
+            "donut",
+            "smoothie",
+            "juice",
+            "food court",
+            "food truck",
+            "food stand",
+            "fast food",
+        ),
+    ),
+    (
         "entertainment",
-    )),
-    ("services", (
-        "bank", "salon", "spa", "barber", "barbershop", "hair", "laundry", "insurance", "real estate",
-        "financial", "atm", "post office", "veterinarian",
-    )),
+        (
+            "theater",
+            "theatre",
+            "cinema",
+            "museum",
+            "gym",
+            "fitness",
+            "nightlife",
+            "night club",
+            "nightclub",
+            "casino",
+            "betting",
+            "arcade",
+            "stadium",
+            "art gallery",
+            "concert",
+            "jazz",
+            "swimming pool",
+            "sports and recreation",
+            "entertainment",
+        ),
+    ),
+    (
+        "services",
+        (
+            "bank",
+            "salon",
+            "spa",
+            "barber",
+            "barbershop",
+            "hair",
+            "laundry",
+            "insurance",
+            "real estate",
+            "financial",
+            "atm",
+            "post office",
+            "veterinarian",
+        ),
+    ),
     ("health", ("hospital", "clinic", "doctor", "pharmacy", "drugstore", "medical", "emergency room")),
     ("school", ("school", "college", "university", "kindergarten", "elementary")),
     ("mall", ("shopping mall", "department store")),
@@ -184,11 +255,13 @@ class FoursquareClient:
             allowed_methods=["GET"],
         )
         session.mount("https://", HTTPAdapter(max_retries=retry_strategy))
-        session.headers.update({
-            "Authorization": f"Bearer {self.api_key}",
-            "X-Places-Api-Version": API_VERSION,
-            "Accept": "application/json",
-        })
+        session.headers.update(
+            {
+                "Authorization": f"Bearer {self.api_key}",
+                "X-Places-Api-Version": API_VERSION,
+                "Accept": "application/json",
+            }
+        )
         return session
 
     @staticmethod
@@ -240,14 +313,16 @@ class FoursquareClient:
 
             category_names = [c.get("name") for c in place.get("categories", []) if c.get("name")]
 
-            pois.append({
-                "fsq_place_id": fsq_id,
-                "category": category,
-                "subcategory": category_names[0] if category_names else None,
-                "name": place.get("name") or f"{category.capitalize()} (sin nombre)",
-                "latitude": lat,
-                "longitude": lon,
-            })
+            pois.append(
+                {
+                    "fsq_place_id": fsq_id,
+                    "category": category,
+                    "subcategory": category_names[0] if category_names else None,
+                    "name": place.get("name") or f"{category.capitalize()} (sin nombre)",
+                    "latitude": lat,
+                    "longitude": lon,
+                }
+            )
         return pois
 
     def fetch_pois_for_zone(self, location: Location) -> List[dict]:
@@ -257,9 +332,7 @@ class FoursquareClient:
             "radius": self.radius_m,
             "limit": self.results_per_zone,
         }
-        response = self.session.get(
-            f"{BASE_URL}/places/search", params=params, timeout=self.timeout
-        )
+        response = self.session.get(f"{BASE_URL}/places/search", params=params, timeout=self.timeout)
         response.raise_for_status()
         payload = response.json()
         raw_results = payload.get("results", [])
@@ -272,11 +345,7 @@ class FoursquareClient:
         # cliente. Si en cambio `raw_results` trae categorías variadas
         # pero el resultado final (tras _parse_results) queda concentrado
         # en pocos baldes, el problema sí estaría en _CATEGORY_RULES.
-        raw_category_names = sorted({
-            c.get("name", "?")
-            for place in raw_results
-            for c in place.get("categories", [])
-        })
+        raw_category_names = sorted({c.get("name", "?") for place in raw_results for c in place.get("categories", [])})
         logger.info(
             f"[{location.name}] Foursquare devolvió {len(raw_results)} resultados crudos, "
             f"con {len(raw_category_names)} nombres de categoría distintos: {raw_category_names}"
@@ -317,7 +386,9 @@ class FoursquareClient:
         bucket_counts: Dict[str, int] = {}
         for poi in result:
             bucket_counts[poi["category"]] = bucket_counts.get(poi["category"], 0) + 1
-        logger.info(f"Foursquare fetch_pois: {len(result)} POIs únicos tras deduplicar — por categoría: {bucket_counts}")
+        logger.info(
+            f"Foursquare fetch_pois: {len(result)} POIs únicos tras deduplicar — por categoría: {bucket_counts}"
+        )
 
         return result
 

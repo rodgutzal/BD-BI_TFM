@@ -78,10 +78,7 @@ class ORSClient:
             )
             response.raise_for_status()
         except requests.exceptions.Timeout:
-            logger.error(
-                f"ORS timeout para ruta {origin_lat},{origin_lon} -> "
-                f"{destination_lat},{destination_lon}"
-            )
+            logger.error(f"ORS timeout para ruta {origin_lat},{origin_lon} -> " f"{destination_lat},{destination_lon}")
             raise
         except requests.exceptions.RequestException as e:
             logger.error(f"ORS request error: {e}")
@@ -102,9 +99,7 @@ class ORSClient:
         distance_km = summary["distance"] / 1000
         travel_time_min = summary["duration"] / 60
 
-        average_speed_kmh = (
-            distance_km / (travel_time_min / 60) if travel_time_min > 0 else 0
-        )
+        average_speed_kmh = distance_km / (travel_time_min / 60) if travel_time_min > 0 else 0
 
         geometry = routes[0].get("geometry")
 

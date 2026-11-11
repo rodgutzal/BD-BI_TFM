@@ -32,10 +32,18 @@ from src.database import RouteDatabase
 def _registros(n=80):
     ahora = datetime.now(timezone.utc)
     return [
-        {"timestamp": (ahora - timedelta(hours=i)).isoformat(), "origin": "Msida", "destination": "Gzira",
-         "data_source": "tomtom", "travel_time_min": 8.0 + (i % 7), "traffic_delay_min": 1.0,
-         "average_speed_kmh": 30.0, "distance_km": 3.0, "origin_temperature": 20.0 + i % 5,
-         "origin_humidity": 50.0 + i % 9}
+        {
+            "timestamp": (ahora - timedelta(hours=i)).isoformat(),
+            "origin": "Msida",
+            "destination": "Gzira",
+            "data_source": "tomtom",
+            "travel_time_min": 8.0 + (i % 7),
+            "traffic_delay_min": 1.0,
+            "average_speed_kmh": 30.0,
+            "distance_km": 3.0,
+            "origin_temperature": 20.0 + i % 5,
+            "origin_humidity": 50.0 + i % 9,
+        }
         for i in range(n)
     ]
 
@@ -48,7 +56,7 @@ def api(tmp_path, monkeypatch):
     monkeypatch.setenv("MOBILITY_CSV_PATH", str(tmp_path / "t.csv"))
     RouteDatabase(tmp_path / "t.csv", db_path).save_records_to_sqlite(_registros())
 
-    sys.modules.pop("src.api", None)          # forzar un import nuevo con las variables de entorno
+    sys.modules.pop("src.api", None)  # forzar un import nuevo con las variables de entorno
     modulo = importlib.import_module("src.api")
     yield modulo
     sys.modules.pop("src.api", None)
@@ -68,13 +76,17 @@ def test_la_api_usa_la_base_indicada_por_variable_de_entorno(api, tmp_path):
 # Un recurso inexistente debe ser 404, no 400
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("url", [
-    "/api/statistics/Nada/Nunca",
-    "/api/predict/Nada/Nunca",
-    "/api/anomalies/Nada/Nunca",
-    "/api/forecast/Nada/Nunca",
-    "/api/time-series/Nada/Nunca",
-])
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/api/statistics/Nada/Nunca",
+        "/api/predict/Nada/Nunca",
+        "/api/anomalies/Nada/Nunca",
+        "/api/forecast/Nada/Nunca",
+        "/api/time-series/Nada/Nunca",
+    ],
+)
 def test_ruta_sin_datos_responde_404_y_no_400(client, url):
     """Una ruta sin datos responde 404 (en cada URL parametrizada) y el `detail` no lleva el 404 anidado."""
     r = client.get(url)
@@ -92,16 +104,20 @@ def test_el_detail_del_404_es_el_mensaje_original(client):
 # Validación de parámetros (la gestiona FastAPI: 422)
 # ---------------------------------------------------------------------------
 
+
 def test_analisis_invalido_es_422(client):
     """Un tipo de análisis de serie temporal no válido responde 422."""
     assert client.get("/api/time-series/Msida/Gzira?analysis=invalido").status_code == 422
 
 
-@pytest.mark.parametrize("url", [
-    "/api/predict/Msida/Gzira?days=0",
-    "/api/predict/Msida/Gzira?days=999",
-    "/api/statistics/Msida/Gzira?hours=0",
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/api/predict/Msida/Gzira?days=0",
+        "/api/predict/Msida/Gzira?days=999",
+        "/api/statistics/Msida/Gzira?hours=0",
+    ],
+)
 def test_parametros_fuera_de_rango_son_422(client, url):
     """Los parámetros fuera de rango (en cada URL parametrizada) responden 422."""
     assert client.get(url).status_code == 422
@@ -110,6 +126,7 @@ def test_parametros_fuera_de_rango_son_422(client, url):
 # ---------------------------------------------------------------------------
 # Caminos felices
 # ---------------------------------------------------------------------------
+
 
 def test_health(client):
     """`/api/health` responde «healthy» con el número de rutas."""
@@ -158,7 +175,7 @@ def test_time_series_patrones_con_un_dia_de_una_sola_muestra(tmp_path, monkeypat
     """Regresión: un día con 1 muestra tiene desviación típica NaN y el endpoint devolvía 500
     (dependía de la hora a la que se ejecutaba: justo tras la medianoche UTC)."""
     # 80 horas terminando a las 00:30 de ayer (UTC): ese último día queda con exactamente 1 muestra.
-    fin =datetime.now(timezone.utc).replace(hour=0, minute=30, second=0, microsecond=0) - timedelta(days=1)
+    fin = datetime.now(timezone.utc).replace(hour=0, minute=30, second=0, microsecond=0) - timedelta(days=1)
     registros = [{**r, "timestamp": (fin - timedelta(hours=i)).isoformat()} for i, r in enumerate(_registros(80))]
     db_path = tmp_path / "t.db"
     monkeypatch.setenv("MOBILITY_DB_PATH", str(db_path))
@@ -189,6 +206,9 @@ def test_predict_devuelve_json_serializable_y_modelos_entrenados(client):
     assert r.status_code == 200, r.text
     j = r.json()
     assert isinstance(j["prediction"]["value"], float)
-    assert j["prediction"]["confidence_interval_95"]["lower"] <= j["prediction"]["value"] \
+    assert (
+        j["prediction"]["confidence_interval_95"]["lower"]
+        <= j["prediction"]["value"]
         <= j["prediction"]["confidence_interval_95"]["upper"]
-    assert "random_forest" in j["models_used"]      # solo los modelos realmente entrenados
+    )
+    assert "random_forest" in j["models_used"]  # solo los modelos realmente entrenados
