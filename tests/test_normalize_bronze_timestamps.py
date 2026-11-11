@@ -90,6 +90,7 @@ def db_mixta(db_path):
 # ---------------------------------------------------------------------------
 
 def test_is_legacy_y_normalize():
+    """`is_legacy` reconoce el formato antiguo de timestamp, `normalize` lo pasa a ISO y normalizar dos veces da lo mismo."""
     assert nb.is_legacy(LEGACY_A) and not nb.is_legacy(ISO_A)
     assert not nb.is_legacy("") and not nb.is_legacy(None)
     assert nb.normalize(LEGACY_A) == ISO_A
@@ -97,6 +98,7 @@ def test_is_legacy_y_normalize():
 
 
 def test_plan_clasifica_cada_fila():
+    """El plan clasifica cada fila: gemelas de otra fila ISO, duplicadas entre antiguas, a renombrar y las que no se tocan."""
     rows = [
         (1, LEGACY_A, "Msida", "Gzira"),     # tiene gemela ISO (id 2)
         (2, ISO_A, "Msida", "Gzira"),
@@ -115,12 +117,14 @@ def test_plan_clasifica_cada_fila():
 
 
 def test_misma_hora_en_otra_ruta_no_es_gemela():
+    """Una fila con la misma hora pero en otra ruta no es gemela y solo se renombra."""
     rows = [(1, LEGACY_A, "Msida", "Gzira"), (2, ISO_A, "Msida", "Sliema")]
     plan = nb.build_plan(rows)
     assert plan.delete_twin == [] and plan.rename == [(1, ISO_A)]
 
 
 def test_base_sin_filas_antiguas_no_necesita_cambios():
+    """Una base sin filas en formato antiguo no necesita cambios."""
     assert not nb.build_plan([(1, ISO_A, "Msida", "Gzira")]).needs_changes
 
 
@@ -129,6 +133,7 @@ def test_base_sin_filas_antiguas_no_necesita_cambios():
 # ---------------------------------------------------------------------------
 
 def test_el_ensayo_no_modifica_nada_ni_crea_archivos(db_mixta, capsys):
+    """El ensayo (sin `--apply`) no modifica la base ni crea archivos, y lo dice en su salida."""
     antes = _sha(db_mixta)
     carpeta = set(p.name for p in db_mixta.parent.iterdir())
 
@@ -142,6 +147,7 @@ def test_el_ensayo_no_modifica_nada_ni_crea_archivos(db_mixta, capsys):
 
 
 def test_main_con_base_inexistente_o_sin_tabla(tmp_path, capsys):
+    """Con una base inexistente devuelve código 2; con una base sin tabla indica que no hay nada que normalizar."""
     assert nb.main(["--db", str(tmp_path / "no_existe.db")]) == 2
     vacia = tmp_path / "vacia.db"
     sqlite3.connect(vacia).close()
@@ -154,6 +160,7 @@ def test_main_con_base_inexistente_o_sin_tabla(tmp_path, capsys):
 # ---------------------------------------------------------------------------
 
 def test_aplicar_borra_duplicados_renombra_el_resto_y_deja_un_respaldo(db_mixta):
+    """`--apply` borra las gemelas y duplicadas, renombra el resto al formato ISO y deja un respaldo de la base."""
     original = _filas(db_mixta)
     assert nb.main(["--db", str(db_mixta), "--apply"]) == 0
 
@@ -173,6 +180,7 @@ def test_aplicar_borra_duplicados_renombra_el_resto_y_deja_un_respaldo(db_mixta)
 
 
 def test_aplicar_es_idempotente(db_mixta, capsys):
+    """Aplicar dos veces da el mismo resultado, la segunda dice que no hay nada que hacer y no crea otro respaldo."""
     nb.main(["--db", str(db_mixta), "--apply"])
     despues = _filas(db_mixta)
     capsys.readouterr()
@@ -203,6 +211,7 @@ def test_despues_de_normalizar_reingerir_la_misma_medicion_no_duplica(db_path):
 
 
 def test_el_indice_unico_sigue_vigente(db_path):
+    """Tras normalizar, el índice único de Bronze sigue vigente y rechaza una fila igual a una ya normalizada."""
     _insertar(db_path, [(LEGACY_A, "Msida", "Gzira", 5.0), (LEGACY_B, "Msida", "Sliema", 7.0)])
     nb.apply_changes(db_path)
     conn = sqlite3.connect(db_path)
@@ -215,6 +224,7 @@ def test_el_indice_unico_sigue_vigente(db_path):
 
 
 def test_no_toca_otras_tablas(db_mixta):
+    """La normalización no modifica otras tablas, como `route_measurements`."""
     conn = sqlite3.connect(db_mixta)
     conn.execute("CREATE TABLE route_measurements (timestamp TEXT, origin TEXT)")
     conn.execute("INSERT INTO route_measurements VALUES ('2026-05-25 23:54:03+00:00', 'Msida')")
@@ -247,6 +257,7 @@ def test_si_la_base_esta_en_uso_aborta_sin_cambiar_nada(db_mixta):
 
 
 def test_si_la_verificacion_falla_se_revierte_todo(db_mixta, monkeypatch):
+    """Si la verificación final falla, se revierte todo y la base queda como estaba."""
     antes = _filas(db_mixta)
 
     def verificacion_que_falla(conn, expected_rows):
