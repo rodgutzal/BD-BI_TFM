@@ -6,7 +6,6 @@ import shutil
 import sys
 from pathlib import Path
 
-import pandas as pd
 import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest

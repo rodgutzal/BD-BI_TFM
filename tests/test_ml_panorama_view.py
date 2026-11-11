@@ -14,8 +14,7 @@ sys.path.insert(0, str(ROOT))
 from src.ml import business_profiles as bp  # noqa: E402
 from src.ml import grid, panorama  # noqa: E402
 from src.ml import panorama_view as pv  # noqa: E402
-from src.ml.cell_counts import CellCounts, Selector, selector, selector_except  # noqa: E402
-from src.ml.lenses import compute_lenses  # noqa: E402
+from src.ml.cell_counts import CellCounts, selector, selector_except  # noqa: E402
 
 DATA_ML = ROOT / "data" / "ml"
 FOOD = bp.get_default_profile("food_drink")

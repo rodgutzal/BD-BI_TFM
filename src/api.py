@@ -1,14 +1,12 @@
 """FastAPI REST endpoint for predictions and analytics."""
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
 from pathlib import Path
 import math
 import os
 import sys
 from datetime import datetime, timedelta, timezone
 import numpy as np
-import pandas as pd
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))

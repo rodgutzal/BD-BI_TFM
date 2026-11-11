@@ -5,11 +5,10 @@ import pandas as pd
 from pathlib import Path
 import pickle
 import warnings
-from datetime import datetime, timedelta
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.metrics import r2_score
 try:
     import xgboost as xgb
     HAS_XGBOOST = True

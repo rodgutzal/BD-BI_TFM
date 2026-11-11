@@ -1,10 +1,9 @@
 """Silver layer: Cleaned and transformed data."""
 
 import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 import sqlite3
 
 

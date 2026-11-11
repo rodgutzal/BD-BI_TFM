@@ -1,8 +1,6 @@
 """Cliente de TomTom con reintentos y manejo avanzado de errores."""
 
 import logging
-import time
-from typing import Optional
 
 import requests
 from requests.adapters import HTTPAdapter
