@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit as st
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent

@@ -1,9 +1,7 @@
 """Cliente de OpenWeather con cache y reintentos."""
 
 import logging
-import time
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import datetime, timezone
 
 import requests
 from requests.adapters import HTTPAdapter

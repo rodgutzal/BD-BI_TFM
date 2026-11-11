@@ -11,7 +11,6 @@ Qué hace:
 
 from typing import Dict, List, Optional, Sequence, Tuple
 
-import numpy as np
 import pandas as pd
 
 from src.ml.business_profiles import (PROVEEDORES_POI, SEGMENTOS_POI, BusinessProfile, _elementos, apply_overrides,
