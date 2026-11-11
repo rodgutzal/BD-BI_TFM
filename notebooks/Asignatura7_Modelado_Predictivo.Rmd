@@ -73,7 +73,8 @@ df_raw <- read_csv(ruta_csv, show_col_types = FALSE)
 # La columna 'polyline' contiene la geometría de la ruta (lat/lon por tramo).
 # No aporta valor predictivo tabular y su tamaño es muy grande, por lo que se
 # descarta para el modelado (podría reutilizarse en un futuro módulo geoespacial).
-df_raw <- df_raw %>% select(-polyline)
+# any_of() evita el error si el CSV exportado no incluye la columna.
+df_raw <- df_raw %>% select(-any_of("polyline"))
 
 glimpse(df_raw)
 ```
