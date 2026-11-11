@@ -1,7 +1,8 @@
 # Entorno de la MÁQUINA DE ENTRENAMIENTO del ML de recomendación (fase 1c).
 #
 # Versiones EXACTAS, las mismas con las que se midieron los resultados de docs/DISENO_ML_RECOMENDACION.md (§3.G, §3.H).
-# requirements.txt deja scikit-learn y scipy con cota inferior (>=) porque el dashboard no entrena; para entrenar, una
+# requirements.txt deja scikit-learn con cota inferior (>=) porque el dashboard no entrena, y fija scipy en 1.17.1 (la
+# última con wheels para Python 3.11, que usan Docker y CI); aquí, con Python 3.13, es 1.18.0. Para entrenar, una
 # versión distinta puede dar otros números. El manifiesto del paquete de entrada (tools/export_ml_inputs.py) registra
 # las versiones con que se exportó, y cada resultado debe guardar las suyas (src/ml/inputs_bundle.py::provenance).
 #
