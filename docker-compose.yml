@@ -119,6 +119,10 @@ services:
       timescaledb:
         condition: service_healthy
     restart: unless-stopped
+    # `docker compose stop` manda SIGTERM: el colector termina el ciclo en curso y sale. En 200 ciclos del log la
+    # mediana fue de 5 s, el p95 de 15 s y el máximo de 177 s (reintentos); con los 10 s por defecto de Docker un ciclo
+    # largo moría a SIGKILL. 90 s cubre casi todos; el caso extremo sigue acabando en SIGKILL.
+    stop_grace_period: 90s
     healthcheck:
       # No hay puerto HTTP que consultar (a diferencia de dashboard), así
       # que se usa el heartbeat que collector.py escribe tras cada ciclo
