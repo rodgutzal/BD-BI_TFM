@@ -42,18 +42,21 @@ def entrenado():
 # ---------------------------------------------------------------------------
 
 def test_prepare_features_devuelve_las_seis_variables_y_el_objetivo():
+    """`prepare_features` devuelve las seis variables esperadas y el objetivo, con la hora entre 0 y 23 y el día de la semana entre 0 y 6."""
     X, y = TravelTimePredictor().prepare_features(_df(30))
     assert list(X.columns) == FEATURES and len(X) == len(y) == 30
     assert X["hour_of_day"].between(0, 23).all() and X["day_of_week"].between(0, 6).all()
 
 
 def test_prepare_features_acepta_columnas_sin_prefijo_origin():
+    """`prepare_features` acepta columnas de clima sin el prefijo `origin_`."""
     df = _df(30).rename(columns={"origin_temperature": "temperature", "origin_humidity": "humidity"})
     X, _ = TravelTimePredictor().prepare_features(df)
     assert list(X.columns) == FEATURES
 
 
 def test_prepare_features_rellena_nulos_con_cero():
+    """`prepare_features` rellena los nulos con 0."""
     df = _df(30)
     df.loc[3, "origin_temperature"] = np.nan
     X, _ = TravelTimePredictor().prepare_features(df)
@@ -62,16 +65,19 @@ def test_prepare_features_rellena_nulos_con_cero():
 
 @pytest.mark.parametrize("quitar", ["timestamp", "origin_temperature", "origin_humidity", "no_traffic_time_min"])
 def test_prepare_features_sin_una_columna_necesaria_devuelve_vacio(quitar):
+    """Si falta una columna necesaria (parametrizado), `prepare_features` devuelve tablas vacías."""
     X, y = TravelTimePredictor().prepare_features(_df(30).drop(columns=quitar))
     assert X.empty and y.empty
 
 
 def test_prepare_features_con_dataframe_vacio():
+    """`prepare_features` con un DataFrame vacío devuelve tablas vacías."""
     X, y = TravelTimePredictor().prepare_features(pd.DataFrame())
     assert X.empty and y.empty
 
 
 def test_entrena_y_registra_las_features(entrenado):
+    """El modelo entrena, registra sus variables y su estado, y las importancias suman 1."""
     assert entrenado.is_trained and entrenado.feature_names == FEATURES
     assert entrenado.get_status() == {"is_trained": True, "min_samples_required": 50, "feature_count": 6,
                                       "features": FEATURES}
@@ -80,6 +86,7 @@ def test_entrena_y_registra_las_features(entrenado):
 
 
 def test_no_entrena_con_pocas_muestras_ni_sin_columnas():
+    """No entrena con menos muestras que el mínimo ni si faltan columnas, y lo indica devolviendo `False`."""
     m = TravelTimePredictor(min_samples=50)
     assert m.train(_df(49)) is False and not m.is_trained
     assert m.train(_df(120, sin_tiempo_sin_trafico=True)) is False and not m.is_trained
@@ -118,6 +125,7 @@ def test_predict_responde_a_los_datos_de_entrada():
 
 
 def test_predict_sin_entrenar_devuelve_none():
+    """Predecir sin haber entrenado devuelve `None`, y la importancia de variables queda vacía."""
     assert TravelTimePredictor().predict(10, 2, 20, 60, 10) is None
     assert TravelTimePredictor().get_feature_importance() == {}
 
@@ -150,6 +158,7 @@ def test_el_lag_es_la_media_movil_de_5_valores_del_tiempo_de_viaje():
 
 
 def test_guardar_y_cargar_reproduce_las_predicciones(entrenado, tmp_path):
+    """Un modelo guardado y vuelto a cargar da las mismas predicciones."""
     ruta = tmp_path / "sub" / "m.pkl"
     assert entrenado.save(ruta) and ruta.exists()
     otro = TravelTimePredictor(ruta)                       # el constructor carga el archivo si existe
@@ -159,6 +168,7 @@ def test_guardar_y_cargar_reproduce_las_predicciones(entrenado, tmp_path):
 
 
 def test_no_guarda_un_modelo_sin_entrenar_y_carga_falla_con_gracia(tmp_path):
+    """No guarda un modelo sin entrenar y cargar un archivo inexistente, corrupto o incompleto devuelve `False` sin lanzar excepción."""
     m = TravelTimePredictor()
     assert m.save(tmp_path / "x.pkl") is False and not (tmp_path / "x.pkl").exists()
     assert m.load(tmp_path / "no_existe.pkl") is False
@@ -191,23 +201,27 @@ def predictor(tmp_path):
 
 
 def test_el_nombre_del_archivo_del_modelo_no_tiene_espacios(predictor):
+    """El nombre del archivo del modelo de una ruta cambia los espacios por guiones bajos y cuelga del directorio de modelos."""
     ruta = predictor._get_model_path("St Julian's", "Msida")
     assert ruta.name == "St_Julian's_Msida_model.pkl" and ruta.parent == predictor.models_dir
 
 
 def test_crea_el_directorio_de_modelos_y_cachea_el_modelo_por_ruta(predictor):
+    """Se crea el directorio de modelos y el modelo de cada ruta se reutiliza; la ruta inversa es otro modelo."""
     assert predictor.models_dir.is_dir()
     assert predictor.get_or_create_model("Msida", "Gzira") is predictor.get_or_create_model("Msida", "Gzira")
     assert predictor.get_or_create_model("Msida", "Gzira") is not predictor.get_or_create_model("Gzira", "Msida")
 
 
 def test_entrena_una_ruta_con_suficientes_datos_y_guarda_el_modelo(predictor):
+    """Una ruta con suficientes datos se entrena y su modelo queda guardado en disco."""
     assert predictor.train_route_model("Msida", "Gzira") is True
     assert predictor._get_model_path("Msida", "Gzira").exists()
     assert predictor.get_or_create_model("Msida", "Gzira").is_trained
 
 
 def test_no_entrena_una_ruta_con_pocas_muestras(predictor):
+    """Una ruta con pocas muestras no se entrena ni se guarda."""
     assert predictor.train_route_model("Msida", "Sliema") is False
     assert not predictor._get_model_path("Msida", "Sliema").exists()
 
@@ -223,10 +237,12 @@ def test_min_samples_del_predictor_llega_al_modelo(tmp_path):
 
 
 def test_train_all_models_devuelve_un_resultado_por_ruta(predictor):
+    """`train_all_models` devuelve un resultado por ruta: entrenada o no."""
     assert predictor.train_all_models() == {"Msida→Gzira": True, "Msida→Sliema": False, "Sliema→Gzira": True}
 
 
 def test_predice_el_tiempo_de_viaje_de_una_ruta_entrenada(predictor):
+    """Una ruta entrenada predice un tiempo de viaje plausible con una confianza entre 50 y 100."""
     predictor.train_route_model("Msida", "Gzira")
     tiempo, confianza = predictor.predict_travel_time("Msida", "Gzira", current_temp=21, current_humidity=55,
                                                       no_traffic_time=10)
@@ -234,16 +250,19 @@ def test_predice_el_tiempo_de_viaje_de_una_ruta_entrenada(predictor):
 
 
 def test_sin_modelo_entrenado_no_hay_prediccion(predictor):
+    """Sin modelo entrenado para la ruta no hay predicción (`None`)."""
     assert predictor.predict_travel_time("Msida", "Sliema", 21, 55, 10) is None
 
 
 def test_un_predictor_nuevo_reutiliza_los_modelos_guardados(predictor, tmp_path):
+    """Un predictor nuevo carga los modelos ya guardados en disco."""
     predictor.train_route_model("Msida", "Gzira")
     nuevo = RoutePredictor(predictor.db_path, predictor.models_dir)
     assert nuevo.get_or_create_model("Msida", "Gzira").is_trained
 
 
 def test_el_estado_de_los_modelos(predictor):
+    """El estado de los modelos lista todas las rutas; las entrenadas incluyen la importancia de variables y las demás no."""
     predictor.train_route_model("Msida", "Gzira")
     estado = predictor.get_all_models_status()
     assert set(estado) == {"Msida→Gzira", "Msida→Sliema", "Sliema→Gzira"}

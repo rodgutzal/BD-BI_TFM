@@ -65,10 +65,12 @@ def _botones(at):
 
 
 def test_las_secciones_coinciden_con_los_modelos():
+    """Las secciones de la pantalla coinciden con los modelos que se pueden entrenar."""
     assert set(pm.SECCIONES) == set(FIT)
 
 
 def test_al_abrir_no_se_entrena_nada(llamadas):
+    """Al abrir la pantalla no se entrena ningún modelo; solo se muestran los botones y las métricas baratas de resumen."""
     at = _app()
     assert not at.exception, [e.value for e in at.exception]
     assert llamadas == [], "no debe entrenarse ningún modelo hasta que el usuario lo pida"
@@ -78,6 +80,7 @@ def test_al_abrir_no_se_entrena_nada(llamadas):
 
 
 def test_pulsar_un_boton_entrena_solo_esa_seccion(llamadas):
+    """Pulsar el botón de una sección entrena solo esa y el botón se reemplaza por su resultado."""
     at = _app()
     at.button(key="pm_btn_reg").click().run()
     assert not at.exception, [e.value for e in at.exception]
@@ -87,6 +90,7 @@ def test_pulsar_un_boton_entrena_solo_esa_seccion(llamadas):
 
 
 def test_lo_pedido_se_mantiene_en_la_sesion(llamadas):
+    """Lo ya pedido se conserva entre reejecuciones de la página, sin pedir de nuevo otras secciones."""
     at = _app()
     at.button(key="pm_btn_cluster").click().run()
     llamadas.clear()
@@ -96,6 +100,7 @@ def test_lo_pedido_se_mantiene_en_la_sesion(llamadas):
 
 
 def test_el_boton_de_todos_entrena_las_cuatro_secciones(llamadas):
+    """El botón de «todos» entrena las cuatro secciones."""
     at = _app()
     at.button(key="pm_btn_all").click().run()
     assert not at.exception, [e.value for e in at.exception]

@@ -59,6 +59,7 @@ def datos_sinteticos(n_filas=18, n_cols=22, semilla=0):
 # ---------------------------------------------------------------------------
 
 def test_la_lectura_es_de_solo_lectura(tmp_path):
+    """Leer POIs, POIs de Foursquare y la tabla de zonas no modifica la base de datos ni crea archivos."""
     db = tmp_path / "t.db"
     crear_db(db, pois=[("food_drink", "cafe", 35.9, 14.5)], foursquare=[("restaurant", "x", "A", 35.9, 14.5)])
     antes = db.read_bytes()
@@ -68,6 +69,7 @@ def test_la_lectura_es_de_solo_lectura(tmp_path):
 
 
 def test_foursquare_es_opcional(tmp_path):
+    """Sin tabla de Foursquare, la carga devuelve una tabla vacía con sus columnas."""
     db = tmp_path / "t.db"
     crear_db(db)                                              # sin tabla pois_foursquare
     f = data_access.load_pois_foursquare(db)
@@ -75,6 +77,7 @@ def test_foursquare_es_opcional(tmp_path):
 
 
 def test_tabla_de_zonas_con_poblacion_y_tiempo_de_viaje(tmp_path):
+    """La tabla de zonas trae la población y el tiempo de viaje medio de las rutas que tocan cada zona; las zonas sin dato quedan en NaN."""
     db = tmp_path / "t.db"
     crear_db(db, poblacion={"Msida": 1000, "Gzira": 2000},
              rutas=[("Msida", "Gzira", 10.0), ("Msida", "Gzira", 20.0), ("Msida", "Sliema", 30.0), ("Sliema", "Gzira", 5.0)])
@@ -91,6 +94,7 @@ def test_tabla_de_zonas_con_poblacion_y_tiempo_de_viaje(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_la_densidad_suma_las_categorias_en_log():
+    """La densidad suma todas las categorías de la celda y de los anillos y aplica el logaritmo."""
     X, _ = datos_sinteticos(3, 3)
     d = models.densidad(X)
     assert list(d.columns) == ["densidad_celda", "densidad_anillo1", "densidad_anillo2"]
@@ -99,6 +103,7 @@ def test_la_densidad_suma_las_categorias_en_log():
 
 
 def test_cada_modelo_usa_solo_sus_variables():
+    """Cada modelo de referencia usa solo sus variables: cambiar la población no altera `solo_distancia` ni `solo_densidad`, pero sí `solo_poblacion`."""
     X, y = datos_sinteticos(10, 12)
     cambiada = X.copy()
     cambiada["pob_suavizada"] = cambiada["pob_suavizada"] * 10 + 7          # no es 'solo_distancia' ni 'solo_densidad'
@@ -111,6 +116,7 @@ def test_cada_modelo_usa_solo_sus_variables():
 
 @pytest.mark.parametrize("nombre", models.TODOS)
 def test_las_predicciones_son_positivas_y_tienen_una_por_fila(nombre):
+    """Cada modelo (parametrizado) da una predicción finita y positiva por cada fila de prueba."""
     X, y = datos_sinteticos(10, 12)
     p = models.fit_predict(nombre, X.iloc[:80], y[:80], X.iloc[80:])
     assert p.shape == (len(X) - 80,) and (p >= models.MIN_ESPERADO).all() and np.isfinite(p).all()
@@ -125,17 +131,20 @@ def test_una_linea_base_sin_su_unica_variable_degrada_a_la_media():
 
 
 def test_la_media_es_el_promedio_de_entrenamiento():
+    """El modelo `media` predice el promedio del objetivo de entrenamiento."""
     X, y = datos_sinteticos(8, 8)
     assert models.fit_predict("media", X, y, X)[0] == pytest.approx(y.mean())
 
 
 def test_fit_predict_es_determinista_con_la_misma_semilla():
+    """`fit_predict` da las mismas predicciones con la misma semilla."""
     X, y = datos_sinteticos(10, 12)
     for nombre in ("boosting", "mlp"):
         np.testing.assert_allclose(models.fit_predict(nombre, X, y, X, seed=3), models.fit_predict(nombre, X, y, X, seed=3))
 
 
 def test_modelo_desconocido_lanza_error():
+    """Un nombre de modelo desconocido lanza `ValueError`."""
     X, y = datos_sinteticos(5, 5)
     with pytest.raises(ValueError, match="Modelo desconocido"):
         models.fit_predict("magia", X, y, X)
@@ -144,6 +153,7 @@ def test_modelo_desconocido_lanza_error():
 
 
 def test_el_boosting_aprende_la_senal_y_gana_a_la_media():
+    """Sobre datos sintéticos con señal, el boosting aprende y baja la desviación de Poisson al menos un 10 % respecto a la media."""
     X, y = datos_sinteticos(20, 24)
     entrenar, probar = np.arange(len(y)) % 5 != 0, np.arange(len(y)) % 5 == 0
     dev = {n: validation.poisson_deviance(y[probar], models.fit_predict(n, X[entrenar], y[entrenar], X[probar])).mean()
@@ -162,6 +172,7 @@ def test_una_variable_toda_nan_no_rompe_el_ajuste(nombre):
 
 
 def test_el_conjunto_da_media_y_dispersion():
+    """El conjunto de modelos da media, desviación y percentiles 10 y 90; con un solo modelo la desviación es 0."""
     X, y = datos_sinteticos(10, 12)
     e = models.fit_predict_ensemble("boosting", X, y, X, n=5, seed=1)
     assert set(e) == {"esperado", "desv", "p10", "p90"} and all(len(v) == len(X) for v in e.values())
@@ -175,6 +186,7 @@ def test_el_conjunto_da_media_y_dispersion():
 # ---------------------------------------------------------------------------
 
 def test_las_celdas_de_un_bloque_comparten_etiqueta_y_el_desplazamiento_la_cambia():
+    """Las celdas de un mismo bloque comparten etiqueta y desplazar los bloques cambia la etiqueta."""
     filas, cols = np.array([0, 0, 3, 3, 4, 4]), np.array([0, 3, 0, 3, 0, 4])
     etiquetas = validation.block_labels(filas, cols)
     assert etiquetas[0] == etiquetas[1] == etiquetas[2] == etiquetas[3]            # 4x4 celdas
@@ -183,6 +195,7 @@ def test_las_celdas_de_un_bloque_comparten_etiqueta_y_el_desplazamiento_la_cambi
 
 
 def test_los_pliegues_no_parten_un_bloque_y_estan_equilibrados():
+    """Los pliegues no parten ningún bloque, están equilibrados y son reproducibles con la misma semilla."""
     X, _ = datos_sinteticos(18, 22)
     f, c = validation.positions(X.index)
     etiquetas = validation.block_labels(f, c)
@@ -195,6 +208,7 @@ def test_los_pliegues_no_parten_un_bloque_y_estan_equilibrados():
 
 
 def test_la_desviacion_de_poisson_coincide_con_scikit_learn_y_los_casos_limite():
+    """La desviación de Poisson coincide con la de scikit-learn y maneja los casos límite (cero observado, predicción cero)."""
     y, mu = np.array([1.0, 3.0, 5.0]), np.array([2.0, 2.5, 6.0])
     assert validation.poisson_deviance(y, mu).mean() == pytest.approx(mean_poisson_deviance(y, mu))
     assert validation.poisson_deviance([0.0], [2.0])[0] == pytest.approx(4.0)       # y=0 -> 2μ
@@ -203,6 +217,7 @@ def test_la_desviacion_de_poisson_coincide_con_scikit_learn_y_los_casos_limite()
 
 
 def test_precision_en_las_k_primeras_y_spearman():
+    """La precisión en las k primeras y la correlación de Spearman dan los valores esperados, incluidos k mayor que n y una serie constante."""
     y = np.arange(10.0)
     assert validation.precision_at_k(y, y, 3) == 1.0
     assert validation.precision_at_k(y, -y, 3) == 0.0
@@ -211,6 +226,7 @@ def test_precision_en_las_k_primeras_y_spearman():
 
 
 def test_evaluate_devuelve_predicciones_fuera_de_muestra_para_todas_las_celdas():
+    """`evaluate` devuelve predicciones fuera de muestra para todas las celdas y repeticiones, y el resumen ordena los modelos por desviación."""
     X, y = datos_sinteticos(14, 18)
     ev = validation.evaluate(X, y, nombres=("media", "solo_densidad", "boosting"), repeats=3, n_folds=4, seed=1, k_top=10)
     assert ev.oof["boosting"].shape == (3, len(y)) and (ev.oof["boosting"] > 0).all()
@@ -230,6 +246,7 @@ def test_la_prediccion_de_una_celda_no_usa_su_propio_valor():
 
 
 def test_el_bootstrap_de_bloques_con_predicciones_identicas_da_cero():
+    """El bootstrap de bloques con predicciones idénticas da diferencia e intervalo en cero."""
     y = np.arange(40.0) % 5
     bloques = np.repeat(np.arange(8), 5)
     r = validation.block_bootstrap_diff(y, np.full(40, 2.0), np.full(40, 2.0), bloques, n_boot=200)
@@ -237,6 +254,7 @@ def test_el_bootstrap_de_bloques_con_predicciones_identicas_da_cero():
 
 
 def test_el_bootstrap_detecta_una_mejora_uniforme_y_es_prudente_si_solo_hay_un_bloque_mejor():
+    """El bootstrap detecta una mejora uniforme y es prudente (el intervalo incluye 0) si la mejora está solo en un bloque; es reproducible con la misma semilla."""
     y = np.tile([0.0, 1.0, 2.0, 3.0, 4.0], 20)
     bloques = np.repeat(np.arange(20), 5)
     bueno = y + 0.01
@@ -259,6 +277,7 @@ def _evaluacion(y, oof, bloques=None):
 
 
 def test_decide_publica_solo_si_el_intervalo_queda_por_debajo_de_cero():
+    """`decide` declara ganador solo si el intervalo de la diferencia queda por debajo de cero frente al mejor modelo de referencia."""
     y = np.tile([0.0, 1.0, 2.0, 3.0, 4.0], 20)
     ev = _evaluacion(y, {"media": [np.full(100, 2.3)], "solo_distancia": [np.full(100, 2.2)], "solo_poblacion": [np.full(100, 2.4)],
                          "solo_densidad": [np.full(100, 2.0)], "boosting": [y + 0.05], "mlp": [np.full(100, 2.0)]})
@@ -269,6 +288,7 @@ def test_decide_publica_solo_si_el_intervalo_queda_por_debajo_de_cero():
 
 
 def test_decide_sin_mejora_clara_no_hay_ganador_y_marca_al_que_empeora():
+    """Sin mejora clara no hay ganador, y se marca como «peor» al modelo que empeora."""
     y = np.tile([0.0, 1.0, 2.0, 3.0, 4.0], 20)
     base = np.full(100, 2.0)
     ev = _evaluacion(y, {"media": [base], "solo_distancia": [base], "solo_poblacion": [base], "solo_densidad": [base],
@@ -292,6 +312,7 @@ def test_decide_no_depende_de_cuantas_repeticiones_se_promedien():
 
 
 def test_la_brecha_relativa_no_premia_solo_a_las_celdas_grandes():
+    """La brecha relativa no premia solo a las celdas grandes, a diferencia de la brecha absoluta, y es 0 si lo esperado es igual a lo observado."""
     esperado, observado = np.array([75.0, 7.0]), np.array([18.0, 0.0])
     absoluta = esperado - observado
     relativa = validation.brecha_relativa(esperado, observado)
@@ -301,6 +322,7 @@ def test_la_brecha_relativa_no_premia_solo_a_las_celdas_grandes():
 
 
 def test_auc_y_artefacto_de_cartografia():
+    """El AUC de presencia da 1 con una puntuación perfecta y NaN si todo es positivo; la proporción de brecha explicada por la cartografía se calcula frente a su referencia."""
     score = np.array([0.1, 0.2, 0.8, 0.9])
     assert validation.auc_presence(score, [0, 0, 1, 1]) == 1.0
     assert validation.auc_presence(score, [1, 1, 1, 1]) != validation.auc_presence(score, [1, 1, 1, 1])      # NaN
@@ -314,6 +336,7 @@ def test_auc_y_artefacto_de_cartografia():
 # ---------------------------------------------------------------------------
 
 def test_conteos_de_foursquare_por_celda():
+    """Los conteos de Foursquare por celda cuentan solo las categorías pedidas e ignoran los puntos fuera de la rejilla."""
     f, c = 20, 20
     lat, lon = grid.cell_center(f, c)
     fsq = pd.DataFrame({"category": ["restaurant", "restaurant", "retail", "restaurant"], "latitude": [lat, lat, lat, 40.0],
@@ -324,6 +347,7 @@ def test_conteos_de_foursquare_por_celda():
 
 
 def test_zona_mas_cercana():
+    """La zona más cercana a la celda de Valletta es Valletta."""
     f, c = (int(x[0]) for x in grid.cell_index(LOCATIONS["Valletta"].latitude, LOCATIONS["Valletta"].longitude))
     assert vlm.zona_mas_cercana(f, c) == "Valletta"
 
@@ -346,6 +370,7 @@ def _db_para_la_herramienta(tmp_path):
 
 
 def test_la_herramienta_valida_un_objetivo_de_punta_a_punta(tmp_path, capsys):
+    """La herramienta valida un objetivo de punta a punta: imprime la decisión y el contraste con Foursquare, y no modifica la base de datos."""
     db = _db_para_la_herramienta(tmp_path)
     antes = db.read_bytes()
     assert vlm.main(["--db", str(db), "--target", "food_drink", "--repeats", "2", "--folds", "3", "--boot", "50"]) == 0
@@ -356,6 +381,7 @@ def test_la_herramienta_valida_un_objetivo_de_punta_a_punta(tmp_path, capsys):
 
 
 def test_run_target_devuelve_todo_lo_necesario(tmp_path):
+    """`run_target` devuelve esperado, observado, brecha, variables, resumen y decisión, con la brecha igual a esperado menos observado."""
     db = _db_para_la_herramienta(tmp_path)
     from src.ml.cell_counts import CellCounts
     r = vlm.run_target("business", CellCounts.from_pois(data_access.load_pois(db)), data_access.load_zone_table(db),
@@ -367,6 +393,7 @@ def test_run_target_devuelve_todo_lo_necesario(tmp_path):
 
 
 def test_la_herramienta_sin_foursquare_no_hace_el_contraste(tmp_path, capsys):
+    """Sin datos de Foursquare, la herramienta avisa y no hace el contraste."""
     db = tmp_path / "t.db"
     lat, lon = grid.cell_center(20, 20)
     pois = [("food_drink", "cafe", float(lat), float(lon))] * 3 + [("school", "school", float(lat), float(lon))] * 3

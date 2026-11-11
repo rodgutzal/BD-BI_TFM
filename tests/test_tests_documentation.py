@@ -36,6 +36,7 @@ def _leer(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 def test_el_catalogo_de_tests_esta_al_dia():
+    """`docs/TESTS.md` coincide con lo que genera `tools/generate_tests_doc.py` a partir de los tests actuales."""
     esperado = gen.render(gen.collect())
     actual = _leer(gen.OUTPUT) if gen.OUTPUT.exists() else ""
     assert actual == esperado, (
@@ -70,6 +71,7 @@ def _archivos_en_la_tabla_del_readme() -> set:
 
 
 def test_todo_archivo_de_test_esta_en_la_tabla_del_readme():
+    """Cada archivo `tests/test_*.py` tiene su fila en la tabla de tests del README."""
     en_disco = {p.name for p in (ROOT / "tests").glob("test_*.py")}
     faltan = sorted(en_disco - _archivos_en_la_tabla_del_readme())
     assert not faltan, (
@@ -79,6 +81,7 @@ def test_todo_archivo_de_test_esta_en_la_tabla_del_readme():
 
 
 def test_la_tabla_del_readme_no_cita_archivos_que_ya_no_existen():
+    """La tabla de tests del README no cita archivos de test que ya no existen."""
     en_disco = {p.name for p in (ROOT / "tests").glob("test_*.py")}
     sobran = sorted(_archivos_en_la_tabla_del_readme() - en_disco)
     assert not sobran, f"La tabla de tests del README cita archivos que no existen: {sobran}. Quita esas filas."
@@ -93,11 +96,13 @@ def _funcion(codigo: str):
 
 
 def test_parametrize_con_literales_cuenta_los_casos():
+    """Un `parametrize` con una lista literal cuenta sus casos."""
     f = _funcion('@pytest.mark.parametrize("x", [1, 2, 3])\ndef test_a(x): pass')
     assert gen.parametrize_cases(f) == 3
 
 
 def test_parametrize_apilado_multiplica():
+    """Dos `parametrize` apilados multiplican sus casos."""
     f = _funcion(
         '@pytest.mark.parametrize("x", [1, 2])\n@pytest.mark.parametrize("y", ["a", "b", "c"])\ndef test_a(x, y): pass'
     )
@@ -105,15 +110,18 @@ def test_parametrize_apilado_multiplica():
 
 
 def test_parametrize_con_valores_no_literales_no_se_puede_contar():
+    """Si los valores de `parametrize` no son literales, el número de casos es `None`."""
     f = _funcion('@pytest.mark.parametrize("x", VALORES)\ndef test_a(x): pass')
     assert gen.parametrize_cases(f) is None
 
 
 def test_sin_parametrize_es_un_caso():
+    """Un test sin `parametrize` cuenta como un caso."""
     assert gen.parametrize_cases(_funcion("def test_a(): pass")) == 1
 
 
 def test_el_generador_encuentra_funciones_y_metodos_de_clases_test(tmp_path):
+    """El generador del catálogo encuentra las funciones de test y los métodos de clases `Test*`, usa la primera frase del docstring e ignora lo que no es test."""
     (tmp_path / "test_ejemplo.py").write_text(
         '"""Ejemplo."""\n'
         "def test_uno():\n    '''Primera frase.\n\n    Segundo párrafo, que no se usa.'''\n"

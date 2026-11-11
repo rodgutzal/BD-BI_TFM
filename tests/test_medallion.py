@@ -50,6 +50,7 @@ def db_path(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_bronze_inserta_las_filas_validas(db_path):
+    """Bronze inserta todas las filas válidas y devuelve cuántas."""
     r = BronzeLayer(db_path).ingest(_df())
     assert r["status"] == "success"
     assert r["inserted_records"] == 6
@@ -67,6 +68,7 @@ def test_bronze_es_idempotente_reingerir_no_duplica(db_path):
 
 
 def test_bronze_ingiere_solo_lo_nuevo(db_path):
+    """Bronze ingiere solo las filas nuevas: las que ya existen no se vuelven a insertar."""
     bronze = BronzeLayer(db_path)
     bronze.ingest(_df(n=3))
     r = bronze.ingest(_df(n=6))  # las 3 primeras ya existen
@@ -75,17 +77,20 @@ def test_bronze_ingiere_solo_lo_nuevo(db_path):
 
 
 def test_bronze_rechaza_datos_sin_columnas_requeridas(db_path):
+    """Bronze rechaza un lote al que le falta una columna requerida."""
     r = BronzeLayer(db_path).ingest(_df().drop(columns=["travel_time_min"]))
     assert r["error"] == "Missing required columns"
 
 
 def test_bronze_descarta_duplicados_dentro_del_lote(db_path):
+    """Bronze descarta los duplicados dentro del mismo lote."""
     df = pd.concat([_df(n=3), _df(n=3)], ignore_index=True)
     r = BronzeLayer(db_path).ingest(df)
     assert r["inserted_records"] == 3
 
 
 def test_bronze_descarta_tiempos_fuera_de_rango_y_nulos(db_path):
+    """Bronze descarta las filas con tiempo de viaje fuera de rango o nulo."""
     df = _df(n=4)
     df.loc[0, "travel_time_min"] = 9999.0   # fuera de (0, 500)
     df.loc[1, "travel_time_min"] = None     # nulo en columna crítica
@@ -116,6 +121,7 @@ def _bronze_df(db_path):
 
 
 def test_silver_transforma_y_agrega_variables_temporales(db_path):
+    """Silver transforma las filas de Bronze y calcula el retraso, el nivel de congestión y las variables temporales como la hora y el fin de semana."""
     BronzeLayer(db_path).ingest(_df(no_traffic=8.0))
     r = SilverLayer(db_path).transform_bronze(_bronze_df(db_path))
     assert r["status"] == "success"
@@ -143,6 +149,7 @@ def test_silver_sin_tiempo_sin_trafico_deja_el_retraso_desconocido(db_path):
 
 
 def test_silver_no_duplica_al_transformar_dos_veces(db_path):
+    """Transformar dos veces el mismo lote en Silver no duplica filas."""
     BronzeLayer(db_path).ingest(_df())
     silver = SilverLayer(db_path)
     bronze = _bronze_df(db_path)
@@ -164,6 +171,7 @@ def test_silver_perfil_de_ruta_calcula_la_desviacion_sin_stddev_de_sql(db_path):
 
 
 def test_silver_agregacion_horaria(db_path):
+    """Silver agrega los datos por hora y crea un registro por cada grupo."""
     BronzeLayer(db_path).ingest(_df())
     silver = SilverLayer(db_path)
     silver.transform_bronze(_bronze_df(db_path))
@@ -180,6 +188,7 @@ def _poblar_hasta_silver(db_path, **kwargs):
 
 
 def test_gold_calcula_kpis_por_ruta(db_path):
+    """Gold calcula los KPI de cada ruta del día: promedio, número de muestras y fiabilidad entre 0 y 100."""
     _poblar_hasta_silver(db_path, no_traffic=8.0)
     gold = GoldLayer(db_path)
     r = gold.calculate_kpis(date=HOY.date().isoformat())
@@ -210,11 +219,13 @@ def test_gold_recalcular_el_mismo_dia_no_falla_ni_duplica(db_path):
 
 
 def test_gold_dia_sin_datos(db_path):
+    """Gold devuelve «no_data» para un día sin datos."""
     _poblar_hasta_silver(db_path)
     assert GoldLayer(db_path).calculate_kpis(date="2000-01-01")["status"] == "no_data"
 
 
 def test_gold_ranking_ordena_por_fiabilidad(db_path):
+    """El ranking de Gold ordena las rutas por fiabilidad y pone primero la más estable."""
     BronzeLayer(db_path).ingest(_df(origin="Msida", destination="Gzira"))
     estable = _df(origin="Msida", destination="Sliema", base=HOY)
     estable["travel_time_min"] = 10.0                       # sin variación -> fiabilidad 100
@@ -229,6 +240,7 @@ def test_gold_ranking_ordena_por_fiabilidad(db_path):
 
 
 def test_gold_metricas_de_periodo(db_path):
+    """Las métricas de periodo de Gold dan promedio y fiabilidad con datos, y valores vacíos con cero filas si el periodo no tiene."""
     _poblar_hasta_silver(db_path, no_traffic=8.0)
     gold = GoldLayer(db_path)
     gold.calculate_kpis(date=HOY.date().isoformat())
@@ -254,6 +266,7 @@ def test_gold_resumen_ejecutivo_en_base_vacia_devuelve_ceros_no_error(db_path):
 
 
 def test_gold_resumen_ejecutivo_con_datos(db_path):
+    """El resumen ejecutivo de Gold cuenta rutas y mediciones y da el tiempo de viaje promedio del sistema."""
     _poblar_hasta_silver(db_path, no_traffic=8.0)
     gold = GoldLayer(db_path)
     gold.calculate_kpis(date=HOY.date().isoformat())
@@ -268,6 +281,7 @@ def test_gold_resumen_ejecutivo_con_datos(db_path):
 # ---------------------------------------------------------------------------
 
 def test_pipeline_completo_es_idempotente(tmp_path):
+    """El pipeline completo (Bronze, Silver y Gold) es idempotente: ejecutarlo de nuevo no cambia los recuentos de cada capa."""
     db_path = tmp_path / "t.db"
     db = RouteDatabase(tmp_path / "t.csv", db_path)
     db.save_records_to_sqlite([

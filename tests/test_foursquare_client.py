@@ -41,6 +41,7 @@ def _cat(nombre):
     ],
 )
 def test_categoriza_nombres_reales_de_foursquare(nombre, esperado):
+    """Cada nombre de categoría real de Foursquare (parametrizado) cae en el balde esperado."""
     assert _cat(nombre) == esperado
 
 
@@ -57,6 +58,7 @@ def test_barbershop_no_se_confunde_con_bar():
 
 
 def test_nunca_descarta_un_poi_sin_categoria():
+    """Una lista de categorías vacía, `None` o un nombre desconocido devuelve «other»; el POI nunca se descarta."""
     assert FoursquareClient._categorize([]) == "other"
     assert FoursquareClient._categorize(None) == "other"
     assert _cat("Algo Totalmente Desconocido") == "other"
@@ -67,6 +69,7 @@ def test_nunca_descarta_un_poi_sin_categoria():
 # ---------------------------------------------------------------------------
 
 def test_sin_rutas_solo_devuelve_las_zonas():
+    """Sin rutas, los puntos de búsqueda son solo las zonas."""
     puntos = build_search_points(LOCATIONS)
     assert set(puntos) == set(LOCATIONS)
 
@@ -87,6 +90,7 @@ def test_no_duplica_corredores_en_sentido_inverso():
 
 
 def test_puntos_intermedios_quedan_entre_origen_y_destino():
+    """Los puntos intermedios de una ruta larga caen dentro del rectángulo que forman su origen y su destino."""
     puntos = build_search_points(LOCATIONS, [("Msida", "Marsaskala")])
     intermedios = [p for nombre, p in puntos.items() if "km" in nombre]
     assert intermedios, "Msida-Marsaskala (~9.5 km) debe generar puntos intermedios"
@@ -98,6 +102,7 @@ def test_puntos_intermedios_quedan_entre_origen_y_destino():
 
 
 def test_ignora_rutas_con_zonas_desconocidas():
+    """Una ruta con una zona que no existe se ignora y no añade puntos."""
     puntos = build_search_points(LOCATIONS, [("Msida", "Narnia")])
     assert set(puntos) == set(LOCATIONS)
 
@@ -112,6 +117,7 @@ def cliente():
 
 
 def test_acepta_la_forma_nueva_de_la_respuesta(cliente):
+    """Se interpreta la respuesta nueva de la API (`fsq_place_id` con latitud y longitud planas)."""
     pois = cliente._parse_results([{
         "fsq_place_id": "abc", "name": "La Pizzeria", "latitude": 35.9, "longitude": 14.5,
         "categories": [{"name": "Pizzeria"}],
@@ -123,6 +129,7 @@ def test_acepta_la_forma_nueva_de_la_respuesta(cliente):
 
 
 def test_acepta_la_forma_antigua_con_geocodes(cliente):
+    """Se interpreta la respuesta antigua de la API (`fsq_id` con coordenadas dentro de `geocodes`)."""
     pois = cliente._parse_results([{
         "fsq_id": "xyz", "name": "Farmacia", "categories": [{"name": "Pharmacy"}],
         "geocodes": {"main": {"latitude": 35.8, "longitude": 14.4}},
@@ -134,6 +141,7 @@ def test_acepta_la_forma_antigua_con_geocodes(cliente):
 
 
 def test_descarta_lugares_sin_id_o_sin_coordenadas(cliente):
+    """Un lugar sin identificador o sin coordenadas se descarta."""
     pois = cliente._parse_results([
         {"name": "Sin id", "latitude": 35.9, "longitude": 14.5, "categories": []},
         {"fsq_place_id": "sin-coords", "name": "Sin coords", "categories": []},
@@ -142,5 +150,6 @@ def test_descarta_lugares_sin_id_o_sin_coordenadas(cliente):
 
 
 def test_cliente_exige_api_key():
+    """Crear el cliente con una clave de API vacía lanza `ValueError`."""
     with pytest.raises(ValueError):
         FoursquareClient(api_key="")

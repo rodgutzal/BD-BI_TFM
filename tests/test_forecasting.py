@@ -76,11 +76,13 @@ def test_perfil_horario_y_su_pronostico():
 
 
 def test_mae_ignora_las_posiciones_sin_dato():
+    """El MAE salta las posiciones con NaN y devuelve `None` si no queda ninguna con dato."""
     assert forecasting.mae([1, 2, 3], [1, np.nan, 5]) == pytest.approx(1.0)
     assert forecasting.mae([1, 2], [np.nan, np.nan]) is None
 
 
 def test_los_cortes_exigen_horizonte_y_pasado_con_datos():
+    """Un corte de validación exige una semana de pasado con datos y un horizonte que no esté vacío; si el horizonte queda en NaN deja de ser elegible."""
     s = _serie(dias=20, huecos=False)
     cortes = vf.eligible_cutoffs(s, min_train_obs=168)
     assert cortes and cortes[0] >= s.index[0] + pd.Timedelta(days=7)      # hace falta una semana de pasado

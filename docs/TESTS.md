@@ -67,11 +67,11 @@
 >   - `get_all_routes_statistics()` recorría la tabla otra vez solo para contar filas por ruta.
 > Todo eso sale ahora de `get_data_profile()`, una sola pasada.
 
-- `test_abrir_analyst_no_usa_las_consultas_caras`
+- `test_abrir_analyst_no_usa_las_consultas_caras` — Abrir el Analyst no lanza `get_available_routes` ni `get_all_routes_statistics`; hace un único `get_data_profile` compartido por todas las pestañas.
 - `test_ninguna_consulta_carga_la_base_entera` — 'Missing Values' ya no carga 100 mil filas: toda lectura de filas es de UNA ruta.
-- `test_las_metricas_de_calidad_son_las_del_perfil`
-- `test_la_completitud_por_ruta_sale_del_perfil_y_cubre_todas_las_rutas`
-- `test_las_muestras_por_ruta_de_model_performance_son_las_filas_reales`
+- `test_las_metricas_de_calidad_son_las_del_perfil` — Total de registros, valores faltantes, duplicados y rango de fechas de la pestaña de calidad coinciden con los del perfil de datos.
+- `test_la_completitud_por_ruta_sale_del_perfil_y_cubre_todas_las_rutas` — La tabla de completitud sale del perfil, trae todas las rutas y la ruta con `traffic_delay_min` vacío es menos completa que la que lo trae.
+- `test_las_muestras_por_ruta_de_model_performance_son_las_filas_reales` — La tabla de muestras por ruta de Model Performance cuenta las filas reales de cada ruta.
 - `test_el_panel_lateral_usa_el_ultimo_timestamp_y_no_el_resumen_completo` — app.py pedía get_database_summary() (con el DISTINCT de rutas) solo para la hora del último dato.
 
 ## `tests/test_analyst_tabs.py`
@@ -82,26 +82,26 @@
 > (test_analyst_quality.py ya prueba que Analyst abre con UN perfil de la base; test_predictive_modeling_*.py,
 > el modelado. Aquí el modelado se sustituye por un no-op.)
 
-- `test_el_editor_sql_ejecuta_selects_y_ofrece_la_descarga`
-- `test_el_editor_sql_acepta_with_recursivo_y_funciones`
-- `test_el_editor_sql_rechaza_escrituras_y_pragmas_sin_tocar_los_datos` ×7
+- `test_el_editor_sql_ejecuta_selects_y_ofrece_la_descarga` — El editor SQL ejecuta un SELECT, muestra el número de filas y la tabla con el resultado correcto.
+- `test_el_editor_sql_acepta_with_recursivo_y_funciones` — El editor SQL de solo lectura acepta consultas con `WITH RECURSIVE` y funciones de SQLite.
+- `test_el_editor_sql_rechaza_escrituras_y_pragmas_sin_tocar_los_datos` ×7 — Cada consulta que escribe o usa PRAGMA (parametrizado) se rechaza con «Error en la consulta» y el archivo de la base queda byte a byte igual.
 - `test_el_editor_sql_no_crea_archivos_en_disco` ×2 — Regresión: con solo `mode=ro`, ATTACH y VACUUM INTO se ejecutaban y creaban archivos nuevos (VACUUM INTO vuelca una copia completa de la base a cualquier ruta escribible). El authorizer de SQLite los deniega.
 - `test_el_editor_sql_cierra_la_conexion_aunque_la_consulta_falle` — Si no se cerrara, en Windows el archivo quedaría bloqueado (no se podría borrar/mover).
-- `test_el_editor_sql_con_consulta_vacia_avisa`
-- `test_un_ejemplo_del_editor_rellena_la_consulta`
+- `test_el_editor_sql_con_consulta_vacia_avisa` — Una consulta vacía o de solo espacios muestra el aviso «Escribe una consulta».
+- `test_un_ejemplo_del_editor_rellena_la_consulta` — Elegir un ejemplo en el selector del editor rellena el cuadro de texto con su consulta.
 - `test_todos_los_ejemplos_del_editor_se_pueden_ejecutar` — Cada consulta de ejemplo debe ser válida y pasar el authorizer (incluida sqlite_master).
-- `test_la_exportacion_incluye_todas_las_rutas_y_la_polyline_por_defecto`
+- `test_la_exportacion_incluye_todas_las_rutas_y_la_polyline_por_defecto` — La exportación por defecto incluye las filas de todas las rutas e informa de cuántas son.
 - `test_la_exportacion_ligera_omite_la_polyline` ×2 — La casilla de la polyline debe respetarse tanto en la exportación total como en la limitada por fechas.
-- `test_la_exportacion_con_rango_de_fechas_filtra`
-- `test_la_exportacion_sin_datos_avisa`
-- `test_el_explorador_muestra_los_datos_de_la_ruta_elegida`
-- `test_las_pruebas_estadisticas_corren_con_datos_suficientes`
-- `test_las_correlaciones_se_dibujan_con_las_columnas_por_defecto`
-- `test_analyst_con_la_base_vacia_no_lanza_excepciones`
-- `test_la_pestana_de_modelos_marca_las_rutas_con_modelo_entrenado`
+- `test_la_exportacion_con_rango_de_fechas_filtra` — Con el rango de fechas activado y un día de historial, la exportación trae menos filas que sin filtro.
+- `test_la_exportacion_sin_datos_avisa` — Si la tabla está vacía, la exportación avisa «No hay datos disponibles» en vez de fallar.
+- `test_el_explorador_muestra_los_datos_de_la_ruta_elegida` — El Data Explorer muestra una tabla con las 60 filas de la ruta elegida.
+- `test_las_pruebas_estadisticas_corren_con_datos_suficientes` — Con datos suficientes, la pestaña de pruebas estadísticas muestra las pruebas de estacionariedad y sus resultados.
+- `test_las_correlaciones_se_dibujan_con_las_columnas_por_defecto` — La pestaña de correlaciones preselecciona las columnas por defecto (tiempo de viaje, velocidad y temperatura).
+- `test_analyst_con_la_base_vacia_no_lanza_excepciones` — El Analyst se abre sin excepciones con una base vacía.
+- `test_la_pestana_de_modelos_marca_las_rutas_con_modelo_entrenado` — La pestaña de modelos marca como entrenadas las rutas que tienen su archivo de modelo y como no entrenadas las demás.
 - `test_un_error_en_una_pestana_se_muestra_en_ella_y_no_tumba_la_pagina` — Antes una excepción en cualquier pestaña (se ejecutan las siete en cada rerun) dejaba la página entera con el traceback. Ahora cada una se aísla: se dice cuál falló y por qué.
 - `test_las_demas_pestanas_siguen_mostrandose_cuando_una_falla` — Con el explorador roto, la pestaña del editor SQL (que viene después) sigue dibujando su editor.
-- `test_sin_fallos_no_aparece_ningun_aviso_de_pestana`
+- `test_sin_fallos_no_aparece_ningun_aviso_de_pestana` — Si ninguna pestaña falla, no aparece ningún aviso «No se pudo mostrar».
 - `test_el_fallo_de_una_pestana_queda_en_el_registro` — El mensaje en pantalla es corto; el traceback completo va al registro de la aplicación.
 - `test_st_stop_dentro_de_una_pestana_no_se_trata_como_un_error` — Solo se captura Exception: st.stop() usa una excepción de control (BaseException) y debe seguir deteniendo el script. Si se capturara, se registraría como un fallo de la pestaña que no lo es (en pantalla no se notaría: el propio st.error volvería a disparar la parada), así que se comprueba el registro.
 
@@ -126,19 +126,19 @@
 > que se importa aquí con MOBILITY_DB_PATH apuntando a un directorio temporal: ningún
 > test toca data/mobility.db.
 
-- `test_la_api_usa_la_base_indicada_por_variable_de_entorno`
-- `test_ruta_sin_datos_responde_404_y_no_400` ×5
-- `test_el_detail_del_404_es_el_mensaje_original`
-- `test_analisis_invalido_es_422`
-- `test_parametros_fuera_de_rango_son_422` ×3
-- `test_health`
-- `test_routes`
-- `test_rankings_con_gold_vacio_no_falla`
-- `test_statistics`
-- `test_anomalies`
+- `test_la_api_usa_la_base_indicada_por_variable_de_entorno` — La API usa la base de datos que indica la variable de entorno.
+- `test_ruta_sin_datos_responde_404_y_no_400` ×5 — Una ruta sin datos responde 404 (en cada URL parametrizada) y el `detail` no lleva el 404 anidado.
+- `test_el_detail_del_404_es_el_mensaje_original` — El `detail` del 404 es el mensaje original de cada endpoint.
+- `test_analisis_invalido_es_422` — Un tipo de análisis de serie temporal no válido responde 422.
+- `test_parametros_fuera_de_rango_son_422` ×3 — Los parámetros fuera de rango (en cada URL parametrizada) responden 422.
+- `test_health` — `/api/health` responde «healthy» con el número de rutas.
+- `test_routes` — `/api/routes` lista el total y cada ruta con origen y destino.
+- `test_rankings_con_gold_vacio_no_falla` — `/api/routes/rankings` responde 200 con listas vacías cuando la capa Gold no tiene datos.
+- `test_statistics` — `/api/statistics` devuelve la ruta y las estadísticas con el recuento de mediciones.
+- `test_anomalies` — `/api/anomalies` responde 200 con la ruta y la lista de anomalías.
 - `test_json_safe_sustituye_nan_e_infinito_por_none` — JSON no admite NaN/inf: se convierten en None, también dentro de dicts y listas anidados. Los escalares de numpy (np.bool_, np.float64) pasan a tipos nativos de Python.
 - `test_time_series_patrones_con_un_dia_de_una_sola_muestra` — Regresión: un día con 1 muestra tiene desviación típica NaN y el endpoint devolvía 500 (dependía de la hora a la que se ejecutaba: justo tras la medianoche UTC).
-- `test_time_series_patrones`
+- `test_time_series_patrones` — `/api/time-series` con `analysis=patterns` responde 200 con ese tipo de análisis.
 - `test_predict_devuelve_json_serializable_y_modelos_entrenados` — De punta a punta: entrena el ensemble con los datos y responde. Cubre también que el resultado se serialice (antes `model_predictions` se apuntaba a sí mismo).
 
 ## `tests/test_api_clients.py`
@@ -149,36 +149,36 @@
 > excepciones de `requests`, y se comprueba la petición que se habría enviado y el parseo del resultado.
 
 - `test_la_sesion_reintenta_solo_errores_transitorios` — Cada cliente monta reintentos sobre https: 4 intentos, solo para 429/5xx y solo para su método HTTP.
-- `test_close_cierra_la_sesion`
-- `test_tomtom_parsea_la_ruta_y_envia_la_peticion_correcta`
+- `test_close_cierra_la_sesion` — `close()` cierra la sesión HTTP del cliente.
+- `test_tomtom_parsea_la_ruta_y_envia_la_peticion_correcta` — TomTom interpreta la respuesta con todos sus campos y envía la URL, el timeout y los parámetros correctos.
 - `test_tomtom_sin_campos_opcionales_deduce_el_tiempo_sin_trafico` — Sin trafico ni noTrafficTravelTime: retraso 0 y tiempo sin tráfico = tiempo de viaje; sin polyline.
-- `test_tomtom_con_tiempo_cero_no_divide_por_cero`
-- `test_tomtom_propaga_los_errores`
-- `test_ors_parsea_la_ruta_con_las_mismas_claves_que_tomtom`
-- `test_ors_envia_longitud_antes_que_latitud_y_la_clave_en_la_cabecera`
-- `test_ors_propaga_los_errores`
-- `test_weather_parsea_y_pide_unidades_metricas`
-- `test_weather_respuesta_incompleta_da_none_y_unknown`
-- `test_weather_usa_la_cache_por_ubicacion_y_caduca`
-- `test_weather_un_error_no_se_guarda_en_cache`
-- `test_weather_propaga_los_errores`
-- `test_overpass_clasifica_por_prioridad_y_toma_el_valor_como_subcategoria`
-- `test_overpass_la_query_cubre_todas_las_categorias`
-- `test_overpass_parsea_nodos_y_ways_y_descarta_lo_inutil`
-- `test_overpass_fetch_calcula_el_bbox_con_margen_y_el_timeout_del_servidor`
-- `test_overpass_prueba_el_siguiente_espejo_si_uno_falla`
-- `test_overpass_json_invalido_cuenta_como_fallo_del_espejo`
-- `test_overpass_si_todos_los_espejos_fallan_lanza_runtimeerror`
-- `test_overpass_envia_un_user_agent_descriptivo`
+- `test_tomtom_con_tiempo_cero_no_divide_por_cero` — Con un tiempo de viaje de 0, TomTom da velocidad media 0 y no divide entre cero.
+- `test_tomtom_propaga_los_errores` — Los errores de red y de estado HTTP de TomTom (parametrizado) se propagan al llamador.
+- `test_ors_parsea_la_ruta_con_las_mismas_claves_que_tomtom` — ORS devuelve las mismas claves que TomTom; los campos de tráfico que no informa quedan en `None`, no en 0.
+- `test_ors_envia_longitud_antes_que_latitud_y_la_clave_en_la_cabecera` — ORS recibe las coordenadas como [longitud, latitud] y la clave de API en la cabecera `Authorization`.
+- `test_ors_propaga_los_errores` — Los errores de red y de estado HTTP de ORS (parametrizado) se propagan al llamador.
+- `test_weather_parsea_y_pide_unidades_metricas` — El clima se interpreta correctamente y se pide en unidades métricas con la clave en los parámetros.
+- `test_weather_respuesta_incompleta_da_none_y_unknown` — Una respuesta de clima incompleta da valores `None` y la descripción «Unknown».
+- `test_weather_usa_la_cache_por_ubicacion_y_caduca` — El clima se cachea por ubicación y caduca pasado el tiempo de vida; `clear_cache` vacía la caché.
+- `test_weather_un_error_no_se_guarda_en_cache` — Un error al pedir el clima no se guarda en la caché: la siguiente petición vuelve a intentarlo.
+- `test_weather_propaga_los_errores` — Los errores de red y de estado HTTP del clima (parametrizado) se propagan al llamador.
+- `test_overpass_clasifica_por_prioridad_y_toma_el_valor_como_subcategoria` — Overpass clasifica cada elemento por prioridad entre categorías y toma el valor de la etiqueta como subcategoría; lo que no encaja da `None`.
+- `test_overpass_la_query_cubre_todas_las_categorias` — La consulta de Overpass cubre todas las categorías: cabecera con el timeout, regex para varios valores y una cláusula de nodo y otra de vía por etiqueta.
+- `test_overpass_parsea_nodos_y_ways_y_descarta_lo_inutil` — Se interpretan nodos y vías y se descartan los elementos sin categoría o sin coordenadas; el que no tiene nombre recibe uno genérico.
+- `test_overpass_fetch_calcula_el_bbox_con_margen_y_el_timeout_del_servidor` — `fetch_pois` calcula el rectángulo de búsqueda con el margen y envía el timeout del servidor y el del cliente.
+- `test_overpass_prueba_el_siguiente_espejo_si_uno_falla` — Si un servidor espejo de Overpass falla (error de red o 504), se prueba el siguiente.
+- `test_overpass_json_invalido_cuenta_como_fallo_del_espejo` — Un JSON inválido cuenta como fallo del espejo y se pasa al siguiente.
+- `test_overpass_si_todos_los_espejos_fallan_lanza_runtimeerror` — Si todos los espejos fallan, `fetch_pois` lanza `RuntimeError` tras probarlos todos.
+- `test_overpass_envia_un_user_agent_descriptivo` — El cliente de Overpass envía su `User-Agent` descriptivo.
 
 ## `tests/test_business_type_classifier.py`
 
 > Pruebas del clasificador de texto libre -> categoría de Overpass.
 
-- `test_clasifica_negocios_comunes` ×10
+- `test_clasifica_negocios_comunes` ×10 — Cada texto de negocio común (parametrizado) se clasifica en la categoría esperada.
 - `test_barberia_no_se_confunde_con_bar` — Regresión: la palabra clave "bar" (comida y bebida) no debe matchear dentro de "barbería". Es el bug que ya ocurrió una vez con datos reales de Foursquare, y el clasificador usa límites de palabra (\b) para evitarlo.
-- `test_ignora_mayusculas_tildes_y_espacios_de_mas`
-- `test_sin_coincidencia_devuelve_none_y_nunca_adivina` ×5
+- `test_ignora_mayusculas_tildes_y_espacios_de_mas` — El clasificador no distingue mayúsculas, tildes ni espacios repetidos o sobrantes.
+- `test_sin_coincidencia_devuelve_none_y_nunca_adivina` ×5 — Un texto sin ninguna palabra clave devuelve `None`; nunca elige una categoría al azar.
 - `test_todas_las_categorias_existen_en_overpass` — El clasificador solo puede devolver categorías que realmente guarda la tabla `pois` (CATEGORY_TAGS de poi_client.py).
 - `test_ninguna_palabra_clave_choca_con_otra_categoria` — Una misma palabra no puede aparecer en dos categorías (el orden de las reglas decidiría en silencio), y ninguna palabra de una categoría puede estar contenida como palabra completa dentro de una frase de otra.
 - `test_cantidad_de_palabras_clave_documentada` — El README dice 140 palabras clave (únicas).
@@ -191,42 +191,42 @@
 > tests comprueban que los cálculos recuperan un efecto conocido y que los casos límite se manejan, no que el
 > resultado sea causal.
 
-- `test_el_constructor_ordena_por_tiempo_parsea_utc_y_no_modifica_el_original`
-- `test_recupera_un_efecto_positivo_conocido`
-- `test_sin_efecto_no_sale_significativo`
-- `test_un_efecto_negativo_lleva_signo_negativo`
-- `test_sin_variables_de_ajuste_no_hay_propensity_score`
-- `test_usa_otra_columna_de_clima_si_se_pide`
-- `test_ignora_las_filas_con_nulos_y_exige_30_filas`
-- `test_columnas_ausentes_devuelven_error`
-- `test_la_simulacion_recupera_el_coeficiente_y_escenarios_coherentes`
-- `test_la_simulacion_valida_los_datos`
-- `test_mide_una_mejora_antes_despues`
-- `test_una_degradacion_se_marca_como_tal`
-- `test_sin_cambio_no_es_significativo_y_el_efecto_es_despreciable`
-- `test_intervencion_valida_columna_y_tamano_de_los_periodos`
-- `test_serie_constante_no_divide_por_cero`
-- `test_detecta_la_hora_como_confusor_cuando_afecta_a_temperatura_y_trafico`
+- `test_el_constructor_ordena_por_tiempo_parsea_utc_y_no_modifica_el_original` — El constructor ordena por tiempo, interpreta los timestamps en UTC y no modifica el DataFrame original.
+- `test_recupera_un_efecto_positivo_conocido` — Sobre datos con un efecto positivo conocido de la temperatura, el análisis lo recupera: correlación alta, diferencia entre grupos significativa y conclusión de evidencia muy fuerte.
+- `test_sin_efecto_no_sale_significativo` — Sin efecto real, ni la correlación ni el análisis estratificado salen significativos y la conclusión es de evidencia débil.
+- `test_un_efecto_negativo_lleva_signo_negativo` — Un efecto negativo da coeficiente de correlación y tamaño del efecto con signo negativo.
+- `test_sin_variables_de_ajuste_no_hay_propensity_score` — Sin variables de ajuste no se calcula el propensity score (`None`), pero el análisis estratificado sí.
+- `test_usa_otra_columna_de_clima_si_se_pide` — Se puede analizar otra columna de clima distinta de la temperatura, por ejemplo la humedad.
+- `test_ignora_las_filas_con_nulos_y_exige_30_filas` — Las filas con nulos se descartan del tamaño de muestra y con menos de 30 filas útiles devuelve «Insufficient data».
+- `test_columnas_ausentes_devuelven_error` — Si falta una columna necesaria o se pide una que no existe, devuelve un error «Missing columns».
+- `test_la_simulacion_recupera_el_coeficiente_y_escenarios_coherentes` — La simulación recupera el coeficiente de temperatura y sus escenarios (de -5 a +5 °C) son coherentes: el cambio es proporcional, nulo en +0 y creciente.
+- `test_la_simulacion_valida_los_datos` — La simulación devuelve error si falta la columna de temperatura o si hay pocos datos.
+- `test_mide_una_mejora_antes_despues` — Mide una intervención que mejora el tiempo de viaje: efecto negativo, significativo, grande y con los tamaños de muestra de antes y después.
+- `test_una_degradacion_se_marca_como_tal` — Una intervención que empeora el tiempo de viaje se marca como degradación con efecto positivo.
+- `test_sin_cambio_no_es_significativo_y_el_efecto_es_despreciable` — Sin cambio entre antes y después, el resultado no es significativo y el efecto es despreciable o pequeño.
+- `test_intervencion_valida_columna_y_tamano_de_los_periodos` — La evaluación de una intervención devuelve error si falta `travel_time_min` o si el periodo tiene muy pocos datos.
+- `test_serie_constante_no_divide_por_cero` — Con una serie constante, la d de Cohen es 0 y no se divide entre cero.
+- `test_detecta_la_hora_como_confusor_cuando_afecta_a_temperatura_y_trafico` — La hora del día se detecta como confusor de severidad alta cuando influye a la vez en la temperatura y en el tráfico.
 - `test_la_hora_no_es_confusor_si_solo_afecta_a_una_de_las_dos_variables` — Un confusor debe afectar al tratamiento Y al resultado: con solo uno de los dos no se marca.
-- `test_detecta_el_dia_de_la_semana_si_el_trafico_varia_mas_de_un_20_por_ciento`
-- `test_sin_confusores_la_lista_esta_vacia_y_hay_recomendaciones`
-- `test_interpretacion_del_p_valor` ×4
-- `test_interpretacion_de_cohen` ×7
+- `test_detecta_el_dia_de_la_semana_si_el_trafico_varia_mas_de_un_20_por_ciento` — El día de la semana se detecta como confusor si el tráfico varía más de un 20 % entre días.
+- `test_sin_confusores_la_lista_esta_vacia_y_hay_recomendaciones` — Sin confusores la lista queda vacía, pero se devuelven consejos y recomendación de método; con datos insuficientes también queda vacía.
+- `test_interpretacion_del_p_valor` ×4 — El texto de interpretación del efecto cambia según el p-valor (parametrizado) y siempre incluye el efecto con su signo.
+- `test_interpretacion_de_cohen` ×7 — La etiqueta de magnitud de la d de Cohen (parametrizado) corresponde a cada valor de d.
 
 ## `tests/test_check_collection_gaps.py`
 
 > Pruebas de tools/check_collection_gaps.py (detección de huecos de recolección).
 
-- `test_find_gaps_detecta_solo_pausas_mayores_al_umbral`
-- `test_find_gaps_sin_huecos`
-- `test_find_gaps_ignora_duplicados_y_orden`
-- `test_find_gaps_con_menos_de_dos_instantes`
-- `test_fmt_h`
-- `test_load_cycle_times_filtra_por_fecha_y_descarta_timestamps_invalidos`
-- `test_load_cycle_times_es_de_solo_lectura`
-- `test_report_avisa_si_ahora_mismo_no_llega_trafico`
-- `test_report_mide_el_tiempo_total_sin_datos`
-- `test_report_sin_datos`
+- `test_find_gaps_detecta_solo_pausas_mayores_al_umbral` — `find_gaps` detecta solo las pausas mayores que el umbral: ciclos cada 15 minutos y 5 horas de silencio dan un único hueco.
+- `test_find_gaps_sin_huecos` — Sin pausas mayores que el umbral, `find_gaps` devuelve una tabla vacía.
+- `test_find_gaps_ignora_duplicados_y_orden` — Las filas de un mismo ciclo comparten instante y el orden de entrada no importa para detectar huecos.
+- `test_find_gaps_con_menos_de_dos_instantes` — Con menos de dos instantes distintos no puede haber huecos.
+- `test_fmt_h` — `fmt_h` da horas para una duración corta (3 h se muestra «3.0 h») y días para una larga (72 h se muestra «3.0 días»).
+- `test_load_cycle_times_filtra_por_fecha_y_descarta_timestamps_invalidos` — `load_cycle_times` descarta lo anterior a la fecha de inicio y los timestamps que no son fechas.
+- `test_load_cycle_times_es_de_solo_lectura` — `load_cycle_times` no modifica la base de datos.
+- `test_report_avisa_si_ahora_mismo_no_llega_trafico` — El informe avisa «AHORA MISMO» si el último dato es antiguo y devuelve su edad.
+- `test_report_mide_el_tiempo_total_sin_datos` — El informe cuenta los huecos y suma el tiempo total sin datos, sin avisar de sequía actual si los datos son recientes.
+- `test_report_sin_datos` — Sin datos, el informe devuelve cero huecos y escribe «Sin datos».
 
 ## `tests/test_collector.py`
 
@@ -237,42 +237,42 @@
 > `signal.signal` por un registro (para no tocar el manejador de Ctrl+C de pytest). La base es temporal y el
 > heartbeat se redirige (el real vive en logs/heartbeat y lo lee el HEALTHCHECK de Docker).
 
-- `test_rechaza_una_fuente_desconocida`
-- `test_la_fuente_elige_el_cliente`
-- `test_timescale_solo_se_activa_con_configuracion`
+- `test_rechaza_una_fuente_desconocida` — Una fuente de tráfico que no sea «ors» o «tomtom» lanza `ValueError`.
+- `test_la_fuente_elige_el_cliente` — La fuente elegida («tomtom» u «ors») decide qué cliente de tráfico se crea.
+- `test_timescale_solo_se_activa_con_configuracion` — Timescale solo se activa si hay configuración y no se pide desactivarlo expresamente.
 - `test_el_manejador_de_parada_solo_se_registra_si_se_pide` — Se escuchan Ctrl+C y SIGTERM (la de `docker stop`); antes solo SIGINT y Docker acababa matando con SIGKILL.
 - `test_una_senal_de_parada_baja_la_bandera_sin_salir_ni_cerrar_los_clientes` — Antes el manejador hacía sys.exit(0) y cerraba los clientes en cualquier punto del ciclo: se perdía el ciclo (si estaba pidiendo datos) o se guardaba a medias (CSV sí, SQLite no). Ahora solo pide parar.
-- `test_una_segunda_senal_sale_sin_esperar`
+- `test_una_segunda_senal_sale_sin_esperar` — La primera señal de parada solo pide parar; la segunda sale de inmediato con código 1.
 - `test_la_senal_durante_un_ciclo_deja_que_termine_y_lo_guarda` — Si llega la señal a mitad de un ciclo, el ciclo se completa y se guarda; después el bucle sale y cierra los clientes.
-- `test_close_no_falla_si_un_cliente_ya_estaba_cerrado_o_falla`
-- `test_run_continuous_cierra_los_clientes_aunque_el_ciclo_lance_una_excepcion`
-- `test_un_ciclo_guarda_todas_las_rutas_en_csv_y_sqlite`
-- `test_cada_ruta_lleva_el_clima_de_su_origen_y_destino_y_se_pide_una_vez_por_lugar`
+- `test_close_no_falla_si_un_cliente_ya_estaba_cerrado_o_falla` — `close()` no propaga el error si un cliente falla al cerrarse y cierra igualmente el resto.
+- `test_run_continuous_cierra_los_clientes_aunque_el_ciclo_lance_una_excepcion` — `run_continuous` cierra los clientes aunque un ciclo lance una excepción.
+- `test_un_ciclo_guarda_todas_las_rutas_en_csv_y_sqlite` — Un ciclo guarda una fila por ruta en el CSV y en SQLite, con un único instante y la fuente correcta, y escribe el heartbeat.
+- `test_cada_ruta_lleva_el_clima_de_su_origen_y_destino_y_se_pide_una_vez_por_lugar` — Cada ruta lleva el clima de su origen y destino, y el clima se pide una vez por lugar, no una vez por ruta.
 - `test_el_nivel_de_movilidad_cambia_justo_por_encima_de_20_minutos` — > 20 min es 'Alta demora'; 20 exactos todavía es normal (umbral estricto).
-- `test_si_falla_el_clima_de_un_lugar_la_ruta_se_guarda_sin_clima`
-- `test_si_falla_una_ruta_se_siguen_guardando_las_demas`
-- `test_si_fallan_todas_las_rutas_no_se_guarda_nada_ni_hay_latido`
-- `test_si_falla_el_guardado_devuelve_cero_y_no_hay_latido`
-- `test_con_timescale_activo_se_guarda_tambien_alli_con_su_configuracion`
-- `test_sin_timescale_no_se_intenta_guardar_alli`
-- `test_el_heartbeat_se_escribe_en_logs_del_proyecto_con_la_hora_del_ciclo`
-- `test_un_heartbeat_que_no_se_puede_escribir_no_rompe_el_ciclo`
-- `test_el_ciclo_alimenta_bronze_silver_y_gold_solo_con_sus_registros`
+- `test_si_falla_el_clima_de_un_lugar_la_ruta_se_guarda_sin_clima` — Si falla el clima de un lugar, las rutas de ese origen se guardan sin clima y las demás conservan el suyo.
+- `test_si_falla_una_ruta_se_siguen_guardando_las_demas` — Si falla una ruta, las demás se siguen guardando y el ciclo cuenta solo las que se guardaron.
+- `test_si_fallan_todas_las_rutas_no_se_guarda_nada_ni_hay_latido` — Si fallan todas las rutas no se guarda nada y no se escribe el heartbeat.
+- `test_si_falla_el_guardado_devuelve_cero_y_no_hay_latido` — Si falla el guardado en SQLite, el ciclo devuelve 0 y no escribe el heartbeat.
+- `test_con_timescale_activo_se_guarda_tambien_alli_con_su_configuracion` — Con Timescale activo, el ciclo guarda también allí todos los registros con su configuración.
+- `test_sin_timescale_no_se_intenta_guardar_alli` — Sin Timescale, el ciclo no intenta guardar allí.
+- `test_el_heartbeat_se_escribe_en_logs_del_proyecto_con_la_hora_del_ciclo` — El heartbeat se escribe en `logs/` del proyecto con la hora actual.
+- `test_un_heartbeat_que_no_se_puede_escribir_no_rompe_el_ciclo` — Un heartbeat que no se puede escribir no rompe el ciclo.
+- `test_el_ciclo_alimenta_bronze_silver_y_gold_solo_con_sus_registros` — Con el medallón activo, el ciclo alimenta Bronze, Silver y Gold con los registros del ciclo.
 - `test_cada_ciclo_procesa_solo_sus_propios_registros_en_silver` — El medallón es incremental: el 2º ciclo transforma únicamente las filas de Bronze de ese ciclo, no todo el histórico (sería lento y reprocesaría datos ya vistos).
-- `test_sin_medallon_no_se_crean_las_capas`
+- `test_sin_medallon_no_se_crean_las_capas` — Con el medallón desactivado no se crean las tablas de las capas.
 - `test_un_fallo_del_medallon_no_impide_guardar_ni_cambia_el_resultado` — Executive es una vista adicional: si Bronze revienta, CSV/SQLite ya están guardados y el ciclo cuenta.
-- `test_si_bronze_no_responde_success_se_omite_silver_y_gold`
-- `test_run_once_hace_un_solo_ciclo`
-- `test_run_continuous_espera_el_intervalo_segundo_a_segundo_y_se_detiene`
-- `test_run_continuous_termina_si_se_detiene_durante_el_ciclo`
-- `test_el_hibrido_registra_un_unico_manejador_y_guarda_los_intervalos`
-- `test_en_el_primer_tick_corren_las_dos_fuentes_y_despues_ninguna_hasta_su_intervalo`
-- `test_una_fuente_vencida_corre_y_la_otra_no`
-- `test_si_se_detiene_durante_un_ciclo_no_dispara_la_otra_fuente`
-- `test_el_hibrido_ante_una_senal_baja_la_bandera_sin_salir`
-- `test_el_hibrido_con_una_segunda_senal_sale_sin_esperar`
+- `test_si_bronze_no_responde_success_se_omite_silver_y_gold` — Si Bronze no responde «success», se omiten Silver y Gold pero el ciclo sigue contando sus registros.
+- `test_run_once_hace_un_solo_ciclo` — `run_once` hace un único ciclo.
+- `test_run_continuous_espera_el_intervalo_segundo_a_segundo_y_se_detiene` — `run_continuous` espera el intervalo de segundo en segundo, para al bajar la bandera y no hace más ciclos.
+- `test_run_continuous_termina_si_se_detiene_durante_el_ciclo` — Si se pide parar durante un ciclo, `run_continuous` termina sin esperar el intervalo.
+- `test_el_hibrido_registra_un_unico_manejador_y_guarda_los_intervalos` — El planificador híbrido registra SIGINT y SIGTERM con un único manejador y guarda los intervalos de ORS y TomTom.
+- `test_en_el_primer_tick_corren_las_dos_fuentes_y_despues_ninguna_hasta_su_intervalo` — En el primer tick corren las dos fuentes y después ninguna hasta que vence su intervalo.
+- `test_una_fuente_vencida_corre_y_la_otra_no` — Solo corre la fuente cuyo intervalo ya venció; su reloj se reinicia y el de la otra no cambia.
+- `test_si_se_detiene_durante_un_ciclo_no_dispara_la_otra_fuente` — Si se pide parar durante el ciclo de una fuente, no se dispara la otra.
+- `test_el_hibrido_ante_una_senal_baja_la_bandera_sin_salir` — Ante una señal de parada (parametrizada), el híbrido baja la bandera sin salir ni cerrar todavía.
+- `test_el_hibrido_con_una_segunda_senal_sale_sin_esperar` — En el híbrido, la segunda señal sale de inmediato con código 1.
 - `test_el_hibrido_termina_el_ciclo_en_curso_y_cierra_los_dos_collectors` — La señal llega durante el ciclo de ORS: ese ciclo termina, no se dispara el de TomTom y se cierran ambos.
-- `test_el_hibrido_cierra_los_collectors_aunque_el_ciclo_lance_una_excepcion`
+- `test_el_hibrido_cierra_los_collectors_aunque_el_ciclo_lance_una_excepcion` — El híbrido cierra los dos colectores aunque un ciclo lance una excepción.
 - `test_el_compose_da_tiempo_al_colector_para_terminar_su_ciclo` — `docker compose stop` manda SIGTERM y espera stop_grace_period antes del SIGKILL: el colector necesita más que los 10 s por defecto para terminar un ciclo largo (p95 ~15 s).
 - `test_un_error_en_un_ciclo_se_propaga_porque_collect_cycle_ya_captura_los_suyos` — Documenta el contrato: el hibrido NO captura excepciones de collect_cycle (DataCollector ya las maneja por dentro); si una se escapara, el bucle terminaría.
 
@@ -292,29 +292,29 @@
 > Se comprueba que abren sin excepciones con datos y con la base vacía, y que lo que muestran sale de los datos
 > (tarjetas, deltas, alertas, colores y estados de las rutas, capas de POIs). No se prueba el aspecto visual.
 
-- `test_executive_abre_con_datos_y_muestra_las_tarjetas`
-- `test_executive_tablas_de_mejores_y_peores_rutas`
-- `test_executive_sin_periodo_anterior_no_inventa_deltas`
-- `test_executive_con_periodo_anterior_calcula_el_delta_con_los_datos`
-- `test_delta` ×5
-- `test_executive_alertas_segun_los_umbrales` ×6
-- `test_executive_si_el_resumen_falla_muestra_el_error_y_no_sigue`
-- `test_executive_con_la_base_vacia_no_lanza_excepciones`
+- `test_executive_abre_con_datos_y_muestra_las_tarjetas` — Executive se abre con datos y muestra las cuatro tarjetas de resumen con los valores correctos.
+- `test_executive_tablas_de_mejores_y_peores_rutas` — Executive muestra las tablas de mejores y peores rutas con las columnas esperadas y cada ruta en la tabla que le toca.
+- `test_executive_sin_periodo_anterior_no_inventa_deltas` — Sin periodo anterior, Executive no muestra variación en las tarjetas.
+- `test_executive_con_periodo_anterior_calcula_el_delta_con_los_datos` — Con periodo anterior, Executive calcula la variación con los datos reales y pinta de rojo un aumento del tiempo de viaje.
+- `test_delta` ×5 — `_delta` da el texto de variación esperado para cada par de valores y formato (parametrizado).
+- `test_executive_alertas_segun_los_umbrales` ×6 — Executive muestra las alertas que corresponden a los umbrales de cada resumen (parametrizado) y no las demás.
+- `test_executive_si_el_resumen_falla_muestra_el_error_y_no_sigue` — Si el resumen falla, Executive muestra el error y no dibuja tarjetas.
+- `test_executive_con_la_base_vacia_no_lanza_excepciones` — Executive se abre sin excepciones con una base vacía.
 - `test_executive_con_la_base_vacia_no_muestra_un_0_por_ciento_ni_una_alerta_falsa` — Sin mediciones la fiabilidad no es 0 %: es desconocida. Antes salía «0.0%» y la alerta «Low system reliability».
 - `test_executive_con_datos_sigue_mostrando_las_cifras_y_las_alertas` — El aviso de «sin mediciones» no aparece cuando sí las hay.
-- `test_hay_datos_solo_si_el_resumen_tiene_mediciones` ×3
-- `test_color_segun_el_retraso`
-- `test_el_mapa_dibuja_una_traza_por_ruta_mas_las_ubicaciones_y_colorea_por_retraso`
-- `test_el_mapa_ignora_rutas_con_ubicaciones_desconocidas`
-- `test_maps_abre_con_datos_y_la_tabla_de_estado_cubre_todas_las_rutas`
+- `test_hay_datos_solo_si_el_resumen_tiene_mediciones` ×3 — `_hay_datos` es verdadero solo si el resumen tiene mediciones (parametrizado).
+- `test_color_segun_el_retraso` — El color de la ruta en el mapa depende del retraso (parametrizado).
+- `test_el_mapa_dibuja_una_traza_por_ruta_mas_las_ubicaciones_y_colorea_por_retraso` — El mapa dibuja una línea por ruta más la capa de ubicaciones, y colorea cada ruta según su retraso (gris si no tiene dato).
+- `test_el_mapa_ignora_rutas_con_ubicaciones_desconocidas` — El mapa ignora las rutas con ubicaciones que no existen.
+- `test_maps_abre_con_datos_y_la_tabla_de_estado_cubre_todas_las_rutas` — Maps se abre con datos y su tabla de estado cubre todas las rutas con el estado correcto: flujo libre, moderado o denso.
 - `test_los_limites_de_los_estados_de_la_tabla_son_1_y_4_minutos_de_retraso` — <=1 libre, <=4 moderado, >4 denso (los mismos umbrales que el color del mapa).
-- `test_maps_con_la_base_vacia_marca_todas_las_rutas_sin_dato`
-- `test_maps_sin_rutas_seleccionadas_avisa`
-- `test_maps_sin_pois_explica_como_cargarlos`
-- `test_maps_con_pois_de_overpass_dibuja_la_capa_y_cuenta_los_elementos`
-- `test_las_categorias_de_overpass_por_defecto_excluyen_las_masivas`
+- `test_maps_con_la_base_vacia_marca_todas_las_rutas_sin_dato` — Con una base vacía, Maps marca todas las rutas como «Sin dato».
+- `test_maps_sin_rutas_seleccionadas_avisa` — Si no se selecciona ninguna ruta, Maps avisa de que hay que elegir al menos una.
+- `test_maps_sin_pois_explica_como_cargarlos` — Sin POIs cargados, Maps explica cómo cargar los de Overpass y los de Foursquare.
+- `test_maps_con_pois_de_overpass_dibuja_la_capa_y_cuenta_los_elementos` — Con POIs de Overpass, Maps dibuja la capa e indica cuántos elementos muestra.
+- `test_las_categorias_de_overpass_por_defecto_excluyen_las_masivas` — Las categorías de Overpass seleccionadas por defecto excluyen las más numerosas.
 - `test_la_capa_de_pois_usa_la_fuente_indicada_y_no_mezcla_las_dos` — school/mall existen en los dos catálogos: elegir una fuente no debe dibujar los de la otra.
-- `test_la_capa_de_pois_no_hace_nada_sin_categorias_o_con_fuente_invalida`
+- `test_la_capa_de_pois_no_hace_nada_sin_categorias_o_con_fuente_invalida` — La capa de POIs no dibuja nada si no hay categorías o si la fuente no es válida.
 
 ## `tests/test_data_profile.py`
 
@@ -325,19 +325,19 @@
 > cuesta ~8 s en el bind mount de Windows de Docker (décimas de segundo en el host), así que sumaban
 > ~87 s. Un único perfil agregado da todo eso en un recorrido.
 
-- `test_totales_y_rutas`
-- `test_fechas_primera_y_ultima`
-- `test_los_nulos_coinciden_con_un_calculo_independiente_en_pandas`
-- `test_completitud_por_ruta`
-- `test_id_polyline_y_created_at_no_son_columnas_de_medicion`
+- `test_totales_y_rutas` — El perfil da el total de filas, de rutas y de orígenes, y las filas de cada ruta.
+- `test_fechas_primera_y_ultima` — El primer y el último timestamp del perfil son el mínimo y el máximo de las mediciones.
+- `test_los_nulos_coinciden_con_un_calculo_independiente_en_pandas` — Los nulos por columna, por ruta y el porcentaje de faltantes coinciden con un cálculo independiente en pandas.
+- `test_completitud_por_ruta` — La completitud por ruta está entre 0 y 100, y la ruta de ORS, con más columnas vacías, es menos completa que las de TomTom.
+- `test_id_polyline_y_created_at_no_son_columnas_de_medicion` — `id`, `polyline` y `created_at` no cuentan como columnas de medición.
 - `test_una_polilinea_nula_no_cuenta_como_dato_faltante` — Las filas históricas de TomTom no tienen polyline: eso no debe bajar la completitud.
-- `test_base_vacia`
+- `test_base_vacia` — Con una base vacía el perfil devuelve ceros, fechas `None` y una tabla de rutas vacía pero con sus columnas.
 - `test_cuenta_duplicados_de_ruta_instante_y_fuente` — La clave UNIQUE de la tabla real los impide; se prueba con una tabla SIN la restricción.
-- `test_en_la_tabla_real_no_hay_duplicados`
-- `test_el_perfil_hace_una_sola_consulta_sobre_la_tabla`
-- `test_ultimo_timestamp`
-- `test_ultimo_timestamp_de_base_vacia`
-- `test_resumen_sin_rutas_omite_solo_las_rutas_unicas`
+- `test_en_la_tabla_real_no_hay_duplicados` — El perfil no encuentra duplicados en la tabla de datos de prueba.
+- `test_el_perfil_hace_una_sola_consulta_sobre_la_tabla` — El perfil recorre la tabla de mediciones con una sola consulta.
+- `test_ultimo_timestamp` — `get_last_timestamp` devuelve el máximo de los timestamps.
+- `test_ultimo_timestamp_de_base_vacia` — `get_last_timestamp` devuelve `None` con una base vacía.
+- `test_resumen_sin_rutas_omite_solo_las_rutas_unicas` — `get_database_summary(include_routes=False)` omite solo las rutas únicas y el resto del resumen es igual.
 - `test_el_resumen_por_defecto_sigue_igual` — Compatibilidad: quien lo llame sin argumentos sigue obteniendo unique_routes.
 - `test_ultimo_timestamp_no_recorre_la_tabla` — MAX(timestamp) se resuelve con el índice: una sola consulta, sin DISTINCT.
 
@@ -359,17 +359,17 @@
 > con mucha recolección mostraban solo los últimos días sin avisar.
 
 - `test_el_limit_antiguo_si_recortaba_la_ventana` — Documenta el bug: con limit=10000 solo se llega a ~25 de los 30 días.
-- `test_promedio_diario_cubre_toda_la_ventana`
-- `test_promedio_diario_respeta_la_ventana`
-- `test_promedio_diario_calcula_bien_el_promedio`
-- `test_promedio_diario_base_vacia`
-- `test_promedio_por_ruta_y_hora`
-- `test_promedio_por_ruta_y_hora_no_pierde_filas_con_mucha_data`
-- `test_columnas_numericas_excluyen_el_id_y_el_texto`
-- `test_query_columns_trae_solo_lo_pedido_sin_limit`
-- `test_query_columns_rechaza_columnas_que_no_existen`
-- `test_query_columns_no_permite_inyeccion_sql`
-- `test_query_columns_sin_columnas`
+- `test_promedio_diario_cubre_toda_la_ventana` — El promedio diario cubre toda la ventana, no pierde ninguna fila y sale ordenado por fecha.
+- `test_promedio_diario_respeta_la_ventana` — Con una ventana de 3 días el promedio diario devuelve pocos días y menos filas que con la ventana completa.
+- `test_promedio_diario_calcula_bien_el_promedio` — El promedio diario es la media de los tiempos de viaje del día.
+- `test_promedio_diario_base_vacia` — Con una base vacía el promedio diario devuelve una tabla vacía.
+- `test_promedio_por_ruta_y_hora` — El promedio por ruta y hora agrupa por origen, destino y hora, y cuenta las mediciones de cada grupo.
+- `test_promedio_por_ruta_y_hora_no_pierde_filas_con_mucha_data` — El promedio por ruta y hora no pierde filas con mucho volumen y las horas están entre 0 y 23.
+- `test_columnas_numericas_excluyen_el_id_y_el_texto` — Las columnas numéricas disponibles excluyen el `id` y las columnas de texto.
+- `test_query_columns_trae_solo_lo_pedido_sin_limit` — `query_columns` devuelve solo las columnas pedidas y todas las filas de la ventana, sin límite.
+- `test_query_columns_rechaza_columnas_que_no_existen` — `query_columns` lanza `ValueError` si una columna no existe.
+- `test_query_columns_no_permite_inyeccion_sql` — `query_columns` rechaza un nombre de columna con inyección SQL y no toca la tabla.
+- `test_query_columns_sin_columnas` — `query_columns` sin columnas devuelve una tabla vacía.
 
 ## `tests/test_demographics.py`
 
@@ -378,20 +378,20 @@
 > No usan la API de Data Commons ni requieren `datacommons-client`.
 
 - `test_latest_observation_usa_el_anio_mas_alto_de_la_serie_completa` — Regresión: date='latest' de la API devolvió 2014 para Valletta cuando su propia serie ya tenía 2021.
-- `test_latest_observation_ignora_zonas_sin_observaciones`
-- `test_latest_observation_prefiere_la_fecha_mas_reciente_en_el_mismo_anio`
-- `test_summarize_history_encuentra_anios_comunes`
-- `test_summarize_history_sin_anio_comun_o_con_zona_sin_datos`
-- `test_reconcile_proyecta_con_la_tasa_nacional`
-- `test_reconcile_no_toca_un_dato_igual_o_mas_nuevo_que_el_objetivo`
-- `test_reconcile_respeta_un_anio_objetivo_explicito`
-- `test_reconcile_omite_zonas_sin_tasa_nacional_para_su_anio`
-- `test_reconcile_sin_serie_nacional`
-- `test_reconcile_se_guarda_y_se_recupera_de_la_base`
+- `test_latest_observation_ignora_zonas_sin_observaciones` — `latest_observation_per_zone` ignora las zonas sin observaciones.
+- `test_latest_observation_prefiere_la_fecha_mas_reciente_en_el_mismo_anio` — Entre dos observaciones del mismo año, se queda con la de fecha más reciente.
+- `test_summarize_history_encuentra_anios_comunes` — `summarize_history` encuentra los años en los que todas las zonas tienen dato.
+- `test_summarize_history_sin_anio_comun_o_con_zona_sin_datos` — Sin año común, o con una zona sin observaciones, los años comunes quedan vacíos.
+- `test_reconcile_proyecta_con_la_tasa_nacional` — Un dato antiguo se proyecta al año común con la tasa de crecimiento nacional y queda trazado cuál es el dato real y cuál la proyección.
+- `test_reconcile_no_toca_un_dato_igual_o_mas_nuevo_que_el_objetivo` — Un dato del año objetivo o posterior se deja como observado, sin proyectar.
+- `test_reconcile_respeta_un_anio_objetivo_explicito` — Si se indica un año objetivo, la proyección usa ese año.
+- `test_reconcile_omite_zonas_sin_tasa_nacional_para_su_anio` — Una zona cuyo año no está en la serie nacional se omite en vez de inventar un dato.
+- `test_reconcile_sin_serie_nacional` — Sin serie nacional no hay registros ni año objetivo.
+- `test_reconcile_se_guarda_y_se_recupera_de_la_base` — Los datos reconciliados se guardan en la base y se recuperan con su método y año base.
 - `test_guardar_solo_el_dcid_no_borra_la_poblacion_ya_guardada` — El upsert usa COALESCE: resolver un dcid no debe pisar datos existentes.
-- `test_historial_de_poblacion_es_upsert`
-- `test_clean_normaliza_nulos`
-- `test_el_cliente_exige_api_key`
+- `test_historial_de_poblacion_es_upsert` — El historial de población se guarda con upsert: repetir una observación la actualiza en vez de duplicarla.
+- `test_clean_normaliza_nulos` — `_clean` convierte `None` y NaN en cadena vacía, recorta espacios y pasa números a texto.
+- `test_el_cliente_exige_api_key` — El cliente de demografía lanza `ValueError` con una clave vacía o solo de comillas.
 
 ## `tests/test_ensemble_predictor.py`
 
@@ -413,8 +413,8 @@
 - `test_el_sarima_aprende_el_ciclo_diario` — Con un ciclo diario claro, el pronóstico sigue el perfil mejor que una media plana.
 - `test_las_horas_sin_dato_no_se_inventan` — hourly_share deja NaN en las horas sin mediciones; solo se interpolan huecos cortos al ajustar.
 - `test_perfil_horario_y_su_pronostico` — La referencia usa la media de cada hora del día; para una hora sin historia cae a la media global.
-- `test_mae_ignora_las_posiciones_sin_dato`
-- `test_los_cortes_exigen_horizonte_y_pasado_con_datos`
+- `test_mae_ignora_las_posiciones_sin_dato` — El MAE salta las posiciones con NaN y devuelve `None` si no queda ninguna con dato.
+- `test_los_cortes_exigen_horizonte_y_pasado_con_datos` — Un corte de validación exige una semana de pasado con datos y un horizonte que no esté vacío; si el horizonte queda en NaN deja de ser elegible.
 - `test_las_referencias_no_usan_datos_del_futuro` — Cambiar los valores a partir del corte no debe alterar ninguna referencia.
 - `test_la_validacion_compara_con_las_referencias` — evaluate + summarize: con un ciclo diario limpio el perfil y el SARIMA ganan a media y persistencia.
 - `test_la_validacion_lee_la_base_en_solo_lectura` — load_hourly_share abre la base con immutable=1: no crea -wal/-shm ni modifica el archivo.
@@ -425,18 +425,18 @@
 >
 > No hacen llamadas de red: solo ejercitan la lógica pura del cliente.
 
-- `test_categoriza_nombres_reales_de_foursquare` ×17
+- `test_categoriza_nombres_reales_de_foursquare` ×17 — Cada nombre de categoría real de Foursquare (parametrizado) cae en el balde esperado.
 - `test_barbershop_no_se_confunde_con_bar` — Regresión: "bar" dentro de "Barbershop" no puede mandarlo a restaurant (se usa \b, no un simple `in`).
-- `test_nunca_descarta_un_poi_sin_categoria`
-- `test_sin_rutas_solo_devuelve_las_zonas`
+- `test_nunca_descarta_un_poi_sin_categoria` — Una lista de categorías vacía, `None` o un nombre desconocido devuelve «other»; el POI nunca se descarta.
+- `test_sin_rutas_solo_devuelve_las_zonas` — Sin rutas, los puntos de búsqueda son solo las zonas.
 - `test_con_las_rutas_actuales_son_27_llamadas` — El README documenta 7 zonas + 20 puntos intermedios = 27 llamadas por refresco (~117/mes con refresco semanal, 23% del límite gratis).
 - `test_no_duplica_corredores_en_sentido_inverso` — Valletta->Birkirkara y Birkirkara->Valletta son el mismo tramo físico.
-- `test_puntos_intermedios_quedan_entre_origen_y_destino`
-- `test_ignora_rutas_con_zonas_desconocidas`
-- `test_acepta_la_forma_nueva_de_la_respuesta`
-- `test_acepta_la_forma_antigua_con_geocodes`
-- `test_descarta_lugares_sin_id_o_sin_coordenadas`
-- `test_cliente_exige_api_key`
+- `test_puntos_intermedios_quedan_entre_origen_y_destino` — Los puntos intermedios de una ruta larga caen dentro del rectángulo que forman su origen y su destino.
+- `test_ignora_rutas_con_zonas_desconocidas` — Una ruta con una zona que no existe se ignora y no añade puntos.
+- `test_acepta_la_forma_nueva_de_la_respuesta` — Se interpreta la respuesta nueva de la API (`fsq_place_id` con latitud y longitud planas).
+- `test_acepta_la_forma_antigua_con_geocodes` — Se interpreta la respuesta antigua de la API (`fsq_id` con coordenadas dentro de `geocodes`).
+- `test_descarta_lugares_sin_id_o_sin_coordenadas` — Un lugar sin identificador o sin coordenadas se descarta.
+- `test_cliente_exige_api_key` — Crear el cliente con una clave de API vacía lanza `ValueError`.
 
 ## `tests/test_hybrid_scheduler.py`
 
@@ -454,28 +454,28 @@
 > Usan una RouteDatabase real sobre un directorio temporal (no mocks), para
 > ejercitar también los métodos de database.py que consume el módulo.
 
-- `test_haversine_conocida`
-- `test_normalize_minmax_basico`
-- `test_normalize_minmax_sin_variacion_queda_en_medio_no_en_cero`
-- `test_normalize_minmax_conserva_nan`
-- `test_demanda_sin_demografia_es_nan_no_cero`
-- `test_demanda_lee_poblacion_guardada`
-- `test_competencia_cuenta_solo_dentro_del_radio`
-- `test_competencia_filtra_por_categoria`
-- `test_competencia_food_drink_se_corrige_por_cobertura_de_osm`
-- `test_competencia_sin_pois_es_cero`
-- `test_accesibilidad_promedia_rutas_que_tocan_la_zona`
-- `test_pesos_por_defecto_suman_uno`
-- `test_pesos_que_no_suman_uno_lanzan_error`
-- `test_mas_demanda_mejora_el_puntaje`
-- `test_mas_competencia_empeora_el_puntaje`
-- `test_mas_tiempo_de_viaje_empeora_el_puntaje`
-- `test_zona_sin_dato_se_trata_como_neutral_no_como_la_peor`
-- `test_un_peso_en_cero_ignora_esa_dimension`
-- `test_el_puntaje_queda_entre_0_y_1`
-- `test_recomienda_de_extremo_a_extremo`
-- `test_recomendar_con_texto_incomprensible_lanza_error`
-- `test_recomendar_acepta_pesos_personalizados`
+- `test_haversine_conocida` — La distancia haversine da el valor conocido (0,01 grados de latitud son unos 1112 m) y 0 para el mismo punto.
+- `test_normalize_minmax_basico` — La normalización min-max lleva el mínimo a 0, el máximo a 1 y el punto medio a 0,5.
+- `test_normalize_minmax_sin_variacion_queda_en_medio_no_en_cero` — Si todos los valores son iguales, la normalización los deja en 0,5 y no en 0.
+- `test_normalize_minmax_conserva_nan` — La normalización min-max conserva los NaN y normaliza el resto.
+- `test_demanda_sin_demografia_es_nan_no_cero` — Sin datos demográficos, la demanda de cada zona es NaN, no 0.
+- `test_demanda_lee_poblacion_guardada` — La demanda de una zona es su población guardada; las zonas sin dato quedan en NaN.
+- `test_competencia_cuenta_solo_dentro_del_radio` — La competencia cuenta solo los comercios dentro del radio de la zona y la marca como observada.
+- `test_competencia_filtra_por_categoria` — La competencia solo cuenta los POIs de la categoría pedida.
+- `test_competencia_food_drink_se_corrige_por_cobertura_de_osm` — En restauración y bares, la competencia se corrige dividiendo entre la cobertura de OpenStreetMap y lo indica en el método.
+- `test_competencia_sin_pois_es_cero` — Sin POIs, la competencia de todas las zonas es 0.
+- `test_accesibilidad_promedia_rutas_que_tocan_la_zona` — La accesibilidad de una zona es el tiempo de viaje medio de las rutas que la tocan; una zona sin rutas queda en NaN.
+- `test_pesos_por_defecto_suman_uno` — Los pesos por defecto suman 1 y valen 0,40, 0,35 y 0,25.
+- `test_pesos_que_no_suman_uno_lanzan_error` — Unos pesos que no suman 1 lanzan `ValueError`.
+- `test_mas_demanda_mejora_el_puntaje` — A igualdad de lo demás, más demanda mejora el puntaje de la zona.
+- `test_mas_competencia_empeora_el_puntaje` — A igualdad de lo demás, más competencia empeora el puntaje.
+- `test_mas_tiempo_de_viaje_empeora_el_puntaje` — A igualdad de lo demás, más tiempo de viaje empeora el puntaje.
+- `test_zona_sin_dato_se_trata_como_neutral_no_como_la_peor` — Una zona sin dato en una dimensión se trata como neutral (0,5), no como la peor, y se anota cuántas dimensiones tenían dato.
+- `test_un_peso_en_cero_ignora_esa_dimension` — Un peso en 0 hace que esa dimensión no influya en el puntaje.
+- `test_el_puntaje_queda_entre_0_y_1` — El puntaje de cada zona queda entre 0 y 1.
+- `test_recomienda_de_extremo_a_extremo` — La recomendación de extremo a extremo devuelve todas las zonas ordenadas por puntaje y con el desglose completo, no solo el puntaje final.
+- `test_recomendar_con_texto_incomprensible_lanza_error` — Un texto que no se entiende como negocio lanza `ValueError`.
+- `test_recomendar_acepta_pesos_personalizados` — Con pesos personalizados, todo el peso en demanda hace ganar a la zona más poblada.
 
 ## `tests/test_locations.py`
 
@@ -491,26 +491,26 @@
 
 > Pruebas del pipeline medallion (Bronze -> Silver -> Gold).
 
-- `test_bronze_inserta_las_filas_validas`
+- `test_bronze_inserta_las_filas_validas` — Bronze inserta todas las filas válidas y devuelve cuántas.
 - `test_bronze_es_idempotente_reingerir_no_duplica` — Regresión: Bronze no tenía restricción UNIQUE y reingerir las mismas filas (p. ej. al correr run_medallion_pipeline dos veces) las duplicaba.
-- `test_bronze_ingiere_solo_lo_nuevo`
-- `test_bronze_rechaza_datos_sin_columnas_requeridas`
-- `test_bronze_descarta_duplicados_dentro_del_lote`
-- `test_bronze_descarta_tiempos_fuera_de_rango_y_nulos`
+- `test_bronze_ingiere_solo_lo_nuevo` — Bronze ingiere solo las filas nuevas: las que ya existen no se vuelven a insertar.
+- `test_bronze_rechaza_datos_sin_columnas_requeridas` — Bronze rechaza un lote al que le falta una columna requerida.
+- `test_bronze_descarta_duplicados_dentro_del_lote` — Bronze descarta los duplicados dentro del mismo lote.
+- `test_bronze_descarta_tiempos_fuera_de_rango_y_nulos` — Bronze descarta las filas con tiempo de viaje fuera de rango o nulo.
 - `test_bronze_guarda_timestamps_iso_con_t` — Regresión: pandas.to_sql guardaba un espacio en vez de 'T' y el collector nunca encontraba las filas de Bronze para pasárselas a Silver.
-- `test_silver_transforma_y_agrega_variables_temporales`
+- `test_silver_transforma_y_agrega_variables_temporales` — Silver transforma las filas de Bronze y calcula el retraso, el nivel de congestión y las variables temporales como la hora y el fin de semana.
 - `test_silver_sin_tiempo_sin_trafico_deja_el_retraso_desconocido` — ORS no reporta tiempo sin tráfico: el retraso no se inventa.
-- `test_silver_no_duplica_al_transformar_dos_veces`
+- `test_silver_no_duplica_al_transformar_dos_veces` — Transformar dos veces el mismo lote en Silver no duplica filas.
 - `test_silver_perfil_de_ruta_calcula_la_desviacion_sin_stddev_de_sql` — Regresión: get_route_profile usaba STDDEV(), que SQLite no trae.
-- `test_silver_agregacion_horaria`
-- `test_gold_calcula_kpis_por_ruta`
+- `test_silver_agregacion_horaria` — Silver agrega los datos por hora y crea un registro por cada grupo.
+- `test_gold_calcula_kpis_por_ruta` — Gold calcula los KPI de cada ruta del día: promedio, número de muestras y fiabilidad entre 0 y 100.
 - `test_gold_recalcular_el_mismo_dia_no_falla_ni_duplica` — Regresión: el INSERT plano chocaba con UNIQUE(date, origin, destination) la segunda vez que se calculaban las KPIs de un mismo día.
-- `test_gold_dia_sin_datos`
-- `test_gold_ranking_ordena_por_fiabilidad`
-- `test_gold_metricas_de_periodo`
+- `test_gold_dia_sin_datos` — Gold devuelve «no_data» para un día sin datos.
+- `test_gold_ranking_ordena_por_fiabilidad` — El ranking de Gold ordena las rutas por fiabilidad y pone primero la más estable.
+- `test_gold_metricas_de_periodo` — Las métricas de periodo de Gold dan promedio y fiabilidad con datos, y valores vacíos con cero filas si el periodo no tiene.
 - `test_gold_resumen_ejecutivo_en_base_vacia_devuelve_ceros_no_error` — Regresión: AVG()/SUM() sin filas dan NULL y float(NaN) reventaba, así que en un clon limpio (sin histórico) Executive mostraba "Error loading summary data".
-- `test_gold_resumen_ejecutivo_con_datos`
-- `test_pipeline_completo_es_idempotente`
+- `test_gold_resumen_ejecutivo_con_datos` — El resumen ejecutivo de Gold cuenta rutas y mediciones y da el tiempo de viaje promedio del sistema.
+- `test_pipeline_completo_es_idempotente` — El pipeline completo (Bronze, Silver y Gold) es idempotente: ejecutarlo de nuevo no cambia los recuentos de cada capa.
 
 ## `tests/test_migrations.py`
 
@@ -518,87 +518,87 @@
 >
 > Sin Postgres real: `psycopg2` se sustituye por un módulo falso que guarda las filas que se habrían insertado.
 
-- `test_migra_el_csv_a_sqlite`
-- `test_dry_run_no_crea_la_base`
-- `test_descarta_filas_sin_campos_obligatorios`
-- `test_data_source_vacio_o_ausente_pasa_a_unknown`
-- `test_un_valor_numerico_ilegible_queda_nulo_sin_romper_la_migracion`
-- `test_csv_inexistente_vacio_o_sin_columnas_obligatorias_devuelve_cero`
-- `test_las_lineas_corruptas_del_csv_se_saltan`
+- `test_migra_el_csv_a_sqlite` — Migra las filas del CSV a SQLite conservando la fuente, el tiempo de viaje, el clima y los nulos.
+- `test_dry_run_no_crea_la_base` — Con `dry_run`, cuenta las filas pero no crea la base de datos.
+- `test_descarta_filas_sin_campos_obligatorios` — Se descartan las filas a las que les falta el timestamp o el origen.
+- `test_data_source_vacio_o_ausente_pasa_a_unknown` — Una fuente de datos vacía o ausente en el CSV se guarda como «unknown».
+- `test_un_valor_numerico_ilegible_queda_nulo_sin_romper_la_migracion` — Un valor numérico ilegible queda como nulo y la fila se migra igualmente.
+- `test_csv_inexistente_vacio_o_sin_columnas_obligatorias_devuelve_cero` — Un CSV inexistente, vacío o sin las columnas obligatorias devuelve 0 filas y no crea la base.
+- `test_las_lineas_corruptas_del_csv_se_saltan` — Las líneas corruptas del CSV se saltan y se migran las demás.
 - `test_migrar_dos_veces_no_duplica_filas` — El índice único de Bronze/route_measurements hace idempotente la migración.
-- `test_cli_dry_run_no_pide_confirmacion`
-- `test_cli_cancelada_no_migra`
-- `test_cli_confirmada_o_con_skip_migra_y_usa_las_rutas_del_proyecto`
-- `test_cli_devuelve_error_si_no_se_importa_nada_o_falla`
-- `test_backfill_inserta_las_filas_con_el_orden_de_columnas_de_traffic_trips`
+- `test_cli_dry_run_no_pide_confirmacion` — La línea de comandos con `--dry-run` no pide confirmación y migra en modo ensayo.
+- `test_cli_cancelada_no_migra` — Si el usuario cancela la confirmación, no se migra nada.
+- `test_cli_confirmada_o_con_skip_migra_y_usa_las_rutas_del_proyecto` — Con confirmación o `--skip-confirmation` se migra usando las rutas del CSV y de la base del proyecto.
+- `test_cli_devuelve_error_si_no_se_importa_nada_o_falla` — La línea de comandos devuelve código de error si no se importa ninguna fila o la migración falla.
+- `test_backfill_inserta_las_filas_con_el_orden_de_columnas_de_traffic_trips` — El backfill a Timescale inserta cada fila de `traffic_trips` con el orden de columnas correcto y hace commit.
 - `test_backfill_celdas_vacias_van_como_null_y_no_como_nan` — Regresión: una celda vacía llegaba como NaN (float) incluso a columnas de texto (origin_weather), que Postgres rechaza; con ello fallaba y se revertía todo el backfill. Ahora es None (NULL), y data_source vacío pasa a 'unknown' como en la migración a SQLite.
-- `test_backfill_con_error_hace_rollback_y_devuelve_cero`
-- `test_backfill_csv_inexistente_o_vacio_no_se_conecta`
-- `test_backfill_sin_psycopg2_instalado_devuelve_cero`
-- `test_backfill_main_devuelve_el_codigo_segun_las_filas`
+- `test_backfill_con_error_hace_rollback_y_devuelve_cero` — Si el backfill falla, hace rollback, cierra la conexión y devuelve 0.
+- `test_backfill_csv_inexistente_o_vacio_no_se_conecta` — Con un CSV inexistente o vacío, el backfill no abre ninguna conexión.
+- `test_backfill_sin_psycopg2_instalado_devuelve_cero` — Si `psycopg2` no está instalado, el backfill devuelve 0 en vez de fallar.
+- `test_backfill_main_devuelve_el_codigo_segun_las_filas` — `main` del backfill devuelve 0 si migró filas y 1 si no migró ninguna.
 
 ## `tests/test_ml_context.py`
 
 > Tests de la fase 1b: contexto de OpenStreetMap (src/ml/osm_context.py) y su efecto en las lentes, las variables y los
 > modelos, y la herramienta de descarga tools/download_osm_context.py (sin red: cliente falso).
 
-- `test_edificios_se_convierten_con_su_tipo_y_yes_por_defecto`
-- `test_los_elementos_sin_coordenadas_se_descartan`
-- `test_transporte_conserva_paradas_y_descarta_las_posiciones_duplicadas`
-- `test_alojamiento_e_industria`
-- `test_un_tema_desconocido_o_sin_uso_da_un_dataframe_vacio_con_las_columnas`
-- `test_load_context_lee_los_json_ignora_los_corruptos_y_un_directorio_vacio_da_vacio`
-- `test_no_residenciales_excluye_lo_que_no_es_vivienda`
+- `test_edificios_se_convierten_con_su_tipo_y_yes_por_defecto` — Los edificios de OSM se convierten en POIs de categoría «edificio» con su tipo como subcategoría, y «yes» si no tienen tipo.
+- `test_los_elementos_sin_coordenadas_se_descartan` — Los elementos de OSM sin coordenadas se descartan.
+- `test_transporte_conserva_paradas_y_descarta_las_posiciones_duplicadas` — En transporte se conservan paradas, estaciones, andenes y terminales de ferry, y se descartan las posiciones de parada duplicadas.
+- `test_alojamiento_e_industria` — Alojamiento e industria se convierten en POIs con el tipo de OSM como subcategoría.
+- `test_un_tema_desconocido_o_sin_uso_da_un_dataframe_vacio_con_las_columnas` — Un tema desconocido o que no se usa devuelve una tabla vacía pero con sus columnas.
+- `test_load_context_lee_los_json_ignora_los_corruptos_y_un_directorio_vacio_da_vacio` — `load_context` lee los JSON de la carpeta, ignora los corruptos y devuelve una tabla vacía si el directorio no tiene datos.
+- `test_no_residenciales_excluye_lo_que_no_es_vivienda` — La lista de edificios no residenciales incluye los industriales, iglesias, escuelas y garajes, y no las viviendas.
 - `test_las_celdas_activas_no_cambian_al_cargar_el_contexto` — Un edificio lejos de cualquier POI no activa una celda: así el conjunto de celdas es el mismo con y sin contexto.
-- `test_residentes_cuenta_edificios_pero_no_los_industriales`
-- `test_los_hoteles_cuentan_como_turistas_aunque_no_haya_atracciones`
-- `test_sin_contexto_residentes_y_turistas_siguen_sin_datos`
+- `test_residentes_cuenta_edificios_pero_no_los_industriales` — La lente de residentes cuenta los edificios de vivienda de la celda pero no los industriales.
+- `test_los_hoteles_cuentan_como_turistas_aunque_no_haya_atracciones` — Los hoteles cuentan como turistas en su celda aunque no haya atracciones.
+- `test_sin_contexto_residentes_y_turistas_siguen_sin_datos` — Sin contexto de OSM, las lentes de residentes y turistas quedan sin dato (NaN).
 - `test_el_indice_de_mercado_va_de_0_a_1_y_los_edificios_no_aplastan_a_los_demas_segmentos` — Regresión: mercado_total sumaba conteos en bruto, y con ~90 edificios por celda frente a ~1 colegio el índice era solo 'cuántos edificios hay'. Ahora cada segmento se escala por su máximo antes de promediar.
 - `test_el_indice_de_mercado_es_una_media_y_no_una_suma` — Una celda que es el máximo en TODOS los segmentos con datos vale exactamente 1 (con una suma valdría 2).
-- `test_las_variables_incluyen_el_contexto_solo_si_se_piden`
-- `test_boosting_poi_no_usa_las_variables_de_contexto_y_solo_edificios_solo_esas`
-- `test_los_modelos_opcionales_predicen_valores_positivos`
-- `test_el_boosting_con_contexto_gana_al_que_no_lo_tiene_cuando_la_senal_esta_en_el_contexto`
-- `test_compare_models_con_el_mismo_modelo_es_indistinguible`
-- `test_validate_location_model_con_contexto_informa_si_el_contexto_aporta`
-- `test_validate_location_model_sin_contexto_no_evalua_los_modelos_opcionales`
-- `test_validate_location_model_con_un_directorio_de_contexto_vacio_valida_sin_contexto`
-- `test_measure_lens_variance_con_contexto_da_datos_a_residentes`
-- `test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes`
-- `test_la_consulta_lleva_el_bbox_el_timeout_del_servidor_y_pide_centro_y_etiquetas`
-- `test_el_plan_pide_siete_trozos_y_el_edificado_va_en_franjas`
-- `test_descargar_guarda_un_archivo_por_trozo_y_resume`
+- `test_las_variables_incluyen_el_contexto_solo_si_se_piden` — Las variables del modelo incluyen las de contexto solo si se piden, y el índice de celdas es el mismo.
+- `test_boosting_poi_no_usa_las_variables_de_contexto_y_solo_edificios_solo_esas` — El modelo `boosting_poi` no usa las variables de contexto y `solo_edificios` usa únicamente las de edificios.
+- `test_los_modelos_opcionales_predicen_valores_positivos` — Los modelos opcionales (parametrizado) predicen valores positivos, por encima del mínimo esperado.
+- `test_el_boosting_con_contexto_gana_al_que_no_lo_tiene_cuando_la_senal_esta_en_el_contexto` — Cuando la señal está en el contexto, el boosting con contexto gana al que no lo usa y la comparación lo marca como mejora.
+- `test_compare_models_con_el_mismo_modelo_es_indistinguible` — Comparar un modelo consigo mismo da diferencia cero y veredicto «indistinguible».
+- `test_validate_location_model_con_contexto_informa_si_el_contexto_aporta` — El script de validación con contexto informa de si el contexto aporta y no modifica la base de datos.
+- `test_validate_location_model_sin_contexto_no_evalua_los_modelos_opcionales` — Sin contexto, el script de validación no evalúa los modelos opcionales.
+- `test_validate_location_model_con_un_directorio_de_contexto_vacio_valida_sin_contexto` — Con un directorio de contexto vacío, el script valida sin contexto y lo avisa.
+- `test_measure_lens_variance_con_contexto_da_datos_a_residentes` — El script de varianza de lentes, con contexto, da datos a la lente de residentes.
+- `test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes` — Las franjas de descarga cubren toda el área sin huecos ni solapes, y pedir 0 franjas lanza `ValueError`.
+- `test_la_consulta_lleva_el_bbox_el_timeout_del_servidor_y_pide_centro_y_etiquetas` — La consulta lleva el rectángulo, el timeout del servidor y pide el centro y las etiquetas.
+- `test_el_plan_pide_siete_trozos_y_el_edificado_va_en_franjas` — El plan de descarga pide siete trozos y el edificado va dividido en tres franjas.
+- `test_descargar_guarda_un_archivo_por_trozo_y_resume` — La descarga guarda un archivo por trozo y devuelve el resumen de elementos y trozos por tema.
 - `test_se_espera_entre_peticiones_pero_no_despues_de_la_ultima` — Cortesía con el servicio público: pausa entre peticiones, y ninguna espera inútil al terminar.
-- `test_si_un_espejo_falla_se_prueba_el_siguiente`
-- `test_si_todos_los_espejos_fallan_lanza_runtimeerror`
-- `test_un_trozo_fallido_se_anota_y_el_resto_se_descarga`
-- `test_dry_run_no_hace_llamadas_de_red_ni_crea_la_carpeta`
-- `test_main_descarga_con_un_cliente_falso_y_devuelve_el_codigo_segun_los_fallos`
-- `test_la_descarga_no_escribe_fuera_del_directorio_indicado`
+- `test_si_un_espejo_falla_se_prueba_el_siguiente` — Si un espejo de Overpass falla, se prueba el siguiente.
+- `test_si_todos_los_espejos_fallan_lanza_runtimeerror` — Si todos los espejos fallan, se lanza `RuntimeError`.
+- `test_un_trozo_fallido_se_anota_y_el_resto_se_descarga` — Un trozo fallido se anota en el resumen y el resto se descarga.
+- `test_dry_run_no_hace_llamadas_de_red_ni_crea_la_carpeta` — Con `--dry-run` no se crea el cliente, no hay llamadas de red y no se crea la carpeta de salida.
+- `test_main_descarga_con_un_cliente_falso_y_devuelve_el_codigo_segun_los_fallos` — `main` devuelve 0 si la descarga va bien y 1 si algún trozo falla.
+- `test_la_descarga_no_escribe_fuera_del_directorio_indicado` — La descarga solo escribe dentro de la carpeta indicada.
 
 ## `tests/test_ml_grid.py`
 
 > Tests de la rejilla de ~250 m (src/ml/grid.py) y de los conteos por celda (src/ml/cell_counts.py).
 
-- `test_la_rejilla_es_fija_y_cubre_el_area`
-- `test_las_celdas_miden_unos_250_m_en_las_dos_direcciones`
-- `test_un_punto_cae_en_la_celda_cuyo_centro_esta_cerca`
-- `test_puntos_fuera_de_la_rejilla_o_sin_coordenadas_dan_menos_uno`
-- `test_los_bordes_de_la_rejilla`
-- `test_identificadores_de_celda`
-- `test_cells_frame_tiene_todas_las_celdas_y_cada_centro_cae_en_su_celda`
-- `test_count_grid_cuenta_por_celda_e_ignora_lo_de_fuera`
-- `test_los_anillos_tienen_las_celdas_esperadas` ×4
-- `test_la_suma_por_anillos_pondera_la_vecindad`
-- `test_los_bordes_no_dan_la_vuelta`
-- `test_activas_son_las_celdas_con_algun_poi_en_ella_o_en_su_vecindad`
-- `test_selector_toda_la_categoria_un_subconjunto_o_todo_menos_algo`
-- `test_los_conteos_se_separan_por_categoria_y_subcategoria`
-- `test_subcategoria_vacia_o_nula_se_cuenta_como_cadena_vacia`
-- `test_los_pois_fuera_de_la_rejilla_se_cuentan_aparte`
-- `test_sin_pois_los_conteos_estan_vacios_pero_las_consultas_funcionan`
-- `test_exclude_quita_del_conteo_lo_que_cumple_el_objetivo`
-- `test_la_tabla_celda_por_subcategoria`
+- `test_la_rejilla_es_fija_y_cubre_el_area` — La rejilla tiene forma fija (45 por 51 celdas) y cubre los POIs conocidos y los centros de las 7 zonas.
+- `test_las_celdas_miden_unos_250_m_en_las_dos_direcciones` — Las celdas miden unos 250 m en latitud y en longitud.
+- `test_un_punto_cae_en_la_celda_cuyo_centro_esta_cerca` — Un punto cae en la celda correcta y su centro queda a menos de 0,71 veces el lado de la celda.
+- `test_puntos_fuera_de_la_rejilla_o_sin_coordenadas_dan_menos_uno` — Un punto fuera de la rejilla o sin coordenadas recibe el índice -1.
+- `test_los_bordes_de_la_rejilla` — Los bordes de la rejilla: la esquina suroeste está dentro y justo fuera da -1.
+- `test_identificadores_de_celda` — Los identificadores de celda se escriben `rNNcNN`, se leen de vuelta y un formato incorrecto lanza `ValueError`.
+- `test_cells_frame_tiene_todas_las_celdas_y_cada_centro_cae_en_su_celda` — La tabla de celdas tiene todas las celdas, con identificador único, y el centro de cada una cae en su propia celda.
+- `test_count_grid_cuenta_por_celda_e_ignora_lo_de_fuera` — `count_grid` cuenta los puntos por celda e ignora los que están fuera de la rejilla.
+- `test_los_anillos_tienen_las_celdas_esperadas` ×4 — Cada anillo de vecindad (parametrizado) cubre el número de celdas esperado.
+- `test_la_suma_por_anillos_pondera_la_vecindad` — La suma por vecindad pondera 1 la celda, 0,5 el primer anillo y 0,25 el segundo, y nada más allá.
+- `test_los_bordes_no_dan_la_vuelta` — La suma por vecindad no da la vuelta en los bordes de la rejilla.
+- `test_activas_son_las_celdas_con_algun_poi_en_ella_o_en_su_vecindad` — Las celdas activas son las que tienen algún POI en ellas o en su vecindad.
+- `test_selector_toda_la_categoria_un_subconjunto_o_todo_menos_algo` — Un selector puede abarcar toda una categoría, un subconjunto de subcategorías o todo salvo algunas.
+- `test_los_conteos_se_separan_por_categoria_y_subcategoria` — Los conteos por celda se separan por categoría y subcategoría y se pueden agregar con un selector.
+- `test_subcategoria_vacia_o_nula_se_cuenta_como_cadena_vacia` — Una subcategoría vacía o nula se cuenta como cadena vacía.
+- `test_los_pois_fuera_de_la_rejilla_se_cuentan_aparte` — Los POIs fuera de la rejilla o sin categoría no entran en la cuenta de celdas y los de fuera se cuentan aparte.
+- `test_sin_pois_los_conteos_estan_vacios_pero_las_consultas_funcionan` — Sin POIs los conteos quedan vacíos pero las consultas siguen funcionando.
+- `test_exclude_quita_del_conteo_lo_que_cumple_el_objetivo` — `exclude` quita del conteo lo que cumple el selector excluido.
+- `test_la_tabla_celda_por_subcategoria` — La tabla celda por subcategoría tiene solo las celdas activas, con conteos enteros y una columna por subcategoría.
 
 ## `tests/test_ml_inputs_bundle.py`
 
@@ -647,44 +647,44 @@
 > Tests de los perfiles de negocio, las tres lentes y las variables con control de fuga (src/ml/*)
 > y de la herramienta tools/measure_lens_variance.py.
 
-- `test_hay_un_perfil_por_cada_categoria_de_overpass`
-- `test_cada_perfil_es_coherente`
-- `test_los_selectores_de_segmentos_y_proveedores_usan_categorias_reales`
-- `test_residentes_usan_edificios_y_los_distribuidores_sanitarios_siguen_sin_proxy`
-- `test_perfil_inexistente_lanza_error`
-- `test_el_comercio_generico_no_cuenta_las_oficinas_como_competencia`
-- `test_ajustar_no_modifica_el_perfil_por_defecto`
-- `test_una_lente_no_puede_quedar_vacia_y_se_conserva_el_valor_por_defecto`
-- `test_una_lente_que_ya_estaba_vacia_por_defecto_puede_seguir_vacia`
-- `test_los_nombres_desconocidos_se_descartan_con_aviso`
-- `test_quitar_mas_de_la_mitad_de_la_competencia_avisa_de_optimismo`
-- `test_anadir_competencia_no_cuenta_como_desviacion`
-- `test_el_perfil_por_defecto_tiene_desviacion_cero_y_cambiarlo_todo_da_uno`
-- `test_el_umbral_de_aviso_es_la_mitad`
-- `test_la_competencia_se_pondera_por_vecindad`
-- `test_solo_salen_las_celdas_activas_y_el_indice_es_cell_id`
-- `test_segmento_sin_pois_es_nan_y_no_cero`
-- `test_cero_y_sin_datos_son_cosas_distintas`
-- `test_proveedores_total_y_diversidad`
-- `test_el_apoyo_cuenta_pois_sin_ponderar_en_la_celda_y_sus_8_vecinas`
+- `test_hay_un_perfil_por_cada_categoria_de_overpass` — Hay un perfil de negocio por cada categoría de Overpass.
+- `test_cada_perfil_es_coherente` — Cada perfil (parametrizado) es coherente: tiene nombre y competencia directa, sus segmentos y proveedores existen y sus selectores usan categorías reales.
+- `test_los_selectores_de_segmentos_y_proveedores_usan_categorias_reales` — Los selectores de segmentos y proveedores usan categorías que existen en Overpass o en el contexto de OSM.
+- `test_residentes_usan_edificios_y_los_distribuidores_sanitarios_siguen_sin_proxy` — El segmento de residentes usa los edificios como proxy y los distribuidores sanitarios siguen sin proxy.
+- `test_perfil_inexistente_lanza_error` — Pedir el perfil de una categoría que no existe lanza `ValueError`.
+- `test_el_comercio_generico_no_cuenta_las_oficinas_como_competencia` — En el comercio genérico, las oficinas no cuentan como competencia pero sí las tiendas.
+- `test_ajustar_no_modifica_el_perfil_por_defecto` — Ajustar un perfil devuelve uno nuevo marcado como personalizado y no modifica el perfil por defecto.
+- `test_una_lente_no_puede_quedar_vacia_y_se_conserva_el_valor_por_defecto` — Una lente no puede quedar vacía: se conserva el valor por defecto y se avisa de cada una.
+- `test_una_lente_que_ya_estaba_vacia_por_defecto_puede_seguir_vacia` — Una lente que ya estaba vacía por defecto puede seguir vacía sin avisos.
+- `test_los_nombres_desconocidos_se_descartan_con_aviso` — Los nombres de segmento o proveedor desconocidos se descartan con un aviso.
+- `test_quitar_mas_de_la_mitad_de_la_competencia_avisa_de_optimismo` — Quitar más de la mitad de la competencia del perfil por defecto avisa de que el resultado será optimista; quitar menos no.
+- `test_anadir_competencia_no_cuenta_como_desviacion` — Añadir competencia al perfil no cuenta como desviación del perfil por defecto.
+- `test_el_perfil_por_defecto_tiene_desviacion_cero_y_cambiarlo_todo_da_uno` — El perfil por defecto tiene desviación 0 y cambiar toda su competencia da 1.
+- `test_el_umbral_de_aviso_es_la_mitad` — El umbral de desviación a partir del cual se avisa es 0,5.
+- `test_la_competencia_se_pondera_por_vecindad` — La competencia directa se pondera por vecindad: 1 en la celda, 0,5 en la vecina y 0,25 en el segundo anillo.
+- `test_solo_salen_las_celdas_activas_y_el_indice_es_cell_id` — Solo salen las celdas activas, con `cell_id` como índice; con una máscara completa salen las 2295.
+- `test_segmento_sin_pois_es_nan_y_no_cero` — Un segmento sin proxy o sin POIs en los datos queda en NaN, no en 0, y uno con datos se calcula por vecindad.
+- `test_cero_y_sin_datos_son_cosas_distintas` — Cero (hay datos y no hay nada cerca) y NaN (no se sabe) son cosas distintas en las lentes.
+- `test_proveedores_total_y_diversidad` — Los proveedores se suman por tipo, con el total y la diversidad (cuántos de los tipos del perfil están presentes).
+- `test_el_apoyo_cuenta_pois_sin_ponderar_en_la_celda_y_sus_8_vecinas` — El apoyo de competencia cuenta POIs sin ponderar en la celda y sus 8 vecinas.
 - `test_un_poi_cuenta_en_una_sola_lente_la_competencia_manda` — Precedencia: un bar es competencia de un restaurante y NO también 'vida nocturna'; una panadería, aquí proveedor, tampoco es competencia.
-- `test_los_museos_no_son_a_la_vez_competencia_y_turistas_en_ocio`
-- `test_lentes_con_datos_cuenta_cuantas_lentes_se_pueden_calcular`
-- `test_ajustar_el_perfil_cambia_la_lente_sin_tocar_los_datos`
-- `test_con_cero_pois_las_lentes_no_fallan`
-- `test_cobertura_de_las_lentes`
+- `test_los_museos_no_son_a_la_vez_competencia_y_turistas_en_ocio` — En ocio, un museo cuenta como competencia pero no como segmento de turistas.
+- `test_lentes_con_datos_cuenta_cuantas_lentes_se_pueden_calcular` — `lentes_con_datos` cuenta cuántas lentes se pueden calcular en cada celda.
+- `test_ajustar_el_perfil_cambia_la_lente_sin_tocar_los_datos` — Ajustar el perfil cambia el valor de la lente sin tocar los datos.
+- `test_con_cero_pois_las_lentes_no_fallan` — Con cero POIs, las lentes devuelven una tabla vacía sin fallar.
+- `test_cobertura_de_las_lentes` — La cobertura cuenta cuántos POIs alimentan cada lente y cada tipo del perfil.
 - `test_las_variables_no_incluyen_el_objetivo_ni_en_la_celda_ni_en_la_vecindad` — Control de fuga: mover o añadir restaurantes NO cambia ninguna variable (si cambiara, el modelo de oferta esperada copiaría su propia etiqueta).
-- `test_las_otras_categorias_si_entran_en_la_celda_y_en_los_anillos`
-- `test_nombres_y_numero_de_variables`
-- `test_el_objetivo_cuenta_solo_la_propia_celda`
-- `test_distancia_al_centro_de_zona_mas_cercano`
-- `test_poblacion_y_accesibilidad_suavizadas_con_las_zonas`
-- `test_una_zona_sin_dato_se_omite_y_los_pesos_se_renormalizan`
-- `test_la_herramienta_lee_en_solo_lectura`
-- `test_describe_lens_excluye_nan_y_los_cuenta_aparte`
-- `test_la_serie_constante_no_da_cv_infinito`
-- `test_cuadrante_de_oportunidad`
-- `test_la_herramienta_imprime_un_informe_por_perfil`
+- `test_las_otras_categorias_si_entran_en_la_celda_y_en_los_anillos` — Las demás categorías cuentan en la celda y en los anillos de vecindad como variables del modelo.
+- `test_nombres_y_numero_de_variables` — Las variables del modelo tienen los nombres esperados, 24 en total, y las de población y tiempo de viaje quedan en NaN sin datos de zona.
+- `test_el_objetivo_cuenta_solo_la_propia_celda` — El objetivo cuenta solo los POIs de la propia celda.
+- `test_distancia_al_centro_de_zona_mas_cercano` — La distancia al centro de la zona más cercana es corta para una celda que contiene un centro de zona.
+- `test_poblacion_y_accesibilidad_suavizadas_con_las_zonas` — La población y el tiempo de viaje suavizados quedan dentro del rango de las zonas y más cerca de la zona cercana.
+- `test_una_zona_sin_dato_se_omite_y_los_pesos_se_renormalizan` — Una zona sin dato se omite al suavizar y los pesos de las demás se renormalizan.
+- `test_la_herramienta_lee_en_solo_lectura` — La herramienta lee los POIs de la base en solo lectura: no la modifica ni crea archivos.
+- `test_describe_lens_excluye_nan_y_los_cuenta_aparte` — `describe_lens` excluye los NaN, los cuenta aparte y calcula media, desviación, coeficiente de variación y porcentaje de ceros.
+- `test_la_serie_constante_no_da_cv_infinito` — Una serie constante en cero da un coeficiente de variación NaN, no infinito.
+- `test_cuadrante_de_oportunidad` — La proporción de celdas de oportunidad (mercado alto y competencia baja) es 0,25 si son independientes y 0 si están correlacionadas.
+- `test_la_herramienta_imprime_un_informe_por_perfil` — La herramienta imprime un informe por cada perfil con las celdas activas y la correlación de Spearman entre lentes.
 
 ## `tests/test_ml_panorama.py`
 
@@ -804,37 +804,37 @@
 > Tests de la fase 1 del ML de recomendación: lectura de datos en solo lectura (src/ml/data_access.py), modelos de
 > oferta esperada (src/ml/models.py), validación espacial (src/ml/validation.py) y tools/validate_location_model.py.
 
-- `test_la_lectura_es_de_solo_lectura`
-- `test_foursquare_es_opcional`
-- `test_tabla_de_zonas_con_poblacion_y_tiempo_de_viaje`
-- `test_la_densidad_suma_las_categorias_en_log`
-- `test_cada_modelo_usa_solo_sus_variables`
-- `test_las_predicciones_son_positivas_y_tienen_una_por_fila`
+- `test_la_lectura_es_de_solo_lectura` — Leer POIs, POIs de Foursquare y la tabla de zonas no modifica la base de datos ni crea archivos.
+- `test_foursquare_es_opcional` — Sin tabla de Foursquare, la carga devuelve una tabla vacía con sus columnas.
+- `test_tabla_de_zonas_con_poblacion_y_tiempo_de_viaje` — La tabla de zonas trae la población y el tiempo de viaje medio de las rutas que tocan cada zona; las zonas sin dato quedan en NaN.
+- `test_la_densidad_suma_las_categorias_en_log` — La densidad suma todas las categorías de la celda y de los anillos y aplica el logaritmo.
+- `test_cada_modelo_usa_solo_sus_variables` — Cada modelo de referencia usa solo sus variables: cambiar la población no altera `solo_distancia` ni `solo_densidad`, pero sí `solo_poblacion`.
+- `test_las_predicciones_son_positivas_y_tienen_una_por_fila` — Cada modelo (parametrizado) da una predicción finita y positiva por cada fila de prueba.
 - `test_una_linea_base_sin_su_unica_variable_degrada_a_la_media` — Regresión: sin demografía cargada la población llega toda NaN, se descarta y solo_poblacion fallaba con KeyError.
-- `test_la_media_es_el_promedio_de_entrenamiento`
-- `test_fit_predict_es_determinista_con_la_misma_semilla`
-- `test_modelo_desconocido_lanza_error`
-- `test_el_boosting_aprende_la_senal_y_gana_a_la_media`
+- `test_la_media_es_el_promedio_de_entrenamiento` — El modelo `media` predice el promedio del objetivo de entrenamiento.
+- `test_fit_predict_es_determinista_con_la_misma_semilla` — `fit_predict` da las mismas predicciones con la misma semilla.
+- `test_modelo_desconocido_lanza_error` — Un nombre de modelo desconocido lanza `ValueError`.
+- `test_el_boosting_aprende_la_senal_y_gana_a_la_media` — Sobre datos sintéticos con señal, el boosting aprende y baja la desviación de Poisson al menos un 10 % respecto a la media.
 - `test_una_variable_toda_nan_no_rompe_el_ajuste` ×3 — Regresión: sin datos de rutas la accesibilidad llega toda NaN y el boosting fallaba al discretizarla (ValueError: window shape cannot be larger than input array shape).
-- `test_el_conjunto_da_media_y_dispersion`
-- `test_las_celdas_de_un_bloque_comparten_etiqueta_y_el_desplazamiento_la_cambia`
-- `test_los_pliegues_no_parten_un_bloque_y_estan_equilibrados`
-- `test_la_desviacion_de_poisson_coincide_con_scikit_learn_y_los_casos_limite`
-- `test_precision_en_las_k_primeras_y_spearman`
-- `test_evaluate_devuelve_predicciones_fuera_de_muestra_para_todas_las_celdas`
+- `test_el_conjunto_da_media_y_dispersion` — El conjunto de modelos da media, desviación y percentiles 10 y 90; con un solo modelo la desviación es 0.
+- `test_las_celdas_de_un_bloque_comparten_etiqueta_y_el_desplazamiento_la_cambia` — Las celdas de un mismo bloque comparten etiqueta y desplazar los bloques cambia la etiqueta.
+- `test_los_pliegues_no_parten_un_bloque_y_estan_equilibrados` — Los pliegues no parten ningún bloque, están equilibrados y son reproducibles con la misma semilla.
+- `test_la_desviacion_de_poisson_coincide_con_scikit_learn_y_los_casos_limite` — La desviación de Poisson coincide con la de scikit-learn y maneja los casos límite (cero observado, predicción cero).
+- `test_precision_en_las_k_primeras_y_spearman` — La precisión en las k primeras y la correlación de Spearman dan los valores esperados, incluidos k mayor que n y una serie constante.
+- `test_evaluate_devuelve_predicciones_fuera_de_muestra_para_todas_las_celdas` — `evaluate` devuelve predicciones fuera de muestra para todas las celdas y repeticiones, y el resumen ordena los modelos por desviación.
 - `test_la_prediccion_de_una_celda_no_usa_su_propio_valor` — Fuera de muestra de verdad: cambiar el valor real de una celda no cambia su propia predicción.
-- `test_el_bootstrap_de_bloques_con_predicciones_identicas_da_cero`
-- `test_el_bootstrap_detecta_una_mejora_uniforme_y_es_prudente_si_solo_hay_un_bloque_mejor`
-- `test_decide_publica_solo_si_el_intervalo_queda_por_debajo_de_cero`
-- `test_decide_sin_mejora_clara_no_hay_ganador_y_marca_al_que_empeora`
+- `test_el_bootstrap_de_bloques_con_predicciones_identicas_da_cero` — El bootstrap de bloques con predicciones idénticas da diferencia e intervalo en cero.
+- `test_el_bootstrap_detecta_una_mejora_uniforme_y_es_prudente_si_solo_hay_un_bloque_mejor` — El bootstrap detecta una mejora uniforme y es prudente (el intervalo incluye 0) si la mejora está solo en un bloque; es reproducible con la misma semilla.
+- `test_decide_publica_solo_si_el_intervalo_queda_por_debajo_de_cero` — `decide` declara ganador solo si el intervalo de la diferencia queda por debajo de cero frente al mejor modelo de referencia.
+- `test_decide_sin_mejora_clara_no_hay_ganador_y_marca_al_que_empeora` — Sin mejora clara no hay ganador, y se marca como «peor» al modelo que empeora.
 - `test_decide_no_depende_de_cuantas_repeticiones_se_promedien` — Regresión: antes se promediaban las predicciones entre repeticiones y DESPUÉS se calculaba la desviación. Un candidato muy inestable (cada repetición falla mucho, pero en promedio acierta) salía como 'mejora' solo por ser un conjunto de modelos, y el veredicto cambiaba con el número de repeticiones.
-- `test_la_brecha_relativa_no_premia_solo_a_las_celdas_grandes`
-- `test_auc_y_artefacto_de_cartografia`
-- `test_conteos_de_foursquare_por_celda`
-- `test_zona_mas_cercana`
-- `test_la_herramienta_valida_un_objetivo_de_punta_a_punta`
-- `test_run_target_devuelve_todo_lo_necesario`
-- `test_la_herramienta_sin_foursquare_no_hace_el_contraste`
+- `test_la_brecha_relativa_no_premia_solo_a_las_celdas_grandes` — La brecha relativa no premia solo a las celdas grandes, a diferencia de la brecha absoluta, y es 0 si lo esperado es igual a lo observado.
+- `test_auc_y_artefacto_de_cartografia` — El AUC de presencia da 1 con una puntuación perfecta y NaN si todo es positivo; la proporción de brecha explicada por la cartografía se calcula frente a su referencia.
+- `test_conteos_de_foursquare_por_celda` — Los conteos de Foursquare por celda cuentan solo las categorías pedidas e ignoran los puntos fuera de la rejilla.
+- `test_zona_mas_cercana` — La zona más cercana a la celda de Valletta es Valletta.
+- `test_la_herramienta_valida_un_objetivo_de_punta_a_punta` — La herramienta valida un objetivo de punta a punta: imprime la decisión y el contraste con Foursquare, y no modifica la base de datos.
+- `test_run_target_devuelve_todo_lo_necesario` — `run_target` devuelve esperado, observado, brecha, variables, resumen y decisión, con la brecha igual a esperado menos observado.
+- `test_la_herramienta_sin_foursquare_no_hace_el_contraste` — Sin datos de Foursquare, la herramienta avisa y no hace el contraste.
 
 ## `tests/test_normalize_bronze_timestamps.py`
 
@@ -842,20 +842,20 @@
 >
 > Todo ocurre sobre bases temporales: ninguna prueba toca data/mobility.db.
 
-- `test_is_legacy_y_normalize`
-- `test_plan_clasifica_cada_fila`
-- `test_misma_hora_en_otra_ruta_no_es_gemela`
-- `test_base_sin_filas_antiguas_no_necesita_cambios`
-- `test_el_ensayo_no_modifica_nada_ni_crea_archivos`
-- `test_main_con_base_inexistente_o_sin_tabla`
-- `test_aplicar_borra_duplicados_renombra_el_resto_y_deja_un_respaldo`
-- `test_aplicar_es_idempotente`
+- `test_is_legacy_y_normalize` — `is_legacy` reconoce el formato antiguo de timestamp, `normalize` lo pasa a ISO y normalizar dos veces da lo mismo.
+- `test_plan_clasifica_cada_fila` — El plan clasifica cada fila: gemelas de otra fila ISO, duplicadas entre antiguas, a renombrar y las que no se tocan.
+- `test_misma_hora_en_otra_ruta_no_es_gemela` — Una fila con la misma hora pero en otra ruta no es gemela y solo se renombra.
+- `test_base_sin_filas_antiguas_no_necesita_cambios` — Una base sin filas en formato antiguo no necesita cambios.
+- `test_el_ensayo_no_modifica_nada_ni_crea_archivos` — El ensayo (sin `--apply`) no modifica la base ni crea archivos, y lo dice en su salida.
+- `test_main_con_base_inexistente_o_sin_tabla` — Con una base inexistente devuelve código 2; con una base sin tabla indica que no hay nada que normalizar.
+- `test_aplicar_borra_duplicados_renombra_el_resto_y_deja_un_respaldo` — `--apply` borra las gemelas y duplicadas, renombra el resto al formato ISO y deja un respaldo de la base.
+- `test_aplicar_es_idempotente` — Aplicar dos veces da el mismo resultado, la segunda dice que no hay nada que hacer y no crea otro respaldo.
 - `test_antes_de_correr_el_pipeline_solo_renombra` — Caso de la base real hoy: filas antiguas sin gemela ISO todavía.
 - `test_despues_de_normalizar_reingerir_la_misma_medicion_no_duplica` — El objetivo del script: que correr el pipeline no reinserte las filas antiguas.
-- `test_el_indice_unico_sigue_vigente`
-- `test_no_toca_otras_tablas`
+- `test_el_indice_unico_sigue_vigente` — Tras normalizar, el índice único de Bronze sigue vigente y rechaza una fila igual a una ya normalizada.
+- `test_no_toca_otras_tablas` — La normalización no modifica otras tablas, como `route_measurements`.
 - `test_si_la_base_esta_en_uso_aborta_sin_cambiar_nada` — Otro proceso (el collector) con una escritura abierta: no se aplica nada.
-- `test_si_la_verificacion_falla_se_revierte_todo`
+- `test_si_la_verificacion_falla_se_revierte_todo` — Si la verificación final falla, se revierte todo y la base queda como estaba.
 - `test_el_respaldo_se_puede_omitir_solo_por_codigo` — La línea de comandos siempre respalda; `backup=False` existe solo para pruebas.
 
 ## `tests/test_operations_status.py`
@@ -867,17 +867,17 @@
 > NULL), así que cualquier ruta cuya última medición fuera de ORS aparecía como
 > "🟢 Free Flow" sin ningún dato detrás.
 
-- `test_ultima_medicion_de_cada_ruta_en_una_consulta`
-- `test_no_trae_la_polilinea`
-- `test_require_column_trae_la_ultima_fila_que_tiene_ese_dato`
-- `test_require_column_omite_las_rutas_que_nunca_tuvieron_ese_dato`
-- `test_require_column_rechaza_columnas_inexistentes`
-- `test_base_vacia`
-- `test_ruta_cuya_ultima_medicion_es_de_ors_usa_la_lectura_de_tomtom`
+- `test_ultima_medicion_de_cada_ruta_en_una_consulta` — `get_latest_per_route` devuelve la medición más reciente de cada ruta en una sola consulta.
+- `test_no_trae_la_polilinea` — `get_latest_per_route` no trae la polilínea ni columnas auxiliares.
+- `test_require_column_trae_la_ultima_fila_que_tiene_ese_dato` — Con `require_column`, trae la última fila que sí tiene ese dato, aunque haya otra más reciente sin él.
+- `test_require_column_omite_las_rutas_que_nunca_tuvieron_ese_dato` — Con `require_column`, se omiten las rutas que nunca tuvieron ese dato.
+- `test_require_column_rechaza_columnas_inexistentes` — `require_column` rechaza con `ValueError` una columna que no existe o con inyección SQL.
+- `test_base_vacia` — Con una base vacía, `get_latest_per_route` devuelve una tabla vacía.
+- `test_ruta_cuya_ultima_medicion_es_de_ors_usa_la_lectura_de_tomtom` — Si la última medición de una ruta es de ORS, el estado y el retraso salen de la última lectura de TomTom, no de un 0 inventado.
 - `test_ruta_sin_ninguna_lectura_de_trafico_nunca_se_pinta_de_verde` — El bug: la última fila es de ORS (delay NULL) -> antes '🟢 Free Flow'.
-- `test_lectura_de_trafico_desactualizada_se_avisa`
-- `test_umbrales_de_estado` ×6
-- `test_una_fila_por_ruta_con_las_columnas_esperadas`
+- `test_lectura_de_trafico_desactualizada_se_avisa` — Si la última lectura de tráfico es demasiado antigua, el estado indica «Lectura desactualizada».
+- `test_umbrales_de_estado` ×6 — El estado de la ruta (libre, moderado o denso) sigue los umbrales de retraso (parametrizado).
+- `test_una_fila_por_ruta_con_las_columnas_esperadas` — La tabla de estado tiene una fila por ruta y las columnas esperadas.
 
 ## `tests/test_ors_null_fields.py`
 
@@ -905,29 +905,29 @@
 > temporal. Los archivos que los módulos escriben en `logs/` (heartbeat, contador de
 > llamadas) se redirigen a `tmp_path`.
 
-- `test_overpass_run_once_guarda_los_pois_y_escribe_el_heartbeat`
-- `test_overpass_run_once_pasa_el_margen_al_cliente`
-- `test_overpass_un_segundo_ciclo_actualiza_en_vez_de_duplicar`
-- `test_overpass_si_la_descarga_falla_devuelve_0_y_no_toca_nada`
-- `test_overpass_heartbeat_contiene_una_fecha_iso_utc`
-- `test_overpass_heartbeat_no_rompe_si_no_puede_escribir`
-- `test_overpass_main_sin_intervalo_hace_un_ciclo_y_cierra_el_cliente`
-- `test_overpass_main_con_intervalo_repite_y_ctrl_c_sale_con_0`
-- `test_overpass_main_un_error_fatal_sale_con_1_y_cierra_el_cliente`
-- `test_contador_nuevo_empieza_en_las_llamadas_dadas_y_guarda_el_mes`
-- `test_contador_acumula_dentro_del_mismo_mes`
-- `test_contador_se_reinicia_al_cambiar_de_mes`
-- `test_contador_corrupto_se_reinicia_sin_fallar`
-- `test_contador_no_rompe_si_no_puede_guardar`
-- `test_foursquare_run_once_guarda_los_pois_cuenta_las_llamadas_y_escribe_el_heartbeat`
-- `test_foursquare_run_once_pide_zonas_y_rutas_al_cliente`
-- `test_foursquare_avisa_al_superar_el_limite_mensual`
-- `test_foursquare_no_avisa_si_queda_margen`
-- `test_foursquare_heartbeat_no_rompe_si_no_puede_escribir`
-- `test_foursquare_main_sin_clave_sale_con_1_sin_crear_el_cliente`
-- `test_foursquare_main_con_clave_hace_un_ciclo_y_cierra_el_cliente`
-- `test_foursquare_main_con_intervalo_repite_y_ctrl_c_sale_con_0`
-- `test_foursquare_main_un_error_fatal_sale_con_1_y_cierra_el_cliente`
+- `test_overpass_run_once_guarda_los_pois_y_escribe_el_heartbeat` — `run_once` de Overpass guarda los POIs en la base y escribe el heartbeat.
+- `test_overpass_run_once_pasa_el_margen_al_cliente` — `run_once` de Overpass pasa el margen indicado al cliente.
+- `test_overpass_un_segundo_ciclo_actualiza_en_vez_de_duplicar` — Un segundo ciclo de Overpass actualiza los POIs existentes en vez de duplicarlos.
+- `test_overpass_si_la_descarga_falla_devuelve_0_y_no_toca_nada` — Si la descarga de Overpass falla, `run_once` devuelve 0, no guarda nada y no escribe el heartbeat.
+- `test_overpass_heartbeat_contiene_una_fecha_iso_utc` — El heartbeat de Overpass contiene una fecha ISO en UTC reciente.
+- `test_overpass_heartbeat_no_rompe_si_no_puede_escribir` — El heartbeat de Overpass no rompe el ciclo si no puede escribirse; deja un aviso en el log.
+- `test_overpass_main_sin_intervalo_hace_un_ciclo_y_cierra_el_cliente` — `main` de Overpass sin intervalo hace un único ciclo con el margen indicado y cierra el cliente.
+- `test_overpass_main_con_intervalo_repite_y_ctrl_c_sale_con_0` — `main` de Overpass con intervalo repite los ciclos esperando el intervalo en horas, y Ctrl+C sale con código 0.
+- `test_overpass_main_un_error_fatal_sale_con_1_y_cierra_el_cliente` — Un error fatal en `main` de Overpass sale con código 1 y cierra el cliente.
+- `test_contador_nuevo_empieza_en_las_llamadas_dadas_y_guarda_el_mes` — El contador mensual nuevo empieza con las llamadas dadas y guarda el mes en curso.
+- `test_contador_acumula_dentro_del_mismo_mes` — El contador mensual acumula las llamadas dentro del mismo mes.
+- `test_contador_se_reinicia_al_cambiar_de_mes` — El contador mensual se reinicia al cambiar de mes.
+- `test_contador_corrupto_se_reinicia_sin_fallar` — Un contador corrupto se reinicia sin fallar.
+- `test_contador_no_rompe_si_no_puede_guardar` — El contador devuelve la cuenta aunque no pueda guardarla y deja un aviso en el log.
+- `test_foursquare_run_once_guarda_los_pois_cuenta_las_llamadas_y_escribe_el_heartbeat` — `run_once` de Foursquare guarda los POIs, suma las llamadas del ciclo al contador y escribe el heartbeat.
+- `test_foursquare_run_once_pide_zonas_y_rutas_al_cliente` — `run_once` de Foursquare pide al cliente las zonas y las rutas.
+- `test_foursquare_avisa_al_superar_el_limite_mensual` — Foursquare avisa al superar el límite mensual del tier gratis.
+- `test_foursquare_no_avisa_si_queda_margen` — Foursquare no avisa si queda margen sobre el límite mensual.
+- `test_foursquare_heartbeat_no_rompe_si_no_puede_escribir` — El heartbeat de Foursquare no rompe el ciclo si no puede escribirse; deja un aviso en el log.
+- `test_foursquare_main_sin_clave_sale_con_1_sin_crear_el_cliente` — Sin `FOURSQUARE_API_KEY`, `main` de Foursquare sale con código 1 sin crear el cliente.
+- `test_foursquare_main_con_clave_hace_un_ciclo_y_cierra_el_cliente` — Con clave, `main` de Foursquare hace un único ciclo y cierra el cliente.
+- `test_foursquare_main_con_intervalo_repite_y_ctrl_c_sale_con_0` — `main` de Foursquare con intervalo repite los ciclos esperando el intervalo en horas, y Ctrl+C sale con código 0.
+- `test_foursquare_main_un_error_fatal_sale_con_1_y_cierra_el_cliente` — Un error fatal en `main` de Foursquare sale con código 1 y cierra el cliente.
 
 ## `tests/test_predictive_modeling_dashboard.py`
 
@@ -937,11 +937,11 @@
 > tienen el clima en NULL, y una sola basta para que `LogisticRegression` lance
 > `Input X contains NaN`. Esa excepción cortaba toda la vista Analyst.
 
-- `test_clima_ausente_no_se_convierte_en_lluvia`
-- `test_descripciones_conocidas_y_desconocidas_se_agrupan_como_antes`
-- `test_complete_cases_excluye_solo_las_filas_sin_clima`
-- `test_sin_filas_incompletas_no_se_pierde_nada`
-- `test_regresion_no_falla_con_filas_sin_clima`
+- `test_clima_ausente_no_se_convierte_en_lluvia` — Una fila sin clima queda como NaN en el grupo de clima, no como «lluvia».
+- `test_descripciones_conocidas_y_desconocidas_se_agrupan_como_antes` — Las descripciones de clima conocidas y las desconocidas se agrupan igual que antes del cambio.
+- `test_complete_cases_excluye_solo_las_filas_sin_clima` — `_complete_cases` descarta solo las filas sin clima y no modifica el DataFrame original.
+- `test_sin_filas_incompletas_no_se_pierde_nada` — Si no hay filas incompletas, `_complete_cases` conserva todas.
+- `test_regresion_no_falla_con_filas_sin_clima` — La regresión se ajusta sin fallar aunque haya filas sin clima.
 - `test_clasificacion_no_falla_con_filas_sin_clima` — El caso exacto del bug: 'Input X contains NaN' en LogisticRegression.
 - `test_el_temporal_y_el_clustering_conservan_las_filas_sin_clima` — Su tiempo de viaje es válido: no deben pasar por _complete_cases.
 
@@ -954,11 +954,11 @@
 > ~9 min dentro del contenedor del dashboard, de 1 CPU y 1 GiB, donde además rozaba el límite de
 > memoria). Ahora se entrena solo lo que el usuario pide.
 
-- `test_las_secciones_coinciden_con_los_modelos`
-- `test_al_abrir_no_se_entrena_nada`
-- `test_pulsar_un_boton_entrena_solo_esa_seccion`
-- `test_lo_pedido_se_mantiene_en_la_sesion`
-- `test_el_boton_de_todos_entrena_las_cuatro_secciones`
+- `test_las_secciones_coinciden_con_los_modelos` — Las secciones de la pantalla coinciden con los modelos que se pueden entrenar.
+- `test_al_abrir_no_se_entrena_nada` — Al abrir la pantalla no se entrena ningún modelo; solo se muestran los botones y las métricas baratas de resumen.
+- `test_pulsar_un_boton_entrena_solo_esa_seccion` — Pulsar el botón de una sección entrena solo esa y el botón se reemplaza por su resultado.
+- `test_lo_pedido_se_mantiene_en_la_sesion` — Lo ya pedido se conserva entre reejecuciones de la página, sin pedir de nuevo otras secciones.
+- `test_el_boton_de_todos_entrena_las_cuatro_secciones` — El botón de «todos» entrena las cuatro secciones.
 - `test_el_forecast_temporal_funciona_con_low_memory` — El SARIMA usa fit(low_memory=True): se comprueba que el pronóstico y su intervalo se pueden obtener (sin resultados suavizados ni predicción en muestra, que low_memory no ofrece), y que la pantalla muestra la referencia y la nota de validación.
 
 ## `tests/test_query_measurements_polyline.py`
@@ -971,13 +971,13 @@
 > la caché de Streamlit, agotaba el límite de 1 GiB del contenedor del dashboard al abrir
 > Analyst (el proceso moría por falta de memoria).
 
-- `test_por_defecto_no_carga_la_polilinea`
-- `test_include_polyline_la_devuelve_intacta`
+- `test_por_defecto_no_carga_la_polilinea` — Por defecto `query_measurements` no carga la columna `polyline`.
+- `test_include_polyline_la_devuelve_intacta` — Con `include_polyline=True` la polilínea vuelve idéntica a la guardada.
 - `test_las_demas_columnas_son_exactamente_las_mismas` — Sin polyline tampoco se lee created_at (va después de polyline y leerla recorre las páginas de desbordamiento de todas las filas); el resto de columnas no cambia.
-- `test_por_defecto_tampoco_lee_created_at_pero_con_include_polyline_si`
-- `test_los_filtros_y_el_orden_no_cambian`
+- `test_por_defecto_tampoco_lee_created_at_pero_con_include_polyline_si` — `created_at` solo se lee con `include_polyline=True`.
+- `test_los_filtros_y_el_orden_no_cambian` — Los filtros por origen, destino y fecha y el orden (más reciente primero) siguen igual que antes.
 - `test_sin_la_polilinea_la_memoria_baja_mucho` — No es una cifra mágica: con polilíneas de ~12 KB, cargarlas pesa >10× lo que pesa el resto.
-- `test_base_vacia_no_falla`
+- `test_base_vacia_no_falla` — Con una base vacía `query_measurements` devuelve un DataFrame vacío sin fallar.
 - `test_export_route_data_conserva_la_polilinea` — La exportación por ruta no cambia: sigue incluyendo la geometría.
 
 ## `tests/test_recommendation_dashboard.py`
@@ -987,12 +987,12 @@
 > El README promete que el desglose muestra cada dimensión CRUDA y NORMALIZADA
 > ("nunca solo el número final"). Esto lo verifica sin abrir Streamlit.
 
-- `test_la_tabla_muestra_cada_factor_crudo_y_normalizado`
-- `test_las_columnas_normalizadas_estan_entre_0_y_1`
+- `test_la_tabla_muestra_cada_factor_crudo_y_normalizado` — La tabla de resultados trae, por cada factor, el valor crudo y el normalizado, y una fila por zona.
+- `test_las_columnas_normalizadas_estan_entre_0_y_1` — Las columnas normalizadas (demanda, baja competencia, accesibilidad) quedan entre 0 y 1.
 - `test_mas_alto_siempre_es_mejor_en_las_tres_columnas` — La zona con más competencia tiene el menor 'Baja competencia'.
 - `test_el_puntaje_es_la_suma_ponderada_de_las_columnas_mostradas` — Lo que dice el pie de la tabla: Puntaje = suma ponderada de las tres columnas (0-1), con 0.5 donde falta el dato.
-- `test_una_zona_sin_dato_queda_en_blanco_y_se_nota`
-- `test_normalize_weights_conserva_proporciones_y_suma_uno`
+- `test_una_zona_sin_dato_queda_en_blanco_y_se_nota` — Una zona sin dato queda en blanco (NaN) en vez de en 0 y su recuento de datos completos baja de 3.
+- `test_normalize_weights_conserva_proporciones_y_suma_uno` — Los pesos normalizados conservan las proporciones y suman 1; con todo en cero se usan los pesos por defecto sin dividir entre cero.
 
 ## `tests/test_recommendation_panorama_ui.py`
 
@@ -1038,15 +1038,15 @@
 >
 > Si falla, el mensaje dice exactamente qué hacer.
 
-- `test_el_catalogo_de_tests_esta_al_dia`
+- `test_el_catalogo_de_tests_esta_al_dia` — `docs/TESTS.md` coincide con lo que genera `tools/generate_tests_doc.py` a partir de los tests actuales.
 - `test_el_catalogo_menciona_cada_funcion_de_test` — Ninguna función `test_*` puede faltar en el catálogo (aunque el resto del texto cambie).
-- `test_todo_archivo_de_test_esta_en_la_tabla_del_readme`
-- `test_la_tabla_del_readme_no_cita_archivos_que_ya_no_existen`
-- `test_parametrize_con_literales_cuenta_los_casos`
-- `test_parametrize_apilado_multiplica`
-- `test_parametrize_con_valores_no_literales_no_se_puede_contar`
-- `test_sin_parametrize_es_un_caso`
-- `test_el_generador_encuentra_funciones_y_metodos_de_clases_test`
+- `test_todo_archivo_de_test_esta_en_la_tabla_del_readme` — Cada archivo `tests/test_*.py` tiene su fila en la tabla de tests del README.
+- `test_la_tabla_del_readme_no_cita_archivos_que_ya_no_existen` — La tabla de tests del README no cita archivos de test que ya no existen.
+- `test_parametrize_con_literales_cuenta_los_casos` — Un `parametrize` con una lista literal cuenta sus casos.
+- `test_parametrize_apilado_multiplica` — Dos `parametrize` apilados multiplican sus casos.
+- `test_parametrize_con_valores_no_literales_no_se_puede_contar` — Si los valores de `parametrize` no son literales, el número de casos es `None`.
+- `test_sin_parametrize_es_un_caso` — Un test sin `parametrize` cuenta como un caso.
+- `test_el_generador_encuentra_funciones_y_metodos_de_clases_test` — El generador del catálogo encuentra las funciones de test y los métodos de clases `Test*`, usa la primera frase del docstring e ignora lo que no es test.
 
 ## `tests/test_time_series.py`
 
@@ -1068,31 +1068,31 @@
 > Tests del modelo simple por ruta: src/models/travel_time_model.py (TravelTimePredictor) y src/predictor.py
 > (RoutePredictor, el orquestador que usa train_models.py).
 
-- `test_prepare_features_devuelve_las_seis_variables_y_el_objetivo`
-- `test_prepare_features_acepta_columnas_sin_prefijo_origin`
-- `test_prepare_features_rellena_nulos_con_cero`
-- `test_prepare_features_sin_una_columna_necesaria_devuelve_vacio` ×4
-- `test_prepare_features_con_dataframe_vacio`
-- `test_entrena_y_registra_las_features`
-- `test_no_entrena_con_pocas_muestras_ni_sin_columnas`
+- `test_prepare_features_devuelve_las_seis_variables_y_el_objetivo` — `prepare_features` devuelve las seis variables esperadas y el objetivo, con la hora entre 0 y 23 y el día de la semana entre 0 y 6.
+- `test_prepare_features_acepta_columnas_sin_prefijo_origin` — `prepare_features` acepta columnas de clima sin el prefijo `origin_`.
+- `test_prepare_features_rellena_nulos_con_cero` — `prepare_features` rellena los nulos con 0.
+- `test_prepare_features_sin_una_columna_necesaria_devuelve_vacio` ×4 — Si falta una columna necesaria (parametrizado), `prepare_features` devuelve tablas vacías.
+- `test_prepare_features_con_dataframe_vacio` — `prepare_features` con un DataFrame vacío devuelve tablas vacías.
+- `test_entrena_y_registra_las_features` — El modelo entrena, registra sus variables y su estado, y las importancias suman 1.
+- `test_no_entrena_con_pocas_muestras_ni_sin_columnas` — No entrena con menos muestras que el mínimo ni si faltan columnas, y lo indica devolviendo `False`.
 - `test_no_entrena_si_el_objetivo_tiene_nulos` — RandomForest no admite NaN en el objetivo: el error se captura y train() devuelve False.
 - `test_predict_devuelve_tiempo_y_confianza_razonables` — Regresión: predict() devolvía SIEMPRE None, porque se le pasaban al escalador columnas con otro nombre (origin_temperature/origin_humidity) que las del ajuste (temperature/humidity) y sklearn lo rechazaba; el except lo ocultaba. El modelo por ruta que documenta el README no producía ninguna predicción.
 - `test_predict_responde_a_los_datos_de_entrada` — El modelo aprende la relación: con un tiempo sin tráfico mayor, predice más.
-- `test_predict_sin_entrenar_devuelve_none`
+- `test_predict_sin_entrenar_devuelve_none` — Predecir sin haber entrenado devuelve `None`, y la importancia de variables queda vacía.
 - `test_predict_usa_el_historico_como_lag_y_si_falta_el_tiempo_sin_trafico` — `historical_avg or no_traffic_time`: con histórico se usa como lag; con None o 0 (falsy) se usa el tiempo sin tráfico. Se espía la entrada que recibe el escalador.
 - `test_el_lag_es_la_media_movil_de_5_valores_del_tiempo_de_viaje` — Documenta cómo se construye hoy `travel_time_min_lag`: media móvil de 5 filas que INCLUYE la fila actual (y las filas llegan de la base ordenadas de más reciente a más antigua). Ver README, limitaciones.
-- `test_guardar_y_cargar_reproduce_las_predicciones`
-- `test_no_guarda_un_modelo_sin_entrenar_y_carga_falla_con_gracia`
-- `test_el_nombre_del_archivo_del_modelo_no_tiene_espacios`
-- `test_crea_el_directorio_de_modelos_y_cachea_el_modelo_por_ruta`
-- `test_entrena_una_ruta_con_suficientes_datos_y_guarda_el_modelo`
-- `test_no_entrena_una_ruta_con_pocas_muestras`
+- `test_guardar_y_cargar_reproduce_las_predicciones` — Un modelo guardado y vuelto a cargar da las mismas predicciones.
+- `test_no_guarda_un_modelo_sin_entrenar_y_carga_falla_con_gracia` — No guarda un modelo sin entrenar y cargar un archivo inexistente, corrupto o incompleto devuelve `False` sin lanzar excepción.
+- `test_el_nombre_del_archivo_del_modelo_no_tiene_espacios` — El nombre del archivo del modelo de una ruta cambia los espacios por guiones bajos y cuelga del directorio de modelos.
+- `test_crea_el_directorio_de_modelos_y_cachea_el_modelo_por_ruta` — Se crea el directorio de modelos y el modelo de cada ruta se reutiliza; la ruta inversa es otro modelo.
+- `test_entrena_una_ruta_con_suficientes_datos_y_guarda_el_modelo` — Una ruta con suficientes datos se entrena y su modelo queda guardado en disco.
+- `test_no_entrena_una_ruta_con_pocas_muestras` — Una ruta con pocas muestras no se entrena ni se guarda.
 - `test_min_samples_del_predictor_llega_al_modelo` — Regresión: el predictor comprobaba su min_samples pero el modelo usaba su propio mínimo (50), así que con min_samples=30 (como train_models.py) una ruta de 40 muestras fallaba al entrenar.
-- `test_train_all_models_devuelve_un_resultado_por_ruta`
-- `test_predice_el_tiempo_de_viaje_de_una_ruta_entrenada`
-- `test_sin_modelo_entrenado_no_hay_prediccion`
-- `test_un_predictor_nuevo_reutiliza_los_modelos_guardados`
-- `test_el_estado_de_los_modelos`
+- `test_train_all_models_devuelve_un_resultado_por_ruta` — `train_all_models` devuelve un resultado por ruta: entrenada o no.
+- `test_predice_el_tiempo_de_viaje_de_una_ruta_entrenada` — Una ruta entrenada predice un tiempo de viaje plausible con una confianza entre 50 y 100.
+- `test_sin_modelo_entrenado_no_hay_prediccion` — Sin modelo entrenado para la ruta no hay predicción (`None`).
+- `test_un_predictor_nuevo_reutiliza_los_modelos_guardados` — Un predictor nuevo carga los modelos ya guardados en disco.
+- `test_el_estado_de_los_modelos` — El estado de los modelos lista todas las rutas; las entrenadas incluyen la importancia de variables y las demás no.
 
 ## Archivos de apoyo (no contienen tests)
 
