@@ -600,7 +600,7 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
    - **Bloqueante**: `flake8 --select=E9,F63,F7,F82` (sintaxis y nombres sin definir), `flake8 --select=F401` (imports sin usar en `src/`, `tests/` y `streamlit_app/`) y `pylint --enable=E,F` (errores y fatales). Si fallan, el pipeline falla.
    - **Informativo** (`continue-on-error`, no bloquea): `flake8` de estilo completo.
 2. **`docker-compose-lint`**: valida `docker-compose.yml` con `docker compose config`
-3. **`lint`**: `black` + `isort`, **informativos** por ahora (`continue-on-error`): el código actual no está formateado con ellos, así que se muestran como aviso en vez de bloquear. Para volverlos obligatorios: aplicar el formato una vez y quitar `continue-on-error` de `.github/workflows/tests.yml`.
+3. **`lint`**: `black --check` e `isort --check-only` sobre `src/` y `tests/`, **bloqueantes**. La configuración (línea de 120, perfil black) está en `pyproject.toml` y las versiones fijadas (`black==26.10.1`, `isort==9.0.2`). Para formatear en local: `black src/ tests/` e `isort src/ tests/` (en Windows, con `PYTHONUTF8=1` para que isort lea los archivos con acentos). `streamlit_app/` y `tools/` no entran en este chequeo.
 
 ---
 
