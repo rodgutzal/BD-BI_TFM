@@ -75,6 +75,11 @@ def render_profile_status(perfil, base, avisos):
         st.warning(aviso)
 
 
+def porcentaje(parte: int, total: int) -> str:
+    """Porcentaje con un decimal. Con cero decimales 5 de 1139 (0,4 %) se veía como «0%», que parece «ninguna»."""
+    return f"{parte / total:.1%}" if total else "—"
+
+
 def build_map(vista, capa: str, seleccionada: Optional[str]):
     valores, titulo = pv.layer_values(vista, capa)
     con, sin = vista[valores.notna()], vista[valores.isna()]
@@ -89,13 +94,15 @@ def build_map(vista, capa: str, seleccionada: Optional[str]):
     esc = "RdBu_r" if capa == pv.CAPA_BRECHA else "YlOrRd"
     fig.add_trace(go.Scattermapbox(
         lat=con["lat"], lon=con["lon"], mode="markers",
-        marker=dict(size=7, color=valores[con.index], colorscale=esc, showscale=True, colorbar=dict(title=titulo),
-                    opacity=0.75, **({"cmid": 0} if capa == pv.CAPA_BRECHA else {})),
+        marker=dict(size=9, color=valores[con.index], colorscale=esc, showscale=True, colorbar=dict(title=titulo),
+                    opacity=0.9, **({"cmid": 0} if capa == pv.CAPA_BRECHA else {})),
         hovertext=textos, hoverinfo="text", name=titulo))
     if seleccionada is not None and seleccionada in vista.index:
         f = vista.loc[seleccionada]
-        fig.add_trace(go.Scattermapbox(lat=[f["lat"]], lon=[f["lon"]], mode="markers", name="celda elegida",
-                                       marker=dict(size=16, color="#1f77b4"), hoverinfo="skip"))
+        fig.add_trace(go.Scattermapbox(lat=[f["lat"]], lon=[f["lon"]], mode="markers+text", name="celda elegida",
+                                       marker=dict(size=16, color="#1f77b4"), hoverinfo="skip",
+                                       text=[f"Celda elegida: {seleccionada}"], textposition="top right",
+                                       textfont=dict(size=14, color="#0b3d6b")))
     fig.update_layout(
         mapbox=dict(style="open-street-map", center=dict(lat=float(vista["lat"].mean()), lon=float(vista["lon"].mean())), zoom=10.5),
         height=520, margin=dict(l=0, r=0, t=0, b=0), showlegend=False,
@@ -182,7 +189,7 @@ def render_panorama_section(categoria: str, data_dir: Optional[Path] = None):
 
     st.caption(
         f"★ = mercado en el 25 % superior y competencia directa en el 25 % inferior, con confianza no baja: **{len(candidatas)} de "
-        f"{len(vista)} celdas** ({len(candidatas) / len(vista):.0%}). Es un filtro, no un puntaje; si las lentes fueran independientes "
+        f"{len(vista)} celdas** ({porcentaje(len(candidatas), len(vista))}). Es un filtro, no un puntaje; si las lentes fueran independientes "
         "serían ~6 %, pero como se parecen, pocas celdas cumplen ambas cosas."
     )
     render_cell_card(vista.loc[elegida], perfil, bool(vista["brecha_relativa"].notna().any()), perfil.personalizado)
