@@ -116,18 +116,66 @@ def test_timescale_solo_se_activa_con_configuracion(entorno):
     assert entorno(timescale_config={"host": "x"}, enable_timescale=False).enable_timescale is False
 
 
-def test_el_manejador_de_ctrl_c_solo_se_registra_si_se_pide(entorno):
+def test_el_manejador_de_parada_solo_se_registra_si_se_pide(entorno):
+    """Se escuchan Ctrl+C y SIGTERM (la de `docker stop`); antes solo SIGINT y Docker acababa matando con SIGKILL."""
     entorno()
     assert entorno.senales == []
     c = entorno(register_signal_handler=True)
-    assert entorno.senales == [(signal.SIGINT, c._signal_handler)]
+    assert entorno.senales == [(signal.SIGINT, c._signal_handler), (signal.SIGTERM, c._signal_handler)]
 
 
-def test_ctrl_c_cierra_los_clientes_y_sale(entorno):
+@pytest.mark.parametrize("senal", [signal.SIGINT, signal.SIGTERM])
+def test_una_senal_de_parada_baja_la_bandera_sin_salir_ni_cerrar_los_clientes(entorno, senal):
+    """Antes el manejador hacía sys.exit(0) y cerraba los clientes en cualquier punto del ciclo: se perdía el ciclo
+    (si estaba pidiendo datos) o se guardaba a medias (CSV sí, SQLite no). Ahora solo pide parar."""
     c = entorno()
+    c._signal_handler(senal, None)                                  # no lanza SystemExit
+    assert c.running is False
+    assert not c.traffic_client.cerrado and not c.weather.cerrado   # se cierran al terminar el bucle, no aquí
+
+
+def test_una_segunda_senal_sale_sin_esperar(entorno):
+    c = entorno()
+    c._signal_handler(signal.SIGTERM, None)
     with pytest.raises(SystemExit) as salida:
-        c._signal_handler(signal.SIGINT, None)
-    assert salida.value.code == 0 and c.running is False
+        c._signal_handler(signal.SIGTERM, None)
+    assert salida.value.code == 1
+
+
+def test_la_senal_durante_un_ciclo_deja_que_termine_y_lo_guarda(entorno, monkeypatch):
+    """Si llega la señal a mitad de un ciclo, el ciclo se completa y se guarda; después el bucle sale y cierra los clientes."""
+    c = entorno()
+    original = c.traffic_client.calculate_route
+
+    def con_senal(*a, **kw):
+        if c.running:
+            c._signal_handler(signal.SIGTERM, None)                 # llega UNA vez, con el ciclo ya en marcha
+        return original(*a, **kw)
+
+    monkeypatch.setattr(c.traffic_client, "calculate_route", con_senal)
+    monkeypatch.setattr(collector.time, "sleep", lambda s: pytest.fail("no debería esperar tras parar"))
+    c.run_continuous(interval_seconds=60)
+    assert len(pd.read_csv(entorno.tmp / "d.csv")) == N_RUTAS      # el ciclo se guardó entero
+    assert len(_tabla(entorno.tmp / "d.db", "SELECT * FROM route_measurements")) == N_RUTAS
+    assert c.traffic_client.cerrado and c.weather.cerrado
+
+
+def test_close_no_falla_si_un_cliente_ya_estaba_cerrado_o_falla(entorno):
+    c = entorno()
+
+    def falla():
+        raise RuntimeError("ya cerrado")
+
+    c.traffic_client.close = falla
+    c.close()                                                       # no propaga
+    assert c.weather.cerrado                                        # y el otro se cierra igualmente
+
+
+def test_run_continuous_cierra_los_clientes_aunque_el_ciclo_lance_una_excepcion(entorno, monkeypatch):
+    c = entorno()
+    monkeypatch.setattr(c, "collect_cycle", lambda: (_ for _ in ()).throw(RuntimeError("inesperado")))
+    with pytest.raises(RuntimeError):
+        c.run_continuous(interval_seconds=60)
     assert c.traffic_client.cerrado and c.weather.cerrado
 
 
@@ -373,7 +421,7 @@ def _parar_tras(h, monkeypatch, esperas):
 
 
 def test_el_hibrido_registra_un_unico_manejador_y_guarda_los_intervalos(hibrido):
-    assert hibrido.senales == [(signal.SIGINT, hibrido._signal_handler)]
+    assert hibrido.senales == [(signal.SIGINT, hibrido._signal_handler), (signal.SIGTERM, hibrido._signal_handler)]
     assert [e["name"] for e in hibrido.entries] == ["ors", "tomtom"]
     assert [e["interval"] for e in hibrido.entries] == [timedelta(minutes=15), timedelta(minutes=27)]
 
@@ -401,6 +449,48 @@ def test_si_se_detiene_durante_un_ciclo_no_dispara_la_otra_fuente(hibrido, monke
     monkeypatch.setattr(collector.time, "sleep", lambda s: pytest.fail("no debería esperar"))
     hibrido.run(tick_seconds=1)
     assert hibrido.ors.collect_cycle.call_count == 1 and hibrido.tom.collect_cycle.call_count == 0
+
+
+@pytest.mark.parametrize("senal", [signal.SIGINT, signal.SIGTERM])
+def test_el_hibrido_ante_una_senal_baja_la_bandera_sin_salir(hibrido, senal):
+    hibrido._signal_handler(senal, None)                            # no lanza SystemExit
+    assert hibrido.running is False
+    hibrido.ors.close.assert_not_called()                           # los clientes se cierran al salir del bucle
+
+
+def test_el_hibrido_con_una_segunda_senal_sale_sin_esperar(hibrido):
+    hibrido._signal_handler(signal.SIGTERM, None)
+    with pytest.raises(SystemExit) as salida:
+        hibrido._signal_handler(signal.SIGTERM, None)
+    assert salida.value.code == 1
+
+
+def test_el_hibrido_termina_el_ciclo_en_curso_y_cierra_los_dos_collectors(hibrido, monkeypatch):
+    """La señal llega durante el ciclo de ORS: ese ciclo termina, no se dispara el de TomTom y se cierran ambos."""
+    hibrido.ors.collect_cycle.side_effect = lambda: hibrido._signal_handler(signal.SIGTERM, None)
+    monkeypatch.setattr(collector.time, "sleep", lambda s: pytest.fail("no debería esperar"))
+    hibrido.run(tick_seconds=1)
+    assert hibrido.ors.collect_cycle.call_count == 1 and hibrido.tom.collect_cycle.call_count == 0
+    hibrido.ors.close.assert_called_once()
+    hibrido.tom.close.assert_called_once()
+
+
+def test_el_hibrido_cierra_los_collectors_aunque_el_ciclo_lance_una_excepcion(hibrido, monkeypatch):
+    hibrido.ors.collect_cycle.side_effect = RuntimeError("inesperado")
+    with pytest.raises(RuntimeError):
+        hibrido.run(tick_seconds=1)
+    hibrido.ors.close.assert_called_once()
+    hibrido.tom.close.assert_called_once()
+
+
+def test_el_compose_da_tiempo_al_colector_para_terminar_su_ciclo():
+    """`docker compose stop` manda SIGTERM y espera stop_grace_period antes del SIGKILL: el colector necesita más que
+    los 10 s por defecto para terminar un ciclo largo (p95 ~15 s)."""
+    import re
+    texto = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    bloque = texto.split("\n  collector:\n", 1)[1].split("\n  poi-collector:", 1)[0]
+    m = re.search(r"^\s+stop_grace_period:\s*(\d+)s\s*$", bloque, re.M)
+    assert m and int(m.group(1)) >= 60
 
 
 def test_un_error_en_un_ciclo_se_propaga_porque_collect_cycle_ya_captura_los_suyos(hibrido, monkeypatch):

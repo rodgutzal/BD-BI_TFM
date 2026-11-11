@@ -28,6 +28,18 @@ from src.weather_client import WeatherClient
 
 logger = logging.getLogger(__name__)
 
+# Señales que piden detener el colector: Ctrl+C (SIGINT) y la que manda `docker stop`/`docker compose stop` (SIGTERM).
+# Antes solo se escuchaba SIGINT: con SIGTERM el proceso (PID 1 en el contenedor, que ignora las señales sin manejador)
+# no se detenía y Docker lo mataba con SIGKILL a los 10 s, posiblemente a mitad de un ciclo.
+STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM)
+
+
+def _nombre_senal(signum) -> str:
+    try:
+        return signal.Signals(signum).name
+    except (ValueError, TypeError):
+        return str(signum)
+
 # Umbral (en minutos) a partir del cual una ruta se considera de alta demora.
 # Se mantiene el mismo criterio que usaba BD_BI_TFM originalmente.
 HIGH_DELAY_THRESHOLD_MIN = 20
@@ -79,15 +91,30 @@ class DataCollector:
         # bien al hacer Ctrl+C. El HybridScheduler registra un único
         # handler que cierra ambos.
         if register_signal_handler:
-            signal.signal(signal.SIGINT, self._signal_handler)
+            for senal in STOP_SIGNALS:
+                signal.signal(senal, self._signal_handler)
 
     def _signal_handler(self, signum, frame):
-        """Maneja Ctrl+C para detener gracefully."""
-        logger.info("Stopping collector...")
+        """Pide detenerse (Ctrl+C o SIGTERM de `docker stop`) SIN interrumpir el ciclo en curso.
+
+        Un ciclo junta los registros de todas las rutas y los guarda al final (CSV, SQLite, Timescale, medallion).
+        Salir con sys.exit desde aquí lo cortaba en cualquier punto: a medias de las peticiones (se perdía el ciclo
+        entero) o a medias de guardar (CSV escrito y SQLite no). Ahora solo se baja la bandera: el ciclo termina, el
+        bucle sale y `close()` cierra los clientes. Una segunda señal sí sale ya, para quien no quiere esperar.
+        """
+        if not self.running:
+            logger.warning("Segunda señal de parada: saliendo sin esperar al ciclo en curso")
+            sys.exit(1)
+        logger.info("Parada pedida (%s): se termina el ciclo en curso y se cierra", _nombre_senal(signum))
         self.running = False
-        self.traffic_client.close()
-        self.weather.close()
-        sys.exit(0)
+
+    def close(self) -> None:
+        """Cierra los clientes HTTP (no falla si alguno ya estaba cerrado)."""
+        for cliente in (self.traffic_client, self.weather):
+            try:
+                cliente.close()
+            except Exception as e:
+                logger.warning(f"No se pudo cerrar un cliente: {e}")
 
     def collect_cycle(self) -> int:
         """
@@ -281,21 +308,24 @@ class DataCollector:
         """
         Ejecuta recolecciones continuas cada N segundos.
 
-        Detiene correctamente con Ctrl+C.
+        Se detiene con Ctrl+C o SIGTERM: termina el ciclo en curso y cierra los clientes.
         """
         logger.info(f"Starting continuous collection (interval: {interval_seconds}s)")
 
-        while self.running:
-            self.collect_cycle()
+        try:
+            while self.running:
+                self.collect_cycle()
 
-            if not self.running:
-                break
-
-            logger.info(f"Next collection in {interval_seconds} seconds...")
-            for _ in range(interval_seconds):
                 if not self.running:
                     break
-                time.sleep(1)
+
+                logger.info(f"Next collection in {interval_seconds} seconds...")
+                for _ in range(interval_seconds):
+                    if not self.running:
+                        break
+                    time.sleep(1)
+        finally:
+            self.close()
 
         logger.info("Collector stopped")
 
@@ -341,16 +371,24 @@ class HybridScheduler:
             },
         ]
         self.running = True
-        signal.signal(signal.SIGINT, self._signal_handler)
+        for senal in STOP_SIGNALS:
+            signal.signal(senal, self._signal_handler)
 
     def _signal_handler(self, signum, frame):
-        """Maneja Ctrl+C cerrando ambos collectors."""
-        logger.info("Stopping hybrid scheduler...")
+        """Pide detenerse (Ctrl+C o SIGTERM) sin interrumpir el ciclo en curso; ver DataCollector._signal_handler.
+
+        Una segunda señal sale ya.
+        """
+        if not self.running:
+            logger.warning("Segunda señal de parada: saliendo sin esperar al ciclo en curso")
+            sys.exit(1)
+        logger.info("Parada pedida (%s): se termina el ciclo en curso y se cierra", _nombre_senal(signum))
         self.running = False
+
+    def close(self) -> None:
+        """Cierra los clientes de ambos collectors."""
         for entry in self.entries:
-            entry["collector"].traffic_client.close()
-            entry["collector"].weather.close()
-        sys.exit(0)
+            entry["collector"].close()
 
     def run(self, tick_seconds: int = 60) -> None:
         """
@@ -367,22 +405,25 @@ class HybridScheduler:
             f"TomTom every {self.entries[1]['interval'].total_seconds() / 60:.0f} min)"
         )
 
-        while self.running:
-            now = datetime.now(timezone.utc)
+        try:
+            while self.running:
+                now = datetime.now(timezone.utc)
 
-            for entry in self.entries:
-                due = entry["last_run"] is None or (now - entry["last_run"]) >= entry["interval"]
-                if due:
-                    logger.info(f"[hybrid] Disparando ciclo de {entry['name']}")
-                    entry["collector"].collect_cycle()
-                    entry["last_run"] = now
+                for entry in self.entries:
+                    due = entry["last_run"] is None or (now - entry["last_run"]) >= entry["interval"]
+                    if due:
+                        logger.info(f"[hybrid] Disparando ciclo de {entry['name']}")
+                        entry["collector"].collect_cycle()
+                        entry["last_run"] = now
 
-                if not self.running:
-                    break
+                    if not self.running:
+                        break
 
-            for _ in range(tick_seconds):
-                if not self.running:
-                    break
-                time.sleep(1)
+                for _ in range(tick_seconds):
+                    if not self.running:
+                        break
+                    time.sleep(1)
+        finally:
+            self.close()
 
         logger.info("Hybrid scheduler stopped")
