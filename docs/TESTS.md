@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**42 archivos · 677 funciones de test · 766 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**42 archivos · 686 funciones de test · 775 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -18,7 +18,7 @@
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 21 | 30 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
-| [`tests/test_collector.py`](#teststest_collectorpy) | 29 | 29 |
+| [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
 | [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 23 | 34+ |
 | [`tests/test_data_profile.py`](#teststest_data_profilepy) | 15 | 15 |
@@ -239,8 +239,12 @@
 - `test_rechaza_una_fuente_desconocida`
 - `test_la_fuente_elige_el_cliente`
 - `test_timescale_solo_se_activa_con_configuracion`
-- `test_el_manejador_de_ctrl_c_solo_se_registra_si_se_pide`
-- `test_ctrl_c_cierra_los_clientes_y_sale`
+- `test_el_manejador_de_parada_solo_se_registra_si_se_pide` — Se escuchan Ctrl+C y SIGTERM (la de `docker stop`); antes solo SIGINT y Docker acababa matando con SIGKILL.
+- `test_una_senal_de_parada_baja_la_bandera_sin_salir_ni_cerrar_los_clientes` — Antes el manejador hacía sys.exit(0) y cerraba los clientes en cualquier punto del ciclo: se perdía el ciclo (si estaba pidiendo datos) o se guardaba a medias (CSV sí, SQLite no). Ahora solo pide parar.
+- `test_una_segunda_senal_sale_sin_esperar`
+- `test_la_senal_durante_un_ciclo_deja_que_termine_y_lo_guarda` — Si llega la señal a mitad de un ciclo, el ciclo se completa y se guarda; después el bucle sale y cierra los clientes.
+- `test_close_no_falla_si_un_cliente_ya_estaba_cerrado_o_falla`
+- `test_run_continuous_cierra_los_clientes_aunque_el_ciclo_lance_una_excepcion`
 - `test_un_ciclo_guarda_todas_las_rutas_en_csv_y_sqlite`
 - `test_cada_ruta_lleva_el_clima_de_su_origen_y_destino_y_se_pide_una_vez_por_lugar`
 - `test_el_nivel_de_movilidad_cambia_justo_por_encima_de_20_minutos` — > 20 min es 'Alta demora'; 20 exactos todavía es normal (umbral estricto).
@@ -264,6 +268,11 @@
 - `test_en_el_primer_tick_corren_las_dos_fuentes_y_despues_ninguna_hasta_su_intervalo`
 - `test_una_fuente_vencida_corre_y_la_otra_no`
 - `test_si_se_detiene_durante_un_ciclo_no_dispara_la_otra_fuente`
+- `test_el_hibrido_ante_una_senal_baja_la_bandera_sin_salir`
+- `test_el_hibrido_con_una_segunda_senal_sale_sin_esperar`
+- `test_el_hibrido_termina_el_ciclo_en_curso_y_cierra_los_dos_collectors` — La señal llega durante el ciclo de ORS: ese ciclo termina, no se dispara el de TomTom y se cierran ambos.
+- `test_el_hibrido_cierra_los_collectors_aunque_el_ciclo_lance_una_excepcion`
+- `test_el_compose_da_tiempo_al_colector_para_terminar_su_ciclo` — `docker compose stop` manda SIGTERM y espera stop_grace_period antes del SIGKILL: el colector necesita más que los 10 s por defecto para terminar un ciclo largo (p95 ~15 s).
 - `test_un_error_en_un_ciclo_se_propaga_porque_collect_cycle_ya_captura_los_suyos` — Documenta el contrato: el hibrido NO captura excepciones de collect_cycle (DataCollector ya las maneja por dentro); si una se escapara, el bucle terminaría.
 
 ## `tests/test_config.py`
@@ -435,7 +444,7 @@
 
 - `test_ors_and_tomtom_fire_on_independent_schedules` — Con 15/27 min en 120 min simulados: ORS 9 veces, TomTom 5 veces.
 - `test_both_sources_fire_immediately_on_first_tick` — En el minuto 0 (last_run=None), ambas fuentes deben disparar de inmediato.
-- `test_signal_handler_closes_both_collectors` — Ctrl+C debe cerrar traffic_client y weather de AMBOS collectors.
+- `test_signal_handler_requests_stop_and_close_closes_both_collectors` — La señal (Ctrl+C o SIGTERM) solo pide parar, sin salir: el ciclo en curso termina. Al salir del bucle, close() cierra los clientes (traffic_client y weather) de AMBOS collectors.
 
 ## `tests/test_location_scoring.py`
 
