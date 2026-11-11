@@ -3,3 +3,5 @@
 # GitHub lo aplica solo en la vista de blame.
 # PR #59: black + isort sobre src/ y tests/
 23e689734f1756fa822a600e05335c07c36f0670
+# PR #59: black + isort sobre streamlit_app/ y tools/
+16e94504bf278c77f042403eaa1356f69003b000
