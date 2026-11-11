@@ -1,0 +1,5 @@
+# Commits de solo formato: git los salta en git blame.
+# Uso local (una vez): git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub lo aplica solo en la vista de blame.
+# PR #59: black + isort sobre src/ y tests/
+23e689734f1756fa822a600e05335c07c36f0670
