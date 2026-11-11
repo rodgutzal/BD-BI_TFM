@@ -126,19 +126,19 @@
 > que se importa aquí con MOBILITY_DB_PATH apuntando a un directorio temporal: ningún
 > test toca data/mobility.db.
 
-- `test_la_api_usa_la_base_indicada_por_variable_de_entorno`
-- `test_ruta_sin_datos_responde_404_y_no_400` ×5
-- `test_el_detail_del_404_es_el_mensaje_original`
-- `test_analisis_invalido_es_422`
-- `test_parametros_fuera_de_rango_son_422` ×3
-- `test_health`
-- `test_routes`
-- `test_rankings_con_gold_vacio_no_falla`
-- `test_statistics`
-- `test_anomalies`
+- `test_la_api_usa_la_base_indicada_por_variable_de_entorno` — La API usa la base de datos que indica la variable de entorno.
+- `test_ruta_sin_datos_responde_404_y_no_400` ×5 — Una ruta sin datos responde 404 (en cada URL parametrizada) y el `detail` no lleva el 404 anidado.
+- `test_el_detail_del_404_es_el_mensaje_original` — El `detail` del 404 es el mensaje original de cada endpoint.
+- `test_analisis_invalido_es_422` — Un tipo de análisis de serie temporal no válido responde 422.
+- `test_parametros_fuera_de_rango_son_422` ×3 — Los parámetros fuera de rango (en cada URL parametrizada) responden 422.
+- `test_health` — `/api/health` responde «healthy» con el número de rutas.
+- `test_routes` — `/api/routes` lista el total y cada ruta con origen y destino.
+- `test_rankings_con_gold_vacio_no_falla` — `/api/routes/rankings` responde 200 con listas vacías cuando la capa Gold no tiene datos.
+- `test_statistics` — `/api/statistics` devuelve la ruta y las estadísticas con el recuento de mediciones.
+- `test_anomalies` — `/api/anomalies` responde 200 con la ruta y la lista de anomalías.
 - `test_json_safe_sustituye_nan_e_infinito_por_none` — JSON no admite NaN/inf: se convierten en None, también dentro de dicts y listas anidados. Los escalares de numpy (np.bool_, np.float64) pasan a tipos nativos de Python.
 - `test_time_series_patrones_con_un_dia_de_una_sola_muestra` — Regresión: un día con 1 muestra tiene desviación típica NaN y el endpoint devolvía 500 (dependía de la hora a la que se ejecutaba: justo tras la medianoche UTC).
-- `test_time_series_patrones`
+- `test_time_series_patrones` — `/api/time-series` con `analysis=patterns` responde 200 con ese tipo de análisis.
 - `test_predict_devuelve_json_serializable_y_modelos_entrenados` — De punta a punta: entrena el ensemble con los datos y responde. Cubre también que el resultado se serialice (antes `model_predictions` se apuntaba a sí mismo).
 
 ## `tests/test_api_clients.py`
@@ -149,27 +149,27 @@
 > excepciones de `requests`, y se comprueba la petición que se habría enviado y el parseo del resultado.
 
 - `test_la_sesion_reintenta_solo_errores_transitorios` — Cada cliente monta reintentos sobre https: 4 intentos, solo para 429/5xx y solo para su método HTTP.
-- `test_close_cierra_la_sesion`
-- `test_tomtom_parsea_la_ruta_y_envia_la_peticion_correcta`
+- `test_close_cierra_la_sesion` — `close()` cierra la sesión HTTP del cliente.
+- `test_tomtom_parsea_la_ruta_y_envia_la_peticion_correcta` — TomTom interpreta la respuesta con todos sus campos y envía la URL, el timeout y los parámetros correctos.
 - `test_tomtom_sin_campos_opcionales_deduce_el_tiempo_sin_trafico` — Sin trafico ni noTrafficTravelTime: retraso 0 y tiempo sin tráfico = tiempo de viaje; sin polyline.
-- `test_tomtom_con_tiempo_cero_no_divide_por_cero`
-- `test_tomtom_propaga_los_errores`
-- `test_ors_parsea_la_ruta_con_las_mismas_claves_que_tomtom`
-- `test_ors_envia_longitud_antes_que_latitud_y_la_clave_en_la_cabecera`
-- `test_ors_propaga_los_errores`
-- `test_weather_parsea_y_pide_unidades_metricas`
-- `test_weather_respuesta_incompleta_da_none_y_unknown`
-- `test_weather_usa_la_cache_por_ubicacion_y_caduca`
-- `test_weather_un_error_no_se_guarda_en_cache`
-- `test_weather_propaga_los_errores`
-- `test_overpass_clasifica_por_prioridad_y_toma_el_valor_como_subcategoria`
-- `test_overpass_la_query_cubre_todas_las_categorias`
-- `test_overpass_parsea_nodos_y_ways_y_descarta_lo_inutil`
-- `test_overpass_fetch_calcula_el_bbox_con_margen_y_el_timeout_del_servidor`
-- `test_overpass_prueba_el_siguiente_espejo_si_uno_falla`
-- `test_overpass_json_invalido_cuenta_como_fallo_del_espejo`
-- `test_overpass_si_todos_los_espejos_fallan_lanza_runtimeerror`
-- `test_overpass_envia_un_user_agent_descriptivo`
+- `test_tomtom_con_tiempo_cero_no_divide_por_cero` — Con un tiempo de viaje de 0, TomTom da velocidad media 0 y no divide entre cero.
+- `test_tomtom_propaga_los_errores` — Los errores de red y de estado HTTP de TomTom (parametrizado) se propagan al llamador.
+- `test_ors_parsea_la_ruta_con_las_mismas_claves_que_tomtom` — ORS devuelve las mismas claves que TomTom; los campos de tráfico que no informa quedan en `None`, no en 0.
+- `test_ors_envia_longitud_antes_que_latitud_y_la_clave_en_la_cabecera` — ORS recibe las coordenadas como [longitud, latitud] y la clave de API en la cabecera `Authorization`.
+- `test_ors_propaga_los_errores` — Los errores de red y de estado HTTP de ORS (parametrizado) se propagan al llamador.
+- `test_weather_parsea_y_pide_unidades_metricas` — El clima se interpreta correctamente y se pide en unidades métricas con la clave en los parámetros.
+- `test_weather_respuesta_incompleta_da_none_y_unknown` — Una respuesta de clima incompleta da valores `None` y la descripción «Unknown».
+- `test_weather_usa_la_cache_por_ubicacion_y_caduca` — El clima se cachea por ubicación y caduca pasado el tiempo de vida; `clear_cache` vacía la caché.
+- `test_weather_un_error_no_se_guarda_en_cache` — Un error al pedir el clima no se guarda en la caché: la siguiente petición vuelve a intentarlo.
+- `test_weather_propaga_los_errores` — Los errores de red y de estado HTTP del clima (parametrizado) se propagan al llamador.
+- `test_overpass_clasifica_por_prioridad_y_toma_el_valor_como_subcategoria` — Overpass clasifica cada elemento por prioridad entre categorías y toma el valor de la etiqueta como subcategoría; lo que no encaja da `None`.
+- `test_overpass_la_query_cubre_todas_las_categorias` — La consulta de Overpass cubre todas las categorías: cabecera con el timeout, regex para varios valores y una cláusula de nodo y otra de vía por etiqueta.
+- `test_overpass_parsea_nodos_y_ways_y_descarta_lo_inutil` — Se interpretan nodos y vías y se descartan los elementos sin categoría o sin coordenadas; el que no tiene nombre recibe uno genérico.
+- `test_overpass_fetch_calcula_el_bbox_con_margen_y_el_timeout_del_servidor` — `fetch_pois` calcula el rectángulo de búsqueda con el margen y envía el timeout del servidor y el del cliente.
+- `test_overpass_prueba_el_siguiente_espejo_si_uno_falla` — Si un servidor espejo de Overpass falla (error de red o 504), se prueba el siguiente.
+- `test_overpass_json_invalido_cuenta_como_fallo_del_espejo` — Un JSON inválido cuenta como fallo del espejo y se pasa al siguiente.
+- `test_overpass_si_todos_los_espejos_fallan_lanza_runtimeerror` — Si todos los espejos fallan, `fetch_pois` lanza `RuntimeError` tras probarlos todos.
+- `test_overpass_envia_un_user_agent_descriptivo` — El cliente de Overpass envía su `User-Agent` descriptivo.
 
 ## `tests/test_business_type_classifier.py`
 
@@ -191,27 +191,27 @@
 > tests comprueban que los cálculos recuperan un efecto conocido y que los casos límite se manejan, no que el
 > resultado sea causal.
 
-- `test_el_constructor_ordena_por_tiempo_parsea_utc_y_no_modifica_el_original`
-- `test_recupera_un_efecto_positivo_conocido`
-- `test_sin_efecto_no_sale_significativo`
-- `test_un_efecto_negativo_lleva_signo_negativo`
-- `test_sin_variables_de_ajuste_no_hay_propensity_score`
-- `test_usa_otra_columna_de_clima_si_se_pide`
-- `test_ignora_las_filas_con_nulos_y_exige_30_filas`
-- `test_columnas_ausentes_devuelven_error`
-- `test_la_simulacion_recupera_el_coeficiente_y_escenarios_coherentes`
-- `test_la_simulacion_valida_los_datos`
-- `test_mide_una_mejora_antes_despues`
-- `test_una_degradacion_se_marca_como_tal`
-- `test_sin_cambio_no_es_significativo_y_el_efecto_es_despreciable`
-- `test_intervencion_valida_columna_y_tamano_de_los_periodos`
-- `test_serie_constante_no_divide_por_cero`
-- `test_detecta_la_hora_como_confusor_cuando_afecta_a_temperatura_y_trafico`
+- `test_el_constructor_ordena_por_tiempo_parsea_utc_y_no_modifica_el_original` — El constructor ordena por tiempo, interpreta los timestamps en UTC y no modifica el DataFrame original.
+- `test_recupera_un_efecto_positivo_conocido` — Sobre datos con un efecto positivo conocido de la temperatura, el análisis lo recupera: correlación alta, diferencia entre grupos significativa y conclusión de evidencia muy fuerte.
+- `test_sin_efecto_no_sale_significativo` — Sin efecto real, ni la correlación ni el análisis estratificado salen significativos y la conclusión es de evidencia débil.
+- `test_un_efecto_negativo_lleva_signo_negativo` — Un efecto negativo da coeficiente de correlación y tamaño del efecto con signo negativo.
+- `test_sin_variables_de_ajuste_no_hay_propensity_score` — Sin variables de ajuste no se calcula el propensity score (`None`), pero el análisis estratificado sí.
+- `test_usa_otra_columna_de_clima_si_se_pide` — Se puede analizar otra columna de clima distinta de la temperatura, por ejemplo la humedad.
+- `test_ignora_las_filas_con_nulos_y_exige_30_filas` — Las filas con nulos se descartan del tamaño de muestra y con menos de 30 filas útiles devuelve «Insufficient data».
+- `test_columnas_ausentes_devuelven_error` — Si falta una columna necesaria o se pide una que no existe, devuelve un error «Missing columns».
+- `test_la_simulacion_recupera_el_coeficiente_y_escenarios_coherentes` — La simulación recupera el coeficiente de temperatura y sus escenarios (de -5 a +5 °C) son coherentes: el cambio es proporcional, nulo en +0 y creciente.
+- `test_la_simulacion_valida_los_datos` — La simulación devuelve error si falta la columna de temperatura o si hay pocos datos.
+- `test_mide_una_mejora_antes_despues` — Mide una intervención que mejora el tiempo de viaje: efecto negativo, significativo, grande y con los tamaños de muestra de antes y después.
+- `test_una_degradacion_se_marca_como_tal` — Una intervención que empeora el tiempo de viaje se marca como degradación con efecto positivo.
+- `test_sin_cambio_no_es_significativo_y_el_efecto_es_despreciable` — Sin cambio entre antes y después, el resultado no es significativo y el efecto es despreciable o pequeño.
+- `test_intervencion_valida_columna_y_tamano_de_los_periodos` — La evaluación de una intervención devuelve error si falta `travel_time_min` o si el periodo tiene muy pocos datos.
+- `test_serie_constante_no_divide_por_cero` — Con una serie constante, la d de Cohen es 0 y no se divide entre cero.
+- `test_detecta_la_hora_como_confusor_cuando_afecta_a_temperatura_y_trafico` — La hora del día se detecta como confusor de severidad alta cuando influye a la vez en la temperatura y en el tráfico.
 - `test_la_hora_no_es_confusor_si_solo_afecta_a_una_de_las_dos_variables` — Un confusor debe afectar al tratamiento Y al resultado: con solo uno de los dos no se marca.
-- `test_detecta_el_dia_de_la_semana_si_el_trafico_varia_mas_de_un_20_por_ciento`
-- `test_sin_confusores_la_lista_esta_vacia_y_hay_recomendaciones`
-- `test_interpretacion_del_p_valor` ×4
-- `test_interpretacion_de_cohen` ×7
+- `test_detecta_el_dia_de_la_semana_si_el_trafico_varia_mas_de_un_20_por_ciento` — El día de la semana se detecta como confusor si el tráfico varía más de un 20 % entre días.
+- `test_sin_confusores_la_lista_esta_vacia_y_hay_recomendaciones` — Sin confusores la lista queda vacía, pero se devuelven consejos y recomendación de método; con datos insuficientes también queda vacía.
+- `test_interpretacion_del_p_valor` ×4 — El texto de interpretación del efecto cambia según el p-valor (parametrizado) y siempre incluye el efecto con su signo.
+- `test_interpretacion_de_cohen` ×7 — La etiqueta de magnitud de la d de Cohen (parametrizado) corresponde a cada valor de d.
 
 ## `tests/test_check_collection_gaps.py`
 
@@ -378,20 +378,20 @@
 > No usan la API de Data Commons ni requieren `datacommons-client`.
 
 - `test_latest_observation_usa_el_anio_mas_alto_de_la_serie_completa` — Regresión: date='latest' de la API devolvió 2014 para Valletta cuando su propia serie ya tenía 2021.
-- `test_latest_observation_ignora_zonas_sin_observaciones`
-- `test_latest_observation_prefiere_la_fecha_mas_reciente_en_el_mismo_anio`
-- `test_summarize_history_encuentra_anios_comunes`
-- `test_summarize_history_sin_anio_comun_o_con_zona_sin_datos`
-- `test_reconcile_proyecta_con_la_tasa_nacional`
-- `test_reconcile_no_toca_un_dato_igual_o_mas_nuevo_que_el_objetivo`
-- `test_reconcile_respeta_un_anio_objetivo_explicito`
-- `test_reconcile_omite_zonas_sin_tasa_nacional_para_su_anio`
-- `test_reconcile_sin_serie_nacional`
-- `test_reconcile_se_guarda_y_se_recupera_de_la_base`
+- `test_latest_observation_ignora_zonas_sin_observaciones` — `latest_observation_per_zone` ignora las zonas sin observaciones.
+- `test_latest_observation_prefiere_la_fecha_mas_reciente_en_el_mismo_anio` — Entre dos observaciones del mismo año, se queda con la de fecha más reciente.
+- `test_summarize_history_encuentra_anios_comunes` — `summarize_history` encuentra los años en los que todas las zonas tienen dato.
+- `test_summarize_history_sin_anio_comun_o_con_zona_sin_datos` — Sin año común, o con una zona sin observaciones, los años comunes quedan vacíos.
+- `test_reconcile_proyecta_con_la_tasa_nacional` — Un dato antiguo se proyecta al año común con la tasa de crecimiento nacional y queda trazado cuál es el dato real y cuál la proyección.
+- `test_reconcile_no_toca_un_dato_igual_o_mas_nuevo_que_el_objetivo` — Un dato del año objetivo o posterior se deja como observado, sin proyectar.
+- `test_reconcile_respeta_un_anio_objetivo_explicito` — Si se indica un año objetivo, la proyección usa ese año.
+- `test_reconcile_omite_zonas_sin_tasa_nacional_para_su_anio` — Una zona cuyo año no está en la serie nacional se omite en vez de inventar un dato.
+- `test_reconcile_sin_serie_nacional` — Sin serie nacional no hay registros ni año objetivo.
+- `test_reconcile_se_guarda_y_se_recupera_de_la_base` — Los datos reconciliados se guardan en la base y se recuperan con su método y año base.
 - `test_guardar_solo_el_dcid_no_borra_la_poblacion_ya_guardada` — El upsert usa COALESCE: resolver un dcid no debe pisar datos existentes.
-- `test_historial_de_poblacion_es_upsert`
-- `test_clean_normaliza_nulos`
-- `test_el_cliente_exige_api_key`
+- `test_historial_de_poblacion_es_upsert` — El historial de población se guarda con upsert: repetir una observación la actualiza en vez de duplicarla.
+- `test_clean_normaliza_nulos` — `_clean` convierte `None` y NaN en cadena vacía, recorta espacios y pasa números a texto.
+- `test_el_cliente_exige_api_key` — El cliente de demografía lanza `ValueError` con una clave vacía o solo de comillas.
 
 ## `tests/test_ensemble_predictor.py`
 
@@ -1068,31 +1068,31 @@
 > Tests del modelo simple por ruta: src/models/travel_time_model.py (TravelTimePredictor) y src/predictor.py
 > (RoutePredictor, el orquestador que usa train_models.py).
 
-- `test_prepare_features_devuelve_las_seis_variables_y_el_objetivo`
-- `test_prepare_features_acepta_columnas_sin_prefijo_origin`
-- `test_prepare_features_rellena_nulos_con_cero`
-- `test_prepare_features_sin_una_columna_necesaria_devuelve_vacio` ×4
-- `test_prepare_features_con_dataframe_vacio`
-- `test_entrena_y_registra_las_features`
-- `test_no_entrena_con_pocas_muestras_ni_sin_columnas`
+- `test_prepare_features_devuelve_las_seis_variables_y_el_objetivo` — `prepare_features` devuelve las seis variables esperadas y el objetivo, con la hora entre 0 y 23 y el día de la semana entre 0 y 6.
+- `test_prepare_features_acepta_columnas_sin_prefijo_origin` — `prepare_features` acepta columnas de clima sin el prefijo `origin_`.
+- `test_prepare_features_rellena_nulos_con_cero` — `prepare_features` rellena los nulos con 0.
+- `test_prepare_features_sin_una_columna_necesaria_devuelve_vacio` ×4 — Si falta una columna necesaria (parametrizado), `prepare_features` devuelve tablas vacías.
+- `test_prepare_features_con_dataframe_vacio` — `prepare_features` con un DataFrame vacío devuelve tablas vacías.
+- `test_entrena_y_registra_las_features` — El modelo entrena, registra sus variables y su estado, y las importancias suman 1.
+- `test_no_entrena_con_pocas_muestras_ni_sin_columnas` — No entrena con menos muestras que el mínimo ni si faltan columnas, y lo indica devolviendo `False`.
 - `test_no_entrena_si_el_objetivo_tiene_nulos` — RandomForest no admite NaN en el objetivo: el error se captura y train() devuelve False.
 - `test_predict_devuelve_tiempo_y_confianza_razonables` — Regresión: predict() devolvía SIEMPRE None, porque se le pasaban al escalador columnas con otro nombre (origin_temperature/origin_humidity) que las del ajuste (temperature/humidity) y sklearn lo rechazaba; el except lo ocultaba. El modelo por ruta que documenta el README no producía ninguna predicción.
 - `test_predict_responde_a_los_datos_de_entrada` — El modelo aprende la relación: con un tiempo sin tráfico mayor, predice más.
-- `test_predict_sin_entrenar_devuelve_none`
+- `test_predict_sin_entrenar_devuelve_none` — Predecir sin haber entrenado devuelve `None`, y la importancia de variables queda vacía.
 - `test_predict_usa_el_historico_como_lag_y_si_falta_el_tiempo_sin_trafico` — `historical_avg or no_traffic_time`: con histórico se usa como lag; con None o 0 (falsy) se usa el tiempo sin tráfico. Se espía la entrada que recibe el escalador.
 - `test_el_lag_es_la_media_movil_de_5_valores_del_tiempo_de_viaje` — Documenta cómo se construye hoy `travel_time_min_lag`: media móvil de 5 filas que INCLUYE la fila actual (y las filas llegan de la base ordenadas de más reciente a más antigua). Ver README, limitaciones.
-- `test_guardar_y_cargar_reproduce_las_predicciones`
-- `test_no_guarda_un_modelo_sin_entrenar_y_carga_falla_con_gracia`
-- `test_el_nombre_del_archivo_del_modelo_no_tiene_espacios`
-- `test_crea_el_directorio_de_modelos_y_cachea_el_modelo_por_ruta`
-- `test_entrena_una_ruta_con_suficientes_datos_y_guarda_el_modelo`
-- `test_no_entrena_una_ruta_con_pocas_muestras`
+- `test_guardar_y_cargar_reproduce_las_predicciones` — Un modelo guardado y vuelto a cargar da las mismas predicciones.
+- `test_no_guarda_un_modelo_sin_entrenar_y_carga_falla_con_gracia` — No guarda un modelo sin entrenar y cargar un archivo inexistente, corrupto o incompleto devuelve `False` sin lanzar excepción.
+- `test_el_nombre_del_archivo_del_modelo_no_tiene_espacios` — El nombre del archivo del modelo de una ruta cambia los espacios por guiones bajos y cuelga del directorio de modelos.
+- `test_crea_el_directorio_de_modelos_y_cachea_el_modelo_por_ruta` — Se crea el directorio de modelos y el modelo de cada ruta se reutiliza; la ruta inversa es otro modelo.
+- `test_entrena_una_ruta_con_suficientes_datos_y_guarda_el_modelo` — Una ruta con suficientes datos se entrena y su modelo queda guardado en disco.
+- `test_no_entrena_una_ruta_con_pocas_muestras` — Una ruta con pocas muestras no se entrena ni se guarda.
 - `test_min_samples_del_predictor_llega_al_modelo` — Regresión: el predictor comprobaba su min_samples pero el modelo usaba su propio mínimo (50), así que con min_samples=30 (como train_models.py) una ruta de 40 muestras fallaba al entrenar.
-- `test_train_all_models_devuelve_un_resultado_por_ruta`
-- `test_predice_el_tiempo_de_viaje_de_una_ruta_entrenada`
-- `test_sin_modelo_entrenado_no_hay_prediccion`
-- `test_un_predictor_nuevo_reutiliza_los_modelos_guardados`
-- `test_el_estado_de_los_modelos`
+- `test_train_all_models_devuelve_un_resultado_por_ruta` — `train_all_models` devuelve un resultado por ruta: entrenada o no.
+- `test_predice_el_tiempo_de_viaje_de_una_ruta_entrenada` — Una ruta entrenada predice un tiempo de viaje plausible con una confianza entre 50 y 100.
+- `test_sin_modelo_entrenado_no_hay_prediccion` — Sin modelo entrenado para la ruta no hay predicción (`None`).
+- `test_un_predictor_nuevo_reutiliza_los_modelos_guardados` — Un predictor nuevo carga los modelos ya guardados en disco.
+- `test_el_estado_de_los_modelos` — El estado de los modelos lista todas las rutas; las entrenadas incluyen la importancia de variables y las demás no.
 
 ## Archivos de apoyo (no contienen tests)
 

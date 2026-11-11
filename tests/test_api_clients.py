@@ -84,6 +84,7 @@ def test_la_sesion_reintenta_solo_errores_transitorios(cliente, metodo):
 
 
 def test_close_cierra_la_sesion():
+    """`close()` cierra la sesión HTTP del cliente."""
     c = _con_sesion(TomTomClient("k"), Respuesta({}))
     c.close()
     assert c.session.cerrada
@@ -102,6 +103,7 @@ TOMTOM_OK = {"routes": [{
 
 
 def test_tomtom_parsea_la_ruta_y_envia_la_peticion_correcta():
+    """TomTom interpreta la respuesta con todos sus campos y envía la URL, el timeout y los parámetros correctos."""
     c = _con_sesion(TomTomClient("CLAVE", timeout=7), Respuesta(TOMTOM_OK))
     r = c.calculate_route(35.90, 14.50, 35.88, 14.52, route_type="shortest")
     assert r == {
@@ -125,6 +127,7 @@ def test_tomtom_sin_campos_opcionales_deduce_el_tiempo_sin_trafico():
 
 
 def test_tomtom_con_tiempo_cero_no_divide_por_cero():
+    """Con un tiempo de viaje de 0, TomTom da velocidad media 0 y no divide entre cero."""
     payload = {"routes": [{"summary": {"lengthInMeters": 1000, "travelTimeInSeconds": 0}}]}
     assert _con_sesion(TomTomClient("k"), Respuesta(payload)).calculate_route(0, 0, 1, 1)["average_speed_kmh"] == 0
 
@@ -138,6 +141,7 @@ def test_tomtom_con_tiempo_cero_no_divide_por_cero():
     (Respuesta({}), ValueError),
 ])
 def test_tomtom_propaga_los_errores(respuesta, error):
+    """Los errores de red y de estado HTTP de TomTom (parametrizado) se propagan al llamador."""
     with pytest.raises(error):
         _con_sesion(TomTomClient("k"), respuesta).calculate_route(0, 0, 1, 1)
 
@@ -150,6 +154,7 @@ ORS_OK = {"routes": [{"summary": {"distance": 4200.0, "duration": 600.0}, "geome
 
 
 def test_ors_parsea_la_ruta_con_las_mismas_claves_que_tomtom():
+    """ORS devuelve las mismas claves que TomTom; los campos de tráfico que no informa quedan en `None`, no en 0."""
     c = _con_sesion(ORSClient("CLAVE"), Respuesta(ORS_OK))
     r = c.calculate_route(35.90, 14.50, 35.88, 14.52)
     assert r["distance_km"] == 4.2 and r["travel_time_min"] == 10.0 and r["average_speed_kmh"] == 25.2
@@ -162,6 +167,7 @@ def test_ors_parsea_la_ruta_con_las_mismas_claves_que_tomtom():
 
 
 def test_ors_envia_longitud_antes_que_latitud_y_la_clave_en_la_cabecera():
+    """ORS recibe las coordenadas como [longitud, latitud] y la clave de API en la cabecera `Authorization`."""
     c = _con_sesion(ORSClient("CLAVE"), Respuesta(ORS_OK))
     c.calculate_route(35.90, 14.50, 35.88, 14.52)
     llamada = c.session.llamadas[0]
@@ -177,6 +183,7 @@ def test_ors_envia_longitud_antes_que_latitud_y_la_clave_en_la_cabecera():
     (Respuesta({"routes": []}), ValueError),
 ])
 def test_ors_propaga_los_errores(respuesta, error):
+    """Los errores de red y de estado HTTP de ORS (parametrizado) se propagan al llamador."""
     with pytest.raises(error):
         _con_sesion(ORSClient("k"), respuesta).calculate_route(0, 0, 1, 1)
 
@@ -189,6 +196,7 @@ CLIMA_OK = {"main": {"temp": 21.5, "feels_like": 22.0, "humidity": 60}, "weather
 
 
 def test_weather_parsea_y_pide_unidades_metricas():
+    """El clima se interpreta correctamente y se pide en unidades métricas con la clave en los parámetros."""
     c = _con_sesion(WeatherClient("CLAVE"), Respuesta(CLIMA_OK))
     assert c.get_current_weather(35.9, 14.5) == {"temperature": 21.5, "feels_like": 22.0, "humidity": 60,
                                                  "weather": "cielo claro"}
@@ -197,11 +205,13 @@ def test_weather_parsea_y_pide_unidades_metricas():
 
 
 def test_weather_respuesta_incompleta_da_none_y_unknown():
+    """Una respuesta de clima incompleta da valores `None` y la descripción «Unknown»."""
     r = _con_sesion(WeatherClient("k"), Respuesta({})).get_current_weather(0, 0)
     assert r == {"temperature": None, "feels_like": None, "humidity": None, "weather": "Unknown"}
 
 
 def test_weather_usa_la_cache_por_ubicacion_y_caduca():
+    """El clima se cachea por ubicación y caduca pasado el tiempo de vida; `clear_cache` vacía la caché."""
     c = _con_sesion(WeatherClient("k", cache_ttl=300), Respuesta(CLIMA_OK))
     c.get_current_weather(35.9, 14.5)
     c.get_current_weather(35.9, 14.5)                       # misma ubicación: cache
@@ -216,6 +226,7 @@ def test_weather_usa_la_cache_por_ubicacion_y_caduca():
 
 
 def test_weather_un_error_no_se_guarda_en_cache():
+    """Un error al pedir el clima no se guarda en la caché: la siguiente petición vuelve a intentarlo."""
     c = _con_sesion(WeatherClient("k"), requests.exceptions.ConnectionError("sin red"), Respuesta(CLIMA_OK))
     with pytest.raises(requests.exceptions.RequestException):
         c.get_current_weather(35.9, 14.5)
@@ -228,6 +239,7 @@ def test_weather_un_error_no_se_guarda_en_cache():
     (Respuesta(json_invalido=True), ValueError),
 ])
 def test_weather_propaga_los_errores(respuesta, error):
+    """Los errores de red y de estado HTTP del clima (parametrizado) se propagan al llamador."""
     with pytest.raises(error):
         _con_sesion(WeatherClient("k"), respuesta).get_current_weather(0, 0)
 
@@ -249,6 +261,7 @@ ELEMENTOS = [
 
 
 def test_overpass_clasifica_por_prioridad_y_toma_el_valor_como_subcategoria():
+    """Overpass clasifica cada elemento por prioridad entre categorías y toma el valor de la etiqueta como subcategoría; lo que no encaja da `None`."""
     clasificar = OverpassClient._classify
     assert clasificar({"amenity": "cafe"}) == ("food_drink", "cafe")
     assert clasificar({"shop": "bakery", "amenity": "cafe"}) == ("food_drink", "cafe")      # la específica gana
@@ -261,6 +274,7 @@ def test_overpass_clasifica_por_prioridad_y_toma_el_valor_como_subcategoria():
 
 
 def test_overpass_la_query_cubre_todas_las_categorias():
+    """La consulta de Overpass cubre todas las categorías: cabecera con el timeout, regex para varios valores y una cláusula de nodo y otra de vía por etiqueta."""
     q = OverpassClient._build_query((35.7, 14.4, 36.0, 14.7), CATEGORY_TAGS, 75)
     assert q.startswith("[out:json][timeout:75];") and q.rstrip().endswith("out center tags;")
     assert '["amenity"~"^(school|college|university|kindergarten)$"]' in q       # varios valores: una regex
@@ -269,6 +283,7 @@ def test_overpass_la_query_cubre_todas_las_categorias():
 
 
 def test_overpass_parsea_nodos_y_ways_y_descarta_lo_inutil():
+    """Se interpretan nodos y vías y se descartan los elementos sin categoría o sin coordenadas; el que no tiene nombre recibe uno genérico."""
     pois = OverpassClient()._parse_elements(ELEMENTOS)
     assert [p["osm_id"] for p in pois] == [1, 2]                  # sin categoría (3) y sin coordenadas (4) fuera
     assert pois[0] == {"osm_type": "node", "osm_id": 1, "category": "food_drink", "subcategory": "cafe",
@@ -277,6 +292,7 @@ def test_overpass_parsea_nodos_y_ways_y_descarta_lo_inutil():
 
 
 def test_overpass_fetch_calcula_el_bbox_con_margen_y_el_timeout_del_servidor():
+    """`fetch_pois` calcula el rectángulo de búsqueda con el margen y envía el timeout del servidor y el del cliente."""
     c = _con_sesion(OverpassClient(timeout=90), Respuesta({"elements": ELEMENTOS}))
     pois = c.fetch_pois(_zona(), margin_deg=0.01)
     assert len(pois) == 2
@@ -286,6 +302,7 @@ def test_overpass_fetch_calcula_el_bbox_con_margen_y_el_timeout_del_servidor():
 
 
 def test_overpass_prueba_el_siguiente_espejo_si_uno_falla():
+    """Si un servidor espejo de Overpass falla (error de red o 504), se prueba el siguiente."""
     c = _con_sesion(OverpassClient(endpoints=["https://uno", "https://dos", "https://tres"]),
                     requests.exceptions.ConnectionError("caído"), Respuesta(status=504),
                     Respuesta({"elements": ELEMENTOS}))
@@ -294,6 +311,7 @@ def test_overpass_prueba_el_siguiente_espejo_si_uno_falla():
 
 
 def test_overpass_json_invalido_cuenta_como_fallo_del_espejo():
+    """Un JSON inválido cuenta como fallo del espejo y se pasa al siguiente."""
     c = _con_sesion(OverpassClient(endpoints=["https://uno", "https://dos"]),
                     Respuesta(json_invalido=True), Respuesta({"elements": []}))
     assert c.fetch_pois(_zona()) == []
@@ -301,6 +319,7 @@ def test_overpass_json_invalido_cuenta_como_fallo_del_espejo():
 
 
 def test_overpass_si_todos_los_espejos_fallan_lanza_runtimeerror():
+    """Si todos los espejos fallan, `fetch_pois` lanza `RuntimeError` tras probarlos todos."""
     c = _con_sesion(OverpassClient(endpoints=["https://uno", "https://dos"]), requests.exceptions.Timeout("lento"))
     with pytest.raises(RuntimeError, match="All Overpass endpoints failed"):
         c.fetch_pois(_zona())
@@ -308,4 +327,5 @@ def test_overpass_si_todos_los_espejos_fallan_lanza_runtimeerror():
 
 
 def test_overpass_envia_un_user_agent_descriptivo():
+    """El cliente de Overpass envía su `User-Agent` descriptivo."""
     assert OverpassClient().session.headers["User-Agent"] == OverpassClient.USER_AGENT
