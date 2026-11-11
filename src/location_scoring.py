@@ -49,8 +49,10 @@ DEFAULT_ROUTE_HOURS = 24 * 365 * 10  # "todo el histórico" (ver analyst_dashboa
 
 def _haversine_m(lat1, lon1, lat2, lon2) -> float:
     p = math.pi / 180
-    a = (math.sin((lat2 - lat1) * p / 2) ** 2
-         + math.cos(lat1 * p) * math.cos(lat2 * p) * math.sin((lon2 - lon1) * p / 2) ** 2)
+    a = (
+        math.sin((lat2 - lat1) * p / 2) ** 2
+        + math.cos(lat1 * p) * math.cos(lat2 * p) * math.sin((lon2 - lon1) * p / 2) ** 2
+    )
     return 2 * 6371000 * math.asin(math.sqrt(a))
 
 
@@ -82,10 +84,14 @@ def zone_competition(db, category: str, radius_m: float = DEFAULT_POI_RADIUS_M) 
             dist = pois.apply(lambda r: _haversine_m(loc.latitude, loc.longitude, r.latitude, r.longitude), axis=1)
             crudo = int((dist <= radius_m).sum())
         valor = crudo / FOOD_DRINK_OSM_COVERAGE if corregido else crudo
-        rows.append({
-            "zone_name": zone, "competencia": valor, "competencia_cruda": crudo,
-            "metodo_competencia": "corregido_por_cobertura" if corregido else "observado",
-        })
+        rows.append(
+            {
+                "zone_name": zone,
+                "competencia": valor,
+                "competencia_cruda": crudo,
+                "metodo_competencia": "corregido_por_cobertura" if corregido else "observado",
+            }
+        )
     return pd.DataFrame(rows).set_index("zone_name")
 
 
@@ -98,10 +104,12 @@ def zone_accessibility(db, hours: int = DEFAULT_ROUTE_HOURS) -> pd.DataFrame:
     rows = []
     for zone in LOCATIONS:
         touching = stats[(stats.origin == zone) | (stats.destination == zone)]
-        rows.append({
-            "zone_name": zone,
-            "tiempo_viaje_prom": float(touching["avg_travel_time"].mean()) if len(touching) else float("nan"),
-        })
+        rows.append(
+            {
+                "zone_name": zone,
+                "tiempo_viaje_prom": float(touching["avg_travel_time"].mean()) if len(touching) else float("nan"),
+            }
+        )
     return pd.DataFrame(rows).set_index("zone_name")
 
 
@@ -118,8 +126,9 @@ def _normalize_minmax(series: pd.Series) -> pd.Series:
     return (series - lo) / (hi - lo)
 
 
-def build_zone_features(db, category: str, radius_m: float = DEFAULT_POI_RADIUS_M,
-                         hours: int = DEFAULT_ROUTE_HOURS) -> pd.DataFrame:
+def build_zone_features(
+    db, category: str, radius_m: float = DEFAULT_POI_RADIUS_M, hours: int = DEFAULT_ROUTE_HOURS
+) -> pd.DataFrame:
     """Una fila por zona con las 3 dimensiones crudas (sin normalizar)."""
     df = zone_demand(db).join(zone_competition(db, category, radius_m)).join(zone_accessibility(db, hours))
     df["categoria"] = category
@@ -153,8 +162,9 @@ def score_zones(features: pd.DataFrame, weights: Optional[Dict[str, float]] = No
     return df.sort_values("score", ascending=False)
 
 
-def recommend_locations(db, business_type_text: str, weights: Optional[Dict[str, float]] = None,
-                         radius_m: float = DEFAULT_POI_RADIUS_M) -> pd.DataFrame:
+def recommend_locations(
+    db, business_type_text: str, weights: Optional[Dict[str, float]] = None, radius_m: float = DEFAULT_POI_RADIUS_M
+) -> pd.DataFrame:
     """Punto de entrada de extremo a extremo: texto libre -> categoría ->
     features por zona -> puntaje. Lanza ValueError si el texto no se pudo
     interpretar (no adivina una categoría al azar)."""

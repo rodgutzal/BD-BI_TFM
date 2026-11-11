@@ -37,9 +37,15 @@ ad.main()
 def _fila(i, origin, destination, **extra):
     base = {
         "timestamp": (AHORA - timedelta(hours=i)).isoformat(),
-        "origin": origin, "destination": destination, "data_source": "tomtom",
-        "travel_time_min": 10.0 + (i % 5), "distance_km": 3.0, "average_speed_kmh": 30.0,
-        "traffic_delay_min": 1.0, "origin_temperature": 20.0 + (i % 4), "origin_humidity": 50.0,
+        "origin": origin,
+        "destination": destination,
+        "data_source": "tomtom",
+        "travel_time_min": 10.0 + (i % 5),
+        "distance_km": 3.0,
+        "average_speed_kmh": 30.0,
+        "traffic_delay_min": 1.0,
+        "origin_temperature": 20.0 + (i % 4),
+        "origin_humidity": 50.0,
     }
     base.update(extra)
     return base
@@ -56,9 +62,16 @@ def espia(tmp_path, monkeypatch):
     )
     st.cache_data.clear()
     monkeypatch.setattr(ad, "get_database", lambda: db)
-    monkeypatch.setattr(ad.predictive_modeling_dashboard, "render", lambda: None)   # el modelado ya tiene sus propios tests
+    monkeypatch.setattr(
+        ad.predictive_modeling_dashboard, "render", lambda: None
+    )  # el modelado ya tiene sus propios tests
 
-    llamadas = {"get_available_routes": 0, "get_all_routes_statistics": 0, "get_data_profile": 0, "query_measurements": []}
+    llamadas = {
+        "get_available_routes": 0,
+        "get_all_routes_statistics": 0,
+        "get_data_profile": 0,
+        "query_measurements": [],
+    }
     for nombre in ("get_available_routes", "get_all_routes_statistics", "get_data_profile"):
         original = getattr(RouteDatabase, nombre)
 
@@ -153,7 +166,9 @@ def test_el_panel_lateral_usa_el_ultimo_timestamp_y_no_el_resumen_completo(tmp_p
     st.cache_data.clear()
     resumen = []
     original = RouteDatabase.get_database_summary
-    monkeypatch.setattr(RouteDatabase, "get_database_summary", lambda self, *a, **k: resumen.append(1) or original(self, *a, **k))
+    monkeypatch.setattr(
+        RouteDatabase, "get_database_summary", lambda self, *a, **k: resumen.append(1) or original(self, *a, **k)
+    )
     assert app._last_measurement_timestamp(db) == db.get_last_timestamp()
     assert resumen == [], "no debe construir el resumen completo para sacar una fecha"
     st.cache_data.clear()

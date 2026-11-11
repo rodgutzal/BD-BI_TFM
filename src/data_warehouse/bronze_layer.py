@@ -1,13 +1,13 @@
 """Bronze layer: Raw data ingestion and validation."""
 
 import logging
-
-import pandas as pd
-import numpy as np
+import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict
-import sqlite3
+from typing import Dict, Optional
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +81,7 @@ class BronzeLayer:
         except sqlite3.IntegrityError as e:
             # La base ya contiene duplicados: no se puede imponer la unicidad
             # hasta limpiarlos. No se borra nada automáticamente.
-            logger.warning(
-                f"No se pudo crear idx_bronze_unique (hay filas duplicadas en "
-                f"bronze_measurements): {e}"
-            )
+            logger.warning(f"No se pudo crear idx_bronze_unique (hay filas duplicadas en " f"bronze_measurements): {e}")
 
         conn.commit()
         conn.close()
@@ -105,26 +102,26 @@ class BronzeLayer:
 
         # 1. Handle duplicates (keep first occurrence)
         before_dedup = len(df)
-        df = df.drop_duplicates(subset=['timestamp', 'origin', 'destination'], keep='first')
+        df = df.drop_duplicates(subset=["timestamp", "origin", "destination"], keep="first")
         if len(df) < before_dedup:
             issues.append(f"Removed {before_dedup - len(df)} duplicates")
 
         # 2. Validate required columns
-        required_cols = ['timestamp', 'origin', 'destination', 'travel_time_min']
+        required_cols = ["timestamp", "origin", "destination", "travel_time_min"]
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             issues.append(f"Missing columns: {missing_cols}")
-            return {'error': 'Missing required columns', 'issues': issues}
+            return {"error": "Missing required columns", "issues": issues}
 
         # 3. Data type validation
         # format='mixed': ver la misma nota en silver_layer.py — robustez
         # ante timestamps con formato inconsistente en el df de entrada.
-        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce', utc=True, format='mixed')
-        df['travel_time_min'] = pd.to_numeric(df['travel_time_min'], errors='coerce')
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True, format="mixed")
+        df["travel_time_min"] = pd.to_numeric(df["travel_time_min"], errors="coerce")
 
         # 4. Remove rows with NaN in critical columns
         before_validation = len(df)
-        df = df.dropna(subset=['timestamp', 'travel_time_min', 'origin', 'destination'])
+        df = df.dropna(subset=["timestamp", "travel_time_min", "origin", "destination"])
         if len(df) < before_validation:
             issues.append(f"Removed {before_validation - len(df)} rows with missing critical values")
 
@@ -139,25 +136,27 @@ class BronzeLayer:
         # y por lo tanto Gold nunca tenía nada que agregar ("no_data").
         # Se reconvierte a string ISO explícitamente para mantener el
         # formato consistente en toda la base.
-        df['timestamp'] = df['timestamp'].apply(lambda t: t.isoformat())
+        df["timestamp"] = df["timestamp"].apply(lambda t: t.isoformat())
 
         # 5. Outlier detection (basic bounds check)
         travel_time_bounds = (0, 500)  # 0 to 500 minutes
-        outliers = len(df[(df['travel_time_min'] < travel_time_bounds[0]) | (df['travel_time_min'] > travel_time_bounds[1])])
+        outliers = len(
+            df[(df["travel_time_min"] < travel_time_bounds[0]) | (df["travel_time_min"] > travel_time_bounds[1])]
+        )
         if outliers > 0:
             issues.append(f"Found {outliers} potential outliers in travel_time_min")
-            df = df[(df['travel_time_min'] >= travel_time_bounds[0]) & (df['travel_time_min'] <= travel_time_bounds[1])]
+            df = df[(df["travel_time_min"] >= travel_time_bounds[0]) & (df["travel_time_min"] <= travel_time_bounds[1])]
 
         # 6. Calculate data quality score
         quality_scores = []
         for _, row in df.iterrows():
             score = self._calculate_quality_score(row)
             quality_scores.append(score)
-        df['data_quality_score'] = quality_scores
+        df["data_quality_score"] = quality_scores
 
         # 7. Store in bronze
-        df['ingestion_timestamp'] = datetime.utcnow().isoformat()
-        df['validation_status'] = 'validated'
+        df["ingestion_timestamp"] = datetime.utcnow().isoformat()
+        df["validation_status"] = "validated"
 
         # BD_BI_TFM fix: la tabla bronze_measurements define la columna
         # como `raw_timestamp` (no `timestamp`), y sólo acepta las columnas
@@ -166,13 +165,23 @@ class BronzeLayer:
         # data_source, mobility_level, polyline, etc.) que no existen aquí
         # y que `to_sql` rechazaría. Se renombra y se filtra explícitamente
         # antes de insertar.
-        df = df.rename(columns={'timestamp': 'raw_timestamp'})
+        df = df.rename(columns={"timestamp": "raw_timestamp"})
         bronze_columns = [
-            'raw_timestamp', 'origin', 'destination', 'travel_time_min',
-            'no_traffic_time_min', 'average_speed_kmh', 'origin_temperature',
-            'origin_humidity', 'origin_weather', 'destination_temperature',
-            'destination_humidity', 'destination_weather',
-            'ingestion_timestamp', 'data_quality_score', 'validation_status',
+            "raw_timestamp",
+            "origin",
+            "destination",
+            "travel_time_min",
+            "no_traffic_time_min",
+            "average_speed_kmh",
+            "origin_temperature",
+            "origin_humidity",
+            "origin_weather",
+            "destination_temperature",
+            "destination_humidity",
+            "destination_weather",
+            "ingestion_timestamp",
+            "data_quality_score",
+            "validation_status",
         ]
         for col in bronze_columns:
             if col not in df.columns:
@@ -185,13 +194,12 @@ class BronzeLayer:
             # vistas no las duplica. `inserted` cuenta solo las realmente nuevas.
             cursor = conn.cursor()
             changes_before = conn.total_changes
-            col_list = ','.join(bronze_columns)
-            placeholders = ','.join(['?'] * len(bronze_columns))
+            col_list = ",".join(bronze_columns)
+            placeholders = ",".join(["?"] * len(bronze_columns))
             # NaN -> None: sqlite3 bindea float('nan') como NULL de forma
             # inconsistente según la versión; None es explícito.
             rows = [
-                tuple(None if pd.isna(v) else v for v in r)
-                for r in df_to_insert.itertuples(index=False, name=None)
+                tuple(None if pd.isna(v) else v for v in r) for r in df_to_insert.itertuples(index=False, name=None)
             ]
             cursor.executemany(
                 f"INSERT OR IGNORE INTO bronze_measurements ({col_list}) VALUES ({placeholders})",
@@ -206,12 +214,12 @@ class BronzeLayer:
             conn.close()
 
         return {
-            'status': 'success',
-            'original_records': original_count,
-            'inserted_records': inserted,
-            'removed_records': original_count - inserted,
-            'quality_score': float(np.mean(quality_scores)) if quality_scores else 0,
-            'issues': issues
+            "status": "success",
+            "original_records": original_count,
+            "inserted_records": inserted,
+            "removed_records": original_count - inserted,
+            "quality_score": float(np.mean(quality_scores)) if quality_scores else 0,
+            "issues": issues,
         }
 
     @staticmethod
@@ -227,19 +235,19 @@ class BronzeLayer:
         score = 100.0
 
         # Check for required fields
-        required = ['timestamp', 'origin', 'destination', 'travel_time_min']
+        required = ["timestamp", "origin", "destination", "travel_time_min"]
         missing = sum(1 for col in required if pd.isna(row.get(col)))
         score -= missing * 10
 
         # Check ranges
-        if pd.notna(row.get('travel_time_min')):
-            if not (0 < row['travel_time_min'] < 500):
+        if pd.notna(row.get("travel_time_min")):
+            if not (0 < row["travel_time_min"] < 500):
                 score -= 20
         else:
             score -= 20
 
         # Check optional fields
-        optional = ['origin_temperature', 'origin_humidity', 'destination_temperature', 'destination_humidity']
+        optional = ["origin_temperature", "origin_humidity", "destination_temperature", "destination_humidity"]
         missing_optional = sum(1 for col in optional if pd.isna(row.get(col)))
         score -= missing_optional * 2
 
@@ -251,11 +259,14 @@ class BronzeLayer:
         cursor = conn.cursor()
 
         if date:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*), AVG(data_quality_score)
                 FROM bronze_measurements
                 WHERE DATE(created_at) = ?
-            """, (date,))
+            """,
+                (date,),
+            )
         else:
             cursor.execute("""
                 SELECT COUNT(*), AVG(data_quality_score)
@@ -265,7 +276,4 @@ class BronzeLayer:
         total, avg_score = cursor.fetchone() or (0, 0)
         conn.close()
 
-        return {
-            'total_records': total,
-            'avg_quality_score': float(avg_score) if avg_score else 0
-        }
+        return {"total_records": total, "avg_quality_score": float(avg_score) if avg_score else 0}

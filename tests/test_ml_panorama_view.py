@@ -27,13 +27,15 @@ def punto(fila, col, cat, sub):
 
 @pytest.fixture(scope="module")
 def counts():
-    filas = ([punto(10, 10 + i, "food_drink", "restaurant") for i in range(6)]
-             + [punto(10, 10 + i, "food_drink", "bar") for i in range(3)]
-             + [punto(11, 10 + i, "business", "convenience") for i in range(4)]
-             + [punto(11, 10, "business", "company")]
-             + [punto(12, 10 + i, "edificio", "apartments") for i in range(5)]
-             + [punto(12, 10, "transporte", "bus_stop")]
-             + [punto(12, 10, "leisure", "")])
+    filas = (
+        [punto(10, 10 + i, "food_drink", "restaurant") for i in range(6)]
+        + [punto(10, 10 + i, "food_drink", "bar") for i in range(3)]
+        + [punto(11, 10 + i, "business", "convenience") for i in range(4)]
+        + [punto(11, 10, "business", "company")]
+        + [punto(12, 10 + i, "edificio", "apartments") for i in range(5)]
+        + [punto(12, 10, "transporte", "bus_stop")]
+        + [punto(12, 10, "leisure", "")]
+    )
     return CellCounts.from_pois(pd.DataFrame(filas))
 
 
@@ -45,7 +47,9 @@ def datos():
 # ---- opciones ----------------------------------------------------------------------------------------------------
 def test_expand_selectors_separa_las_subcategorias_y_etiqueta_el_resto():
     """Cada subcategoría de un selector queda por separado; una categoría entera y un «todo salvo» tienen su etiqueta."""
-    e = pv.expand_selectors([selector("business", "bakery", "pastry"), selector("food_drink"), selector_except("business", "company", "it")])
+    e = pv.expand_selectors(
+        [selector("business", "bakery", "pastry"), selector("food_drink"), selector_except("business", "company", "it")]
+    )
     assert "business: bakery" in e and "business: pastry" in e
     assert "food_drink (toda la categoría)" in e
     assert any(k.startswith("business (todo salvo 2 subcategorías") and "company" in k for k in e)
@@ -73,7 +77,7 @@ def test_competition_options_incluye_los_defectos_y_son_disjuntos(counts):
     opciones, directa, indirecta = pv.competition_options(FOOD, counts)
     assert set(directa) | set(indirecta) <= set(opciones) and not set(directa) & set(indirecta)
     assert directa == ["food_drink (toda la categoría)"] and "business: convenience" in indirecta
-    assert "food_drink: bar" in opciones                       # se puede añadir algo más fino
+    assert "food_drink: bar" in opciones  # se puede añadir algo más fino
 
 
 def _por_defecto(counts, perfil=FOOD):
@@ -91,7 +95,9 @@ def test_sin_cambios_devuelve_el_perfil_por_defecto_sin_avisos(counts):
 def test_el_orden_de_la_seleccion_no_cuenta_como_cambio(counts):
     """Elegir lo mismo en otro orden no hace personalizado el perfil."""
     opciones, directa, indirecta, seg, prov = _por_defecto(counts)
-    perfil, avisos = pv.custom_profile(FOOD, opciones, directa, list(reversed(indirecta)), list(reversed(seg)), list(reversed(prov)))
+    perfil, avisos = pv.custom_profile(
+        FOOD, opciones, directa, list(reversed(indirecta)), list(reversed(seg)), list(reversed(prov))
+    )
     assert not perfil.personalizado and avisos == []
 
 
@@ -143,6 +149,7 @@ def test_un_elemento_en_directa_e_indirecta_cuenta_solo_como_directa(counts):
 def test_same_profile_distingue_competencia_segmentos_y_proveedores():
     """Cualquiera de las tres definiciones distinta hace que los perfiles no sean el mismo."""
     from dataclasses import replace
+
     base = FOOD
     assert pv.same_profile(base, replace(base, personalizado=True))
     assert not pv.same_profile(base, replace(base, segmentos=base.segmentos[:-1]))
@@ -156,7 +163,9 @@ def test_gap_table_solo_existe_para_las_categorias_con_brecha(datos):
     guardado, _ = datos
     for clave in ("food_drink", "business"):
         tabla, modelo, validada = pv.gap_table(guardado, clave)
-        assert tabla is not None and list(tabla.columns) == list(panorama.COLUMNAS_BRECHA) and modelo and validada is False
+        assert (
+            tabla is not None and list(tabla.columns) == list(panorama.COLUMNAS_BRECHA) and modelo and validada is False
+        )
     assert pv.gap_table(guardado, "hospital") == (None, "", False)
 
 
@@ -168,7 +177,9 @@ def test_la_vista_por_defecto_coincide_con_la_tabla_guardada(datos):
         g = guardado[guardado["perfil"] == clave].set_index("cell_id")
         assert list(vista.index) == list(g.index)
         for col in ("competencia_directa", "mercado_total", "proveedores_total", "confianza"):
-            np.testing.assert_allclose(vista[col].to_numpy(dtype=float), g[col].to_numpy(dtype=float), rtol=1e-5, equal_nan=True)
+            np.testing.assert_allclose(
+                vista[col].to_numpy(dtype=float), g[col].to_numpy(dtype=float), rtol=1e-5, equal_nan=True
+            )
 
 
 def test_un_perfil_distinto_cambia_las_lentes_pero_no_la_brecha(datos):
@@ -187,14 +198,18 @@ def test_un_segmento_menos_cambia_el_mercado(datos):
     """Con solo «residentes» el índice de mercado es el de residentes escalado, distinto del combinado."""
     guardado, counts = datos
     perfil, _ = pv.custom_profile(FOOD, *_por_defecto(counts)[:3], ["residentes"], FOOD.proveedores)
-    base, vista = pv.compute_view(counts, FOOD, guardado, "food_drink"), pv.compute_view(counts, perfil, guardado, "food_drink")
+    base, vista = pv.compute_view(counts, FOOD, guardado, "food_drink"), pv.compute_view(
+        counts, perfil, guardado, "food_drink"
+    )
     assert "mercado_turistas" not in vista and "mercado_turistas" in base
     assert not np.allclose(base["mercado_total"], vista["mercado_total"])
 
 
 # ---- filtro de oportunidad y capas -------------------------------------------------------------------------------
 def _vista_min(mercado, competencia, confianza):
-    return pd.DataFrame({"pct_mercado_total": mercado, "pct_competencia_directa": competencia, "confianza_nivel": confianza})
+    return pd.DataFrame(
+        {"pct_mercado_total": mercado, "pct_competencia_directa": competencia, "confianza_nivel": confianza}
+    )
 
 
 def test_filtro_de_oportunidad_en_los_umbrales():
@@ -238,6 +253,9 @@ def test_cell_label_incluye_celda_zona_y_distancia():
 def test_el_modulo_no_importa_scikit_learn():
     """La interfaz usa este módulo en el contenedor del dashboard, que no carga scikit-learn."""
     import subprocess
-    codigo = ("import sys; sys.path.insert(0, sys.argv[1]); import src.ml.panorama_view; "
-              "sys.exit(1 if any(m.split('.')[0] == 'sklearn' for m in sys.modules) else 0)")
+
+    codigo = (
+        "import sys; sys.path.insert(0, sys.argv[1]); import src.ml.panorama_view; "
+        "sys.exit(1 if any(m.split('.')[0] == 'sklearn' for m in sys.modules) else 0)"
+    )
     assert subprocess.run([sys.executable, "-c", codigo, str(ROOT)]).returncode == 0

@@ -40,15 +40,25 @@ def _nombre_senal(signum) -> str:
     except (ValueError, TypeError):
         return str(signum)
 
+
 # Umbral (en minutos) a partir del cual una ruta se considera de alta demora.
 # Se mantiene el mismo criterio que usaba BD_BI_TFM originalmente.
 HIGH_DELAY_THRESHOLD_MIN = 20
 
 # Columnas de un registro del collector que necesita BronzeLayer.ingest().
 _BRONZE_INPUT_COLUMNS = [
-    "timestamp", "origin", "destination", "travel_time_min", "no_traffic_time_min",
-    "average_speed_kmh", "origin_temperature", "origin_humidity", "origin_weather",
-    "destination_temperature", "destination_humidity", "destination_weather",
+    "timestamp",
+    "origin",
+    "destination",
+    "travel_time_min",
+    "no_traffic_time_min",
+    "average_speed_kmh",
+    "origin_temperature",
+    "origin_humidity",
+    "origin_weather",
+    "destination_temperature",
+    "destination_humidity",
+    "destination_weather",
 ]
 
 
@@ -71,11 +81,7 @@ class DataCollector:
             raise ValueError(f"data_source debe ser 'ors' o 'tomtom', recibido: {data_source}")
 
         self.data_source = data_source
-        self.traffic_client = (
-            TomTomClient(traffic_api_key)
-            if data_source == "tomtom"
-            else ORSClient(traffic_api_key)
-        )
+        self.traffic_client = TomTomClient(traffic_api_key) if data_source == "tomtom" else ORSClient(traffic_api_key)
         self.weather = WeatherClient(weather_key)
         self.db = RouteDatabase(csv_path, db_path)
         self.db_path = db_path
@@ -137,10 +143,7 @@ class DataCollector:
                     location.longitude,
                 )
             except Exception as e:
-                logger.warning(
-                    f"Weather fetch failed for {location_name}: {e}. "
-                    f"Will continue with other routes."
-                )
+                logger.warning(f"Weather fetch failed for {location_name}: {e}. " f"Will continue with other routes.")
 
         for origin_name, destination_name in ROUTES:
             try:
@@ -149,20 +152,21 @@ class DataCollector:
 
                 if self.data_source == "tomtom":
                     route_data = self.traffic_client.calculate_route(
-                        origin.latitude, origin.longitude,
-                        destination.latitude, destination.longitude,
+                        origin.latitude,
+                        origin.longitude,
+                        destination.latitude,
+                        destination.longitude,
                     )
                 else:
                     route_data = self.traffic_client.calculate_route(
-                        origin.latitude, origin.longitude,
-                        destination.latitude, destination.longitude,
+                        origin.latitude,
+                        origin.longitude,
+                        destination.latitude,
+                        destination.longitude,
                     )
 
                 travel_time_min = route_data["travel_time_min"]
-                mobility_level = (
-                    "Alta demora" if travel_time_min > HIGH_DELAY_THRESHOLD_MIN
-                    else "Movilidad normal"
-                )
+                mobility_level = "Alta demora" if travel_time_min > HIGH_DELAY_THRESHOLD_MIN else "Movilidad normal"
 
                 record = {
                     "timestamp": timestamp_utc,
@@ -191,14 +195,11 @@ class DataCollector:
                 delay = route_data.get("traffic_delay_min")
                 delay_str = f" (+{delay:.1f}min delay)" if delay is not None else ""
                 logger.info(
-                    f"[{self.data_source}] {origin_name}→{destination_name}: "
-                    f"{travel_time_min:.1f}min{delay_str}"
+                    f"[{self.data_source}] {origin_name}→{destination_name}: " f"{travel_time_min:.1f}min{delay_str}"
                 )
 
             except Exception as e:
-                logger.error(
-                    f"Failed to collect {origin_name} → {destination_name}: {e}"
-                )
+                logger.error(f"Failed to collect {origin_name} → {destination_name}: {e}")
                 continue
 
         if not records:
@@ -274,10 +275,12 @@ class DataCollector:
                 return
 
             import sqlite3
+
             conn = sqlite3.connect(self.db_path)
             bronze_cycle_df = pd.read_sql_query(
                 "SELECT * FROM bronze_measurements WHERE raw_timestamp = ?",
-                conn, params=(timestamp_utc,),
+                conn,
+                params=(timestamp_utc,),
             )
             conn.close()
 

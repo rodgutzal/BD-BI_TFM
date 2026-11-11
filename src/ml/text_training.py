@@ -35,7 +35,9 @@ MLP_SEMILLAS = 3
 
 
 def vectorizador() -> TfidfVectorizer:
-    return TfidfVectorizer(analyzer="char_wb", ngram_range=NGRAMAS, lowercase=True, strip_accents="unicode", sublinear_tf=True)
+    return TfidfVectorizer(
+        analyzer="char_wb", ngram_range=NGRAMAS, lowercase=True, strip_accents="unicode", sublinear_tf=True
+    )
 
 
 def entrenar_logistica(frases: Sequence[str], categorias: Sequence[str], C: float = 10.0, seed: int = 0) -> ModeloTexto:
@@ -48,8 +50,9 @@ def entrenar_logistica(frases: Sequence[str], categorias: Sequence[str], C: floa
     return ModeloTexto(list(lr.classes_), vocab, vec.idf_, lr.coef_, lr.intercept_, NGRAMAS)
 
 
-def probabilidades_sklearn(frases: Sequence[str], categorias: Sequence[str], nuevas: Sequence[str], C: float = 10.0,
-                           seed: int = 0) -> Tuple[List[str], np.ndarray]:
+def probabilidades_sklearn(
+    frases: Sequence[str], categorias: Sequence[str], nuevas: Sequence[str], C: float = 10.0, seed: int = 0
+) -> Tuple[List[str], np.ndarray]:
     """Probabilidades de scikit-learn directamente (para comprobar que el modelo de numpy las reproduce)."""
     vec = vectorizador()
     lr = LogisticRegression(C=C, max_iter=3000, class_weight="balanced", random_state=seed)
@@ -57,8 +60,9 @@ def probabilidades_sklearn(frases: Sequence[str], categorias: Sequence[str], nue
     return list(lr.classes_), lr.predict_proba(vec.transform(nuevas))
 
 
-def probabilidades_mlp(frases: Sequence[str], categorias: Sequence[str], nuevas: Sequence[str], seed: int = 0
-                       ) -> Tuple[List[str], np.ndarray]:
+def probabilidades_mlp(
+    frases: Sequence[str], categorias: Sequence[str], nuevas: Sequence[str], seed: int = 0
+) -> Tuple[List[str], np.ndarray]:
     """Red MLP (64 neuronas) sobre los mismos TF-IDF, promediando `MLP_SEMILLAS` semillas."""
     vec = vectorizador()
     X = vec.fit_transform(frases)
@@ -82,8 +86,9 @@ def respuesta(clases: Sequence[str], p: np.ndarray, umbral: float) -> List[Optio
     return salida
 
 
-def probabilidades_oof(frases: Sequence[str], categorias: Sequence[str], metodo: Callable, n_folds: int = 5,
-                       seed: int = 0) -> Tuple[List[str], np.ndarray]:
+def probabilidades_oof(
+    frases: Sequence[str], categorias: Sequence[str], metodo: Callable, n_folds: int = 5, seed: int = 0
+) -> Tuple[List[str], np.ndarray]:
     """Probabilidades fuera de muestra por validación cruzada estratificada, para elegir el umbral sin tocar la
     evaluación."""
     frases, categorias = np.asarray(frases, dtype=object), np.asarray(categorias, dtype=object)
@@ -138,9 +143,11 @@ def perdidas(respuestas: Sequence[Optional[str]], categorias: Sequence[str]) -> 
 
 
 def resumen(respuestas: Sequence[Optional[str]], categorias: Sequence[str]) -> Dict[str, float]:
-    return {"exactitud": float(aciertos(respuestas, categorias).mean()),
-            "equivocadas": float(equivocadas(respuestas, categorias).mean()),
-            "sin_respuesta": float(perdidas(respuestas, categorias).mean())}
+    return {
+        "exactitud": float(aciertos(respuestas, categorias).mean()),
+        "equivocadas": float(equivocadas(respuestas, categorias).mean()),
+        "sin_respuesta": float(perdidas(respuestas, categorias).mean()),
+    }
 
 
 def bootstrap_pareado(a: np.ndarray, b: np.ndarray, n_boot: int = 5000, seed: int = 0, nivel: float = 0.95) -> dict:
@@ -150,25 +157,50 @@ def bootstrap_pareado(a: np.ndarray, b: np.ndarray, n_boot: int = 5000, seed: in
     rng = np.random.default_rng(seed)
     medias = d[rng.integers(0, len(d), (n_boot, len(d)))].mean(axis=1)
     alfa = (1 - nivel) / 2
-    return {"diferencia": float(d.mean()), "ic_inf": float(np.quantile(medias, alfa)), "ic_sup": float(np.quantile(medias, 1 - alfa))}
+    return {
+        "diferencia": float(d.mean()),
+        "ic_inf": float(np.quantile(medias, alfa)),
+        "ic_sup": float(np.quantile(medias, 1 - alfa)),
+    }
 
 
-def decidir(palabras: Sequence[Optional[str]], candidato: Sequence[Optional[str]], categorias: Sequence[str],
-            n_boot: int = 5000, seed: int = 0) -> dict:
+def decidir(
+    palabras: Sequence[Optional[str]],
+    candidato: Sequence[Optional[str]],
+    categorias: Sequence[str],
+    n_boot: int = 5000,
+    seed: int = 0,
+) -> dict:
     """Aplica la regla fijada: el candidato (híbrido) se adopta si mejora la exactitud con el IC por encima de 0 y no
     sube la tasa de respuestas equivocadas más de TOLERANCIA_ERRORES."""
     mejora = bootstrap_pareado(aciertos(candidato, categorias), aciertos(palabras, categorias), n_boot, seed)
     err_c, err_p = float(equivocadas(candidato, categorias).mean()), float(equivocadas(palabras, categorias).mean())
     cumple_a = mejora["ic_inf"] > 0
     cumple_b = err_c <= err_p + TOLERANCIA_ERRORES
-    return {"exactitud": mejora, "equivocadas_candidato": err_c, "equivocadas_palabras": err_p,
-            "cumple_exactitud": cumple_a, "cumple_errores": cumple_b, "adoptar": bool(cumple_a and cumple_b)}
+    return {
+        "exactitud": mejora,
+        "equivocadas_candidato": err_c,
+        "equivocadas_palabras": err_p,
+        "cumple_exactitud": cumple_a,
+        "cumple_errores": cumple_b,
+        "adoptar": bool(cumple_a and cumple_b),
+    }
 
 
 def por_tipo(respuestas: Sequence[Optional[str]], categorias: Sequence[str], tipos: Sequence[str]) -> pd.DataFrame:
     """Exactitud, respuestas equivocadas y sin respuesta por tipo de frase."""
-    df = pd.DataFrame({"tipo": tipos, "acierta": aciertos(respuestas, categorias),
-                       "equivocada": equivocadas(respuestas, categorias), "sin_respuesta": perdidas(respuestas, categorias)})
-    out = df.groupby("tipo").agg(n=("acierta", "size"), exactitud=("acierta", "mean"), equivocadas=("equivocada", "mean"),
-                                 sin_respuesta=("sin_respuesta", "mean"))
+    df = pd.DataFrame(
+        {
+            "tipo": tipos,
+            "acierta": aciertos(respuestas, categorias),
+            "equivocada": equivocadas(respuestas, categorias),
+            "sin_respuesta": perdidas(respuestas, categorias),
+        }
+    )
+    out = df.groupby("tipo").agg(
+        n=("acierta", "size"),
+        exactitud=("acierta", "mean"),
+        equivocadas=("equivocada", "mean"),
+        sin_respuesta=("sin_respuesta", "mean"),
+    )
     return out

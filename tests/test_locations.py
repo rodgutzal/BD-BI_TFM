@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.locations import LOCATIONS, ROUTES, get_location, get_all_unique_locations
+from src.locations import LOCATIONS, ROUTES, get_all_unique_locations, get_location
 
 
 def test_locations_exist():

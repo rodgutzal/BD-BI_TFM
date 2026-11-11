@@ -25,7 +25,7 @@ class TomTomClient:
             total=self.max_retries,
             backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET"]
+            allowed_methods=["GET"],
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
@@ -95,17 +95,12 @@ class TomTomClient:
             "noTrafficTravelTimeInSeconds",
             max(
                 0,
-                summary["travelTimeInSeconds"]
-                - summary.get("trafficDelayInSeconds", 0),
+                summary["travelTimeInSeconds"] - summary.get("trafficDelayInSeconds", 0),
             ),
         )
         no_traffic_time_min = no_traffic_seconds / 60
 
-        average_speed_kmh = (
-            distance_km / (travel_time_min / 60)
-            if travel_time_min > 0
-            else 0
-        )
+        average_speed_kmh = distance_km / (travel_time_min / 60) if travel_time_min > 0 else 0
 
         traffic_length_km = summary.get("trafficLengthInMeters", 0) / 1000
 

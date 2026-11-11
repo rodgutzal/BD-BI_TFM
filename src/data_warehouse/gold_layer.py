@@ -1,10 +1,11 @@
 """Gold layer: Analytics-ready data and KPIs."""
 
-import pandas as pd
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
-import sqlite3
+
+import pandas as pd
 
 
 class GoldLayer:
@@ -123,37 +124,37 @@ class GoldLayer:
             df = pd.read_sql_query(query, conn, params=(date,))
 
             if df.empty:
-                return {'status': 'no_data', 'date': date}
+                return {"status": "no_data", "date": date}
 
             kpis = []
-            for (origin, destination), group in df.groupby(['origin', 'destination']):
+            for (origin, destination), group in df.groupby(["origin", "destination"]):
                 # Calculate metrics
-                avg_travel = group['travel_time_min'].mean()
-                median_travel = group['travel_time_min'].median()
-                p95_travel = group['travel_time_min'].quantile(0.95)
-                avg_delay = group['traffic_delay_min'].mean()
+                avg_travel = group["travel_time_min"].mean()
+                median_travel = group["travel_time_min"].median()
+                p95_travel = group["travel_time_min"].quantile(0.95)
+                avg_delay = group["traffic_delay_min"].mean()
 
                 # Reliability (low std = reliable)
-                travel_std = group['travel_time_min'].std()
+                travel_std = group["travel_time_min"].std()
                 reliability_score = max(0, 100 - (travel_std * 2))  # 0-100 scale
 
                 # Peak hour
-                peak_hour_group = group.groupby('hour')['travel_time_min'].mean()
-                peak_hour = str(peak_hour_group.idxmax()).zfill(2) if not peak_hour_group.empty else '00'
+                peak_hour_group = group.groupby("hour")["travel_time_min"].mean()
+                peak_hour = str(peak_hour_group.idxmax()).zfill(2) if not peak_hour_group.empty else "00"
                 peak_time = float(peak_hour_group.max()) if not peak_hour_group.empty else avg_travel
 
                 kpi = {
-                    'date': date,
-                    'origin': origin,
-                    'destination': destination,
-                    'avg_travel_time': float(avg_travel),
-                    'median_travel_time': float(median_travel),
-                    'p95_travel_time': float(p95_travel),
-                    'avg_delay': float(avg_delay),
-                    'reliability_score': float(reliability_score),
-                    'peak_hour': peak_hour,
-                    'peak_travel_time': float(peak_time),
-                    'sample_count': len(group)
+                    "date": date,
+                    "origin": origin,
+                    "destination": destination,
+                    "avg_travel_time": float(avg_travel),
+                    "median_travel_time": float(median_travel),
+                    "p95_travel_time": float(p95_travel),
+                    "avg_delay": float(avg_delay),
+                    "reliability_score": float(reliability_score),
+                    "peak_hour": peak_hour,
+                    "peak_travel_time": float(peak_time),
+                    "sample_count": len(group),
                 }
                 kpis.append(kpi)
 
@@ -167,13 +168,20 @@ class GoldLayer:
             # llegando más mediciones, sea seguro.
             kpi_df = pd.DataFrame(kpis)
             columns = [
-                'date', 'origin', 'destination', 'avg_travel_time',
-                'median_travel_time', 'p95_travel_time', 'avg_delay',
-                'reliability_score', 'peak_hour', 'peak_travel_time',
-                'sample_count',
+                "date",
+                "origin",
+                "destination",
+                "avg_travel_time",
+                "median_travel_time",
+                "p95_travel_time",
+                "avg_delay",
+                "reliability_score",
+                "peak_hour",
+                "peak_travel_time",
+                "sample_count",
             ]
-            placeholders = ','.join(['?'] * len(columns))
-            col_list = ','.join(columns)
+            placeholders = ",".join(["?"] * len(columns))
+            col_list = ",".join(columns)
             rows = [tuple(r) for r in kpi_df[columns].itertuples(index=False, name=None)]
             cursor.executemany(
                 f"INSERT OR REPLACE INTO gold_route_kpis ({col_list}) VALUES ({placeholders})",
@@ -182,17 +190,17 @@ class GoldLayer:
             conn.commit()
 
             return {
-                'status': 'success',
-                'date': date,
-                'kpis_calculated': len(kpis),
-                'routes': len(kpi_df.groupby(['origin', 'destination']))
+                "status": "success",
+                "date": date,
+                "kpis_calculated": len(kpis),
+                "routes": len(kpi_df.groupby(["origin", "destination"])),
             }
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
         finally:
             conn.close()
 
-    def calculate_rankings(self, date: Optional[str] = None, metric: str = 'reliability_score') -> Dict:
+    def calculate_rankings(self, date: Optional[str] = None, metric: str = "reliability_score") -> Dict:
         """Calculate route rankings for a date.
 
         BD_BI_TFM fix: el valor por defecto original era 'reliability',
@@ -203,9 +211,9 @@ class GoldLayer:
         if date is None:
             date = datetime.utcnow().date().isoformat()
 
-        valid_metrics = {'reliability_score', 'avg_travel_time'}
+        valid_metrics = {"reliability_score", "avg_travel_time"}
         if metric not in valid_metrics:
-            metric = 'reliability_score'
+            metric = "reliability_score"
 
         conn = sqlite3.connect(self.db_path)
 
@@ -224,17 +232,17 @@ class GoldLayer:
             df = pd.read_sql_query(query, conn, params=(date,))
 
             if df.empty:
-                return {'status': 'no_data'}
+                return {"status": "no_data"}
 
-            df['rank'] = range(1, len(df) + 1)
-            df['date'] = date
-            df = df[['date', 'rank', 'origin', 'destination', 'avg_travel_time', 'reliability_score']]
+            df["rank"] = range(1, len(df) + 1)
+            df["date"] = date
+            df = df[["date", "rank", "origin", "destination", "avg_travel_time", "reliability_score"]]
 
             # Store rankings (INSERT OR REPLACE: ver nota en _ensure_tables)
             cursor = conn.cursor()
-            columns = ['date', 'rank', 'origin', 'destination', 'avg_travel_time', 'reliability_score']
-            placeholders = ','.join(['?'] * len(columns))
-            col_list = ','.join(columns)
+            columns = ["date", "rank", "origin", "destination", "avg_travel_time", "reliability_score"]
+            placeholders = ",".join(["?"] * len(columns))
+            col_list = ",".join(columns)
             rows = [tuple(r) for r in df[columns].itertuples(index=False, name=None)]
             cursor.executemany(
                 f"INSERT OR REPLACE INTO gold_route_rankings ({col_list}) VALUES ({placeholders})",
@@ -242,13 +250,9 @@ class GoldLayer:
             )
             conn.commit()
 
-            return {
-                'status': 'success',
-                'date': date,
-                'rankings': df.to_dict('records')
-            }
+            return {"status": "success", "date": date, "rankings": df.to_dict("records")}
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
         finally:
             conn.close()
 
@@ -272,15 +276,15 @@ class GoldLayer:
                 (start_date, end_date),
             ).fetchone()
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
         finally:
             conn.close()
 
         n = row[2] if row else 0
         return {
-            'avg_travel_time': float(row[0]) if n and row[0] is not None else None,
-            'reliability': float(row[1]) if n and row[1] is not None else None,
-            'rows': int(n or 0),
+            "avg_travel_time": float(row[0]) if n and row[0] is not None else None,
+            "reliability": float(row[1]) if n and row[1] is not None else None,
+            "rows": int(n or 0),
         }
 
     def get_executive_summary(self, days: int = 30) -> Dict:
@@ -327,14 +331,14 @@ class GoldLayer:
                 return cast(summary_df[column].iloc[0])
 
             return {
-                'system_avg_travel_time': _num('system_avg_travel_time', float),
-                'system_reliability': _num('system_reliability', float),
-                'total_routes': _num('route_count', int),
-                'total_measurements': _num('total_measurements', int),
-                'best_routes': rankings.head(3).to_dict('records'),
-                'worst_routes': rankings.tail(3).to_dict('records')
+                "system_avg_travel_time": _num("system_avg_travel_time", float),
+                "system_reliability": _num("system_reliability", float),
+                "total_routes": _num("route_count", int),
+                "total_measurements": _num("total_measurements", int),
+                "best_routes": rankings.head(3).to_dict("records"),
+                "worst_routes": rankings.tail(3).to_dict("records"),
             }
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
         finally:
             conn.close()

@@ -28,10 +28,19 @@ APP = f"import sys\nsys.path.insert(0, r'{ROOT}')\nfrom streamlit_app.dashboards
 
 
 def _fila(i, origin="Msida", destination="Gzira", **extra):
-    base = {"timestamp": (AHORA - timedelta(hours=i)).isoformat(), "origin": origin, "destination": destination,
-            "data_source": "tomtom", "travel_time_min": 10.0 + (i % 7), "distance_km": 3.0, "average_speed_kmh": 30.0 - (i % 7),
-            "traffic_delay_min": 1.0, "origin_temperature": 20.0 + (i % 5), "origin_humidity": 50.0,
-            "polyline": "abcdefghij"}
+    base = {
+        "timestamp": (AHORA - timedelta(hours=i)).isoformat(),
+        "origin": origin,
+        "destination": destination,
+        "data_source": "tomtom",
+        "travel_time_min": 10.0 + (i % 7),
+        "distance_km": 3.0,
+        "average_speed_kmh": 30.0 - (i % 7),
+        "traffic_delay_min": 1.0,
+        "origin_temperature": 20.0 + (i % 5),
+        "origin_humidity": 50.0,
+        "polyline": "abcdefghij",
+    }
     base.update(extra)
     return base
 
@@ -43,10 +52,11 @@ def entorno(tmp_path, monkeypatch):
     db.save_records_to_sqlite([_fila(i) for i in range(60)] + [_fila(i, "Msida", "Sliema") for i in range(40)])
     st.cache_data.clear()
     monkeypatch.setattr(ad, "get_database", lambda: db)
-    monkeypatch.setattr(ad, "ROOT_DIR", tmp_path)                      # el editor SQL lee ROOT_DIR/data/mobility.db
+    monkeypatch.setattr(ad, "ROOT_DIR", tmp_path)  # el editor SQL lee ROOT_DIR/data/mobility.db
     (tmp_path / "data").mkdir()
     # data/mobility.db = la base temporal (se copia: el editor la abre en solo lectura por esa ruta)
     import shutil
+
     shutil.copy(ruta, tmp_path / "data" / "mobility.db")
     monkeypatch.setattr(ad.predictive_modeling_dashboard, "render", lambda: None)
     yield db, tmp_path
@@ -69,9 +79,12 @@ def _sql(at, consulta):
 # Editor SQL: solo lectura REAL
 # ---------------------------------------------------------------------------
 
+
 def test_el_editor_sql_ejecuta_selects_y_ofrece_la_descarga(entorno):
     """El editor SQL ejecuta un SELECT, muestra el número de filas y la tabla con el resultado correcto."""
-    at = _sql(_abrir(), "SELECT destination, COUNT(*) AS n FROM route_measurements GROUP BY destination ORDER BY destination")
+    at = _sql(
+        _abrir(), "SELECT destination, COUNT(*) AS n FROM route_measurements GROUP BY destination ORDER BY destination"
+    )
     assert not at.exception, [e.value for e in at.exception]
     assert any(s.value == "2 filas" for s in at.success)
     resultado = [d.value for d in at.dataframe if list(d.value.columns) == ["destination", "n"]][0]
@@ -80,21 +93,26 @@ def test_el_editor_sql_ejecuta_selects_y_ofrece_la_descarga(entorno):
 
 def test_el_editor_sql_acepta_with_recursivo_y_funciones(entorno):
     """El editor SQL de solo lectura acepta consultas con `WITH RECURSIVE` y funciones de SQLite."""
-    r = ad._read_only_query(entorno[1] / "data" / "mobility.db",
-                            "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 3) "
-                            "SELECT x, ROUND(x / 2.0, 1) AS m, datetime('now') > '2000' AS ok FROM c")
+    r = ad._read_only_query(
+        entorno[1] / "data" / "mobility.db",
+        "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 3) "
+        "SELECT x, ROUND(x / 2.0, 1) AS m, datetime('now') > '2000' AS ok FROM c",
+    )
     assert r["x"].tolist() == [1, 2, 3] and r["m"].tolist() == [0.5, 1.0, 1.5]
 
 
-@pytest.mark.parametrize("consulta", [
-    "INSERT INTO route_measurements (timestamp, origin, destination) VALUES ('x', 'a', 'b')",
-    "UPDATE route_measurements SET travel_time_min = 0",
-    "DELETE FROM route_measurements",
-    "DROP TABLE route_measurements",
-    "CREATE TABLE intruso (a)",
-    "PRAGMA journal_mode = DELETE",
-    "PRAGMA writable_schema = 1",
-])
+@pytest.mark.parametrize(
+    "consulta",
+    [
+        "INSERT INTO route_measurements (timestamp, origin, destination) VALUES ('x', 'a', 'b')",
+        "UPDATE route_measurements SET travel_time_min = 0",
+        "DELETE FROM route_measurements",
+        "DROP TABLE route_measurements",
+        "CREATE TABLE intruso (a)",
+        "PRAGMA journal_mode = DELETE",
+        "PRAGMA writable_schema = 1",
+    ],
+)
 def test_el_editor_sql_rechaza_escrituras_y_pragmas_sin_tocar_los_datos(entorno, consulta):
     """Cada consulta que escribe o usa PRAGMA (parametrizado) se rechaza con «Error en la consulta» y el archivo de la base queda byte a byte igual."""
     _, tmp = entorno
@@ -102,7 +120,7 @@ def test_el_editor_sql_rechaza_escrituras_y_pragmas_sin_tocar_los_datos(entorno,
     antes = ruta.read_bytes()
     at = _sql(_abrir(), consulta)
     assert not at.exception and at.error and "Error en la consulta" in at.error[0].value
-    assert ruta.read_bytes() == antes                                   # la base no cambió ni un byte
+    assert ruta.read_bytes() == antes  # la base no cambió ni un byte
 
 
 @pytest.mark.parametrize("plantilla", ["ATTACH DATABASE '{p}' AS intruso", "VACUUM INTO '{p}'"])
@@ -121,7 +139,7 @@ def test_el_editor_sql_cierra_la_conexion_aunque_la_consulta_falle(entorno):
     ruta = entorno[1] / "data" / "mobility.db"
     with pytest.raises(Exception):
         ad._read_only_query(ruta, "SELECT * FROM tabla_que_no_existe")
-    ruta.unlink()                                                       # falla en Windows si queda abierta
+    ruta.unlink()  # falla en Windows si queda abierta
     assert not ruta.exists()
 
 
@@ -150,13 +168,14 @@ def test_todos_los_ejemplos_del_editor_se_pueden_ejecutar(entorno):
         consulta = at.text_area[0].value
         try:
             ad._read_only_query(ruta, consulta)
-        except Exception as e:                                          # tablas opcionales (Gold/Foursquare) pueden no existir
+        except Exception as e:  # tablas opcionales (Gold/Foursquare) pueden no existir
             assert "no such table" in str(e), f"{nombre}: {e}"
 
 
 # ---------------------------------------------------------------------------
 # Exportación completa
 # ---------------------------------------------------------------------------
+
 
 def _generar(at):
     at.button[[b.label for b in at.button].index("🔄 Generar exportación completa")].click().run()
@@ -184,7 +203,9 @@ def test_la_exportacion_ligera_omite_la_polyline(entorno, monkeypatch, con_fecha
     at = _abrir()
     if con_fechas:
         at.checkbox[[c.label for c in at.checkbox].index("Limitar por rango de fechas")].set_value(True)
-    at.checkbox[[c.label for c in at.checkbox].index("Incluir la columna `polyline` (geometría de la ruta)")].set_value(False)
+    at.checkbox[[c.label for c in at.checkbox].index("Incluir la columna `polyline` (geometría de la ruta)")].set_value(
+        False
+    )
     _generar(at)
     assert pedidos[-1] is False and not at.exception
 
@@ -197,7 +218,7 @@ def test_la_exportacion_con_rango_de_fechas_filtra(entorno):
     _generar(at)
     assert not at.exception
     exito = [s.value for s in at.success if "filas de" in s.value]
-    assert exito and int(exito[0].split()[0].replace(",", "")) < 100          # solo ~24 h de las 60/40 horas
+    assert exito and int(exito[0].split()[0].replace(",", "")) < 100  # solo ~24 h de las 60/40 horas
 
 
 def test_la_exportacion_sin_datos_avisa(entorno):
@@ -216,11 +237,12 @@ def test_la_exportacion_sin_datos_avisa(entorno):
 # Explorador, pruebas estadísticas, correlaciones y base vacía
 # ---------------------------------------------------------------------------
 
+
 def test_el_explorador_muestra_los_datos_de_la_ruta_elegida(entorno):
     """El Data Explorer muestra una tabla con las 60 filas de la ruta elegida."""
     at = _abrir()
     assert not at.exception, [e.value for e in at.exception]
-    assert any(len(d.value) == 60 for d in at.dataframe)                  # Msida → Gzira: 60 filas
+    assert any(len(d.value) == 60 for d in at.dataframe)  # Msida → Gzira: 60 filas
 
 
 def test_las_pruebas_estadisticas_corren_con_datos_suficientes(entorno):
@@ -268,10 +290,15 @@ def test_la_pestana_de_modelos_marca_las_rutas_con_modelo_entrenado(entorno):
 # Un error en una pestaña no tumba las demás
 # ---------------------------------------------------------------------------
 
-PESTANAS = [("render_data_explorer", "Data Explorer"), ("render_statistical_tests", "Statistical Tests"),
-            ("render_correlation_matrix", "Correlations"), ("render_model_performance", "Model Performance"),
-            ("render_data_quality_report", "Data Quality"), ("render_sql_query", "SQL Query"),
-            ("render_full_export", "Exportar Todo")]
+PESTANAS = [
+    ("render_data_explorer", "Data Explorer"),
+    ("render_statistical_tests", "Statistical Tests"),
+    ("render_correlation_matrix", "Correlations"),
+    ("render_model_performance", "Model Performance"),
+    ("render_data_quality_report", "Data Quality"),
+    ("render_sql_query", "SQL Query"),
+    ("render_full_export", "Exportar Todo"),
+]
 
 
 def _falla(*_args, **_kw):
@@ -315,11 +342,13 @@ def test_st_stop_dentro_de_una_pestana_no_se_trata_como_un_error(entorno, monkey
     """Solo se captura Exception: st.stop() usa una excepción de control (BaseException) y debe seguir deteniendo el script.
     Si se capturara, se registraría como un fallo de la pestaña que no lo es (en pantalla no se notaría: el propio
     st.error volvería a disparar la parada), así que se comprueba el registro."""
+
     def parar():
         st.stop()
+
     monkeypatch.setattr(ad, "render_data_explorer", parar)
     with caplog.at_level("ERROR", logger=ad.logger.name):
         at = _abrir()
     assert not at.exception and not any("No se pudo mostrar" in e.value for e in at.error)
     assert not [r for r in caplog.records if r.name == ad.logger.name]
-    assert not at.text_area                                              # el script se detuvo: las pestañas siguientes no se dibujaron
+    assert not at.text_area  # el script se detuvo: las pestañas siguientes no se dibujaron

@@ -102,8 +102,7 @@ class RouteDatabase:
         conn = self._connect()
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS route_measurements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
@@ -131,21 +130,12 @@ class RouteDatabase:
                 created_at TEXT NOT NULL,
                 UNIQUE(timestamp, origin, destination, data_source)
             )
-            """
-        )
+            """)
 
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_timestamp ON route_measurements(timestamp)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_origin ON route_measurements(origin)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_destination ON route_measurements(destination)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_data_source ON route_measurements(data_source)"
-        )
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON route_measurements(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_origin ON route_measurements(origin)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_destination ON route_measurements(destination)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_data_source ON route_measurements(data_source)")
 
         conn.commit()
         conn.close()
@@ -161,13 +151,29 @@ class RouteDatabase:
         cursor = conn.cursor()
 
         columns = [
-            "timestamp", "origin", "destination", "data_source", "distance_km",
-            "travel_time_min", "no_traffic_time_min", "traffic_delay_min",
-            "traffic_length_km", "average_speed_kmh", "departure_time",
-            "arrival_time", "origin_temperature", "origin_feels_like",
-            "origin_humidity", "origin_weather", "destination_temperature",
-            "destination_feels_like", "destination_humidity", "destination_weather",
-            "mobility_level", "polyline", "created_at",
+            "timestamp",
+            "origin",
+            "destination",
+            "data_source",
+            "distance_km",
+            "travel_time_min",
+            "no_traffic_time_min",
+            "traffic_delay_min",
+            "traffic_length_km",
+            "average_speed_kmh",
+            "departure_time",
+            "arrival_time",
+            "origin_temperature",
+            "origin_feels_like",
+            "origin_humidity",
+            "origin_weather",
+            "destination_temperature",
+            "destination_feels_like",
+            "destination_humidity",
+            "destination_weather",
+            "mobility_level",
+            "polyline",
+            "created_at",
         ]
 
         for record in records:
@@ -178,6 +184,7 @@ class RouteDatabase:
             polyline_json = None
             if "polyline" in record_copy:
                 import json
+
                 polyline_data = record_copy.pop("polyline")
                 if polyline_data:
                     try:
@@ -192,7 +199,7 @@ class RouteDatabase:
                 cursor.execute(
                     f"INSERT OR IGNORE INTO route_measurements ({','.join(columns)}) "
                     f"VALUES ({','.join(['?' for _ in columns])})",
-                    values
+                    values,
                 )
             except sqlite3.Error as e:
                 logger.error(f"Error inserting record: {e}")
@@ -274,10 +281,7 @@ class RouteDatabase:
         conn = self._connect()
         cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT DISTINCT origin, destination FROM route_measurements "
-            "ORDER BY origin, destination"
-        )
+        cursor.execute("SELECT DISTINCT origin, destination FROM route_measurements " "ORDER BY origin, destination")
         routes = cursor.fetchall()
         conn.close()
 
@@ -303,7 +307,7 @@ class RouteDatabase:
             FROM route_measurements
             WHERE origin = ? AND destination = ? AND timestamp >= ?
             """,
-            (origin, destination, start_time)
+            (origin, destination, start_time),
         )
 
         result = cursor.fetchone()
@@ -337,8 +341,7 @@ class RouteDatabase:
         conn = self._connect()
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS pois (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 osm_type TEXT NOT NULL,
@@ -351,11 +354,8 @@ class RouteDatabase:
                 updated_at TEXT NOT NULL,
                 UNIQUE(osm_type, osm_id)
             )
-            """
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_poi_category ON pois(category)"
-        )
+            """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_poi_category ON pois(category)")
 
         conn.commit()
         conn.close()
@@ -389,8 +389,14 @@ class RouteDatabase:
                         updated_at=excluded.updated_at
                     """,
                     (
-                        poi["osm_type"], poi["osm_id"], poi["category"], poi.get("subcategory"),
-                        poi.get("name"), poi["latitude"], poi["longitude"], now,
+                        poi["osm_type"],
+                        poi["osm_id"],
+                        poi["category"],
+                        poi.get("subcategory"),
+                        poi.get("name"),
+                        poi["latitude"],
+                        poi["longitude"],
+                        now,
                     ),
                 )
             except sqlite3.Error as e:
@@ -440,8 +446,7 @@ class RouteDatabase:
         conn = self._connect()
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS pois_foursquare (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 fsq_place_id TEXT NOT NULL,
@@ -453,11 +458,8 @@ class RouteDatabase:
                 updated_at TEXT NOT NULL,
                 UNIQUE(fsq_place_id)
             )
-            """
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_poi_fsq_category ON pois_foursquare(category)"
-        )
+            """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_poi_fsq_category ON pois_foursquare(category)")
 
         conn.commit()
         conn.close()
@@ -490,8 +492,13 @@ class RouteDatabase:
                         updated_at=excluded.updated_at
                     """,
                     (
-                        poi["fsq_place_id"], poi["category"], poi.get("subcategory"),
-                        poi.get("name"), poi["latitude"], poi["longitude"], now,
+                        poi["fsq_place_id"],
+                        poi["category"],
+                        poi.get("subcategory"),
+                        poi.get("name"),
+                        poi["latitude"],
+                        poi["longitude"],
+                        now,
                     ),
                 )
             except sqlite3.Error as e:
@@ -541,8 +548,7 @@ class RouteDatabase:
         conn = self._connect()
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS zone_demographics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 zone_name TEXT NOT NULL,
@@ -553,8 +559,7 @@ class RouteDatabase:
                 updated_at TEXT NOT NULL,
                 UNIQUE(zone_name)
             )
-            """
-        )
+            """)
 
         # Columnas agregadas después (ALTER TABLE es aditivo — no recrea la
         # tabla ni toca las filas existentes) para el reconciliado a un año
@@ -606,9 +611,15 @@ class RouteDatabase:
                         updated_at=excluded.updated_at
                     """,
                     (
-                        r["zone_name"], r.get("dcid"), r.get("population"),
-                        r.get("observation_date"), r.get("source"), now,
-                        r.get("basis_year"), r.get("basis_population"), r.get("method"),
+                        r["zone_name"],
+                        r.get("dcid"),
+                        r.get("population"),
+                        r.get("observation_date"),
+                        r.get("source"),
+                        now,
+                        r.get("basis_year"),
+                        r.get("basis_population"),
+                        r.get("method"),
                     ),
                 )
             except sqlite3.Error as e:
@@ -643,8 +654,7 @@ class RouteDatabase:
 
         conn = self._connect()
         cursor = conn.cursor()
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS zone_population_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 zone_name TEXT NOT NULL,
@@ -655,8 +665,7 @@ class RouteDatabase:
                 updated_at TEXT NOT NULL,
                 UNIQUE(zone_name, observation_date, source)
             )
-            """
-        )
+            """)
         conn.commit()
         conn.close()
         self._population_history_initialized = True
@@ -683,8 +692,7 @@ class RouteDatabase:
                         population=excluded.population,
                         updated_at=excluded.updated_at
                     """,
-                    (r["zone_name"], r["observation_date"], r.get("year"),
-                     r["population"], r.get("source") or "", now),
+                    (r["zone_name"], r["observation_date"], r.get("year"), r["population"], r.get("source") or "", now),
                 )
             except sqlite3.Error as e:
                 logger.error(f"Error upserting population history for {r.get('zone_name')}: {e}")
@@ -698,9 +706,7 @@ class RouteDatabase:
         self.init_population_history_table()
         conn = self._connect()
         try:
-            df = pd.read_sql_query(
-                "SELECT * FROM zone_population_history ORDER BY zone_name, observation_date", conn
-            )
+            df = pd.read_sql_query("SELECT * FROM zone_population_history ORDER BY zone_name, observation_date", conn)
         except pd.errors.DatabaseError as e:
             logger.error(f"Population history query error: {e}")
             df = pd.DataFrame()
@@ -743,11 +749,7 @@ class RouteDatabase:
         return df
 
     def get_time_series(
-        self,
-        origin: str,
-        destination: str,
-        metric: str = "travel_time_min",
-        hours: int = 24
+        self, origin: str, destination: str, metric: str = "travel_time_min", hours: int = 24
     ) -> pd.DataFrame:
         """Obtiene una serie temporal de una métrica para una ruta."""
         self.init_sqlite()
@@ -756,8 +758,12 @@ class RouteDatabase:
         start_time = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
         valid_metrics = [
-            "travel_time_min", "traffic_delay_min", "average_speed_kmh",
-            "origin_temperature", "origin_humidity", "distance_km"
+            "travel_time_min",
+            "traffic_delay_min",
+            "average_speed_kmh",
+            "origin_temperature",
+            "origin_humidity",
+            "distance_km",
         ]
 
         if metric not in valid_metrics:
@@ -784,12 +790,7 @@ class RouteDatabase:
 
         return df
 
-    def get_hourly_statistics(
-        self,
-        origin: str,
-        destination: str,
-        days: int = 7
-    ) -> pd.DataFrame:
+    def get_hourly_statistics(self, origin: str, destination: str, days: int = 7) -> pd.DataFrame:
         """Agrupa estadísticas por hora para identificar patrones."""
         self.init_sqlite()
         conn = self._connect()
@@ -851,7 +852,8 @@ class RouteDatabase:
                 GROUP BY substr(timestamp, 1, 10)
                 ORDER BY date
                 """,
-                conn, params=[self._window_start(days)],
+                conn,
+                params=[self._window_start(days)],
             )
         except pd.errors.DatabaseError as e:
             logger.error(f"Daily average query error: {e}")
@@ -877,7 +879,8 @@ class RouteDatabase:
                 GROUP BY origin, destination, strftime('%H', timestamp)
                 ORDER BY origin, destination, hour
                 """,
-                conn, params=[self._window_start(days)],
+                conn,
+                params=[self._window_start(days)],
             )
         except pd.errors.DatabaseError as e:
             logger.error(f"Route-hour average query error: {e}")
@@ -930,7 +933,8 @@ class RouteDatabase:
         conn = self._connect()
         try:
             return [
-                row[1] for row in conn.execute("PRAGMA table_info(route_measurements)")
+                row[1]
+                for row in conn.execute("PRAGMA table_info(route_measurements)")
                 if row[2].upper() in ("REAL", "INTEGER") and row[1] != "id"
             ]
         finally:
@@ -952,18 +956,13 @@ class RouteDatabase:
             select = ", ".join(f'"{c}"' for c in columns)
             return pd.read_sql_query(
                 f"SELECT {select} FROM route_measurements WHERE timestamp >= ?",
-                conn, params=[self._window_start(days)],
+                conn,
+                params=[self._window_start(days)],
             )
         finally:
             conn.close()
 
-    def export_route_data(
-        self,
-        origin: str,
-        destination: str,
-        output_path: Path,
-        hours: int = 24
-    ) -> bool:
+    def export_route_data(self, origin: str, destination: str, output_path: Path, hours: int = 24) -> bool:
         """Exporta datos de una ruta a CSV."""
         try:
             # include_polyline=True: se conserva lo que exportaba antes (el CSV
@@ -1024,8 +1023,7 @@ class RouteDatabase:
             all_cols = [row[1] for row in conn.execute("PRAGMA table_info(route_measurements)")]
             measured = [c for c in all_cols if c not in ("id", "polyline", "created_at")]
             null_sums = ", ".join(f'SUM("{c}" IS NULL)' for c in measured)
-            rows = conn.execute(
-                f"""
+            rows = conn.execute(f"""
                 SELECT origin, destination,
                        COUNT(*)                                                       AS n_rows,
                        MIN(timestamp), MAX(timestamp),
@@ -1034,8 +1032,7 @@ class RouteDatabase:
                 FROM route_measurements
                 GROUP BY origin, destination
                 ORDER BY origin, destination
-                """
-            ).fetchall()
+                """).fetchall()
         finally:
             conn.close()
 
@@ -1048,10 +1045,18 @@ class RouteDatabase:
                 null_counts[c] += v
             nulls = sum(per_col)
             cells = row[2] * len(measured)
-            records.append([
-                row[0], row[1], int(row[2]), row[3], row[4], int(row[5] or 0), nulls,
-                round(100 * (1 - nulls / cells), 1) if cells else 100.0,
-            ])
+            records.append(
+                [
+                    row[0],
+                    row[1],
+                    int(row[2]),
+                    row[3],
+                    row[4],
+                    int(row[5] or 0),
+                    nulls,
+                    round(100 * (1 - nulls / cells), 1) if cells else 100.0,
+                ]
+            )
         routes = pd.DataFrame(records, columns=route_cols + ["nulls", "completeness_pct"])
 
         total_rows = int(routes["rows"].sum()) if not routes.empty else 0
@@ -1086,9 +1091,7 @@ class RouteDatabase:
         total_records = cursor.fetchone()[0]
 
         if include_routes:
-            cursor.execute(
-                "SELECT COUNT(*) FROM (SELECT DISTINCT origin, destination FROM route_measurements)"
-            )
+            cursor.execute("SELECT COUNT(*) FROM (SELECT DISTINCT origin, destination FROM route_measurements)")
             unique_routes = cursor.fetchone()[0]
         else:
             unique_routes = None
@@ -1145,19 +1148,21 @@ class RouteDatabase:
 
         rows = []
         for record in records:
-            rows.append((
-                record.get("timestamp"),
-                record.get("origin"),
-                record.get("destination"),
-                record.get("distance_km"),
-                record.get("travel_time_min"),
-                record.get("origin_temperature"),
-                record.get("origin_humidity"),
-                record.get("origin_weather"),
-                record.get("mobility_level"),
-                record.get("data_source", "unknown"),
-                record.get("traffic_delay_min"),
-            ))
+            rows.append(
+                (
+                    record.get("timestamp"),
+                    record.get("origin"),
+                    record.get("destination"),
+                    record.get("distance_km"),
+                    record.get("travel_time_min"),
+                    record.get("origin_temperature"),
+                    record.get("origin_humidity"),
+                    record.get("origin_weather"),
+                    record.get("mobility_level"),
+                    record.get("data_source", "unknown"),
+                    record.get("traffic_delay_min"),
+                )
+            )
 
         conn = None
         try:

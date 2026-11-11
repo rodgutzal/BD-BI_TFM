@@ -38,7 +38,7 @@ def _serie(dias=30, huecos=True, ruido=0.01, seed=0):
 def test_el_sarima_converge_y_pronostica_en_escala_original():
     """El pronóstico a 24 h converge (antes no lo hacía), queda en la escala 0-1 y el IC lo envuelve."""
     with warnings.catch_warnings():
-        warnings.simplefilter("error")           # un ConvergenceWarning haría fallar el test
+        warnings.simplefilter("error")  # un ConvergenceWarning haría fallar el test
         fc = forecasting.forecast_sarima(_serie())
     assert fc["converged"] is True
     assert len(fc["mean"]) == 24 and fc["mean"].between(0, 0.6).all()
@@ -85,9 +85,9 @@ def test_los_cortes_exigen_horizonte_y_pasado_con_datos():
     """Un corte de validación exige una semana de pasado con datos y un horizonte que no esté vacío; si el horizonte queda en NaN deja de ser elegible."""
     s = _serie(dias=20, huecos=False)
     cortes = vf.eligible_cutoffs(s, min_train_obs=168)
-    assert cortes and cortes[0] >= s.index[0] + pd.Timedelta(days=7)      # hace falta una semana de pasado
+    assert cortes and cortes[0] >= s.index[0] + pd.Timedelta(days=7)  # hace falta una semana de pasado
     s2 = s.copy()
-    s2[cortes[-1]:cortes[-1] + pd.Timedelta(hours=23)] = np.nan            # horizonte vacío -> deja de ser elegible
+    s2[cortes[-1] : cortes[-1] + pd.Timedelta(hours=23)] = np.nan  # horizonte vacío -> deja de ser elegible
     assert cortes[-1] not in vf.eligible_cutoffs(s2, min_train_obs=168)
 
 
@@ -123,13 +123,19 @@ def test_la_validacion_lee_la_base_en_solo_lectura(tmp_path):
     db = tmp_path / "m.db"
     con = sqlite3.connect(db)
     con.execute("CREATE TABLE route_measurements (timestamp TEXT, mobility_level TEXT)")
-    con.executemany("INSERT INTO route_measurements VALUES (?, ?)", [
-        ("2026-09-01T00:10:00+00:00", "Alta demora"), ("2026-09-01T00:40:00+00:00", "Normal"),
-        ("2026-09-01T02:10:00+00:00", "Normal"), ("2026-07-01T00:00:00+00:00", "Alta demora")])
+    con.executemany(
+        "INSERT INTO route_measurements VALUES (?, ?)",
+        [
+            ("2026-09-01T00:10:00+00:00", "Alta demora"),
+            ("2026-09-01T00:40:00+00:00", "Normal"),
+            ("2026-09-01T02:10:00+00:00", "Normal"),
+            ("2026-07-01T00:00:00+00:00", "Alta demora"),
+        ],
+    )
     con.commit()
     con.close()
     antes = db.read_bytes()
-    s = vf.load_hourly_share(db)                      # el registro de julio queda fuera (>= 2026-08-01)
+    s = vf.load_hourly_share(db)  # el registro de julio queda fuera (>= 2026-08-01)
     assert s.iloc[0] == 0.5 and s.iloc[2] == 0.0 and s.iloc[1] != s.iloc[1]
     assert db.read_bytes() == antes
     assert sorted(p.name for p in tmp_path.iterdir()) == ["m.db"]

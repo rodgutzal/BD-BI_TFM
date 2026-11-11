@@ -70,8 +70,9 @@ def cells_frame() -> pd.DataFrame:
     filas, cols = np.meshgrid(np.arange(N_ROWS), np.arange(N_COLS), indexing="ij")
     filas, cols = filas.ravel(), cols.ravel()
     lat, lon = cell_center(filas, cols)
-    return pd.DataFrame({"cell_id": [cell_id(f, c) for f, c in zip(filas, cols)], "fila": filas, "col": cols,
-                         "lat": lat, "lon": lon})
+    return pd.DataFrame(
+        {"cell_id": [cell_id(f, c) for f, c in zip(filas, cols)], "fila": filas, "col": cols, "lat": lat, "lon": lon}
+    )
 
 
 def count_grid(filas, cols) -> np.ndarray:
@@ -119,6 +120,8 @@ def active_mask(total_grid: np.ndarray, anillo: int = 1) -> np.ndarray:
 def haversine_m(lat1, lon1, lat2, lon2):
     """Distancia en metros (vectorizable)."""
     p = math.pi / 180
-    a = (np.sin((np.asarray(lat2) - lat1) * p / 2) ** 2
-         + np.cos(np.asarray(lat1) * p) * np.cos(np.asarray(lat2) * p) * np.sin((np.asarray(lon2) - lon1) * p / 2) ** 2)
+    a = (
+        np.sin((np.asarray(lat2) - lat1) * p / 2) ** 2
+        + np.cos(np.asarray(lat1) * p) * np.cos(np.asarray(lat2) * p) * np.sin((np.asarray(lon2) - lon1) * p / 2) ** 2
+    )
     return 2 * 6371000 * np.arcsin(np.sqrt(a))

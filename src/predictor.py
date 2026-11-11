@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-
 from src.database import RouteDatabase
 from src.models.travel_time_model import TravelTimePredictor
 
@@ -44,16 +43,11 @@ class RoutePredictor:
         """Entrena el modelo para una ruta específica."""
         db = RouteDatabase(Path.home(), self.db_path)
 
-        df = db.query_measurements(
-            origin=origin,
-            destination=destination,
-            limit=10000
-        )
+        df = db.query_measurements(origin=origin, destination=destination, limit=10000)
 
         if len(df) < self.min_samples:
             logger.warning(
-                f"Insufficient data for {origin} → {destination}: "
-                f"{len(df)} samples (need {self.min_samples})"
+                f"Insufficient data for {origin} → {destination}: " f"{len(df)} samples (need {self.min_samples})"
             )
             return False
 
@@ -105,11 +99,7 @@ class RoutePredictor:
         day_of_week = now.weekday()
 
         db = RouteDatabase(Path.home(), self.db_path)
-        recent_data = db.query_measurements(
-            origin=origin,
-            destination=destination,
-            limit=100
-        )
+        recent_data = db.query_measurements(origin=origin, destination=destination, limit=100)
 
         historical_avg = None
         if not recent_data.empty and "travel_time_min" in recent_data.columns:
