@@ -73,9 +73,11 @@ jobs:
     - name: Check code quality (blocking)
       run: |
         flake8 src/ tests/ --select=E9,F63,F7,F82 --show-source --statistics
+        # Imports sin usar (F401): se limpiaron en el PR #50; aqui se impide que vuelvan.
+        flake8 src/ tests/ streamlit_app/ --select=F401 --show-source --statistics
         pylint src/ --disable=all --enable=E,F
 
-    # INFORMATIVO: estilo. Hoy hay avisos pendientes (imports sin usar, E402
+    # INFORMATIVO: estilo. Hoy hay avisos pendientes (E402
     # por los sys.path.insert de los dashboards...); no bloquea el pipeline
     # pero queda visible como paso con aviso en vez de ocultarse.
     - name: Check code style (informational)
