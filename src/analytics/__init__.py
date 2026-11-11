@@ -1,13 +1,11 @@
 """Análisis histórico de datos de movilidad."""
 
 import logging
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
 
 from src.database import RouteDatabase
-from src.locations import ROUTES, get_all_unique_locations
 
 logger = logging.getLogger(__name__)
 

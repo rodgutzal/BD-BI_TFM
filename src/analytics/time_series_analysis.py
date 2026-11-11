@@ -2,7 +2,7 @@
 
 import numpy as np
 import pandas as pd
-from scipy import signal, stats
+from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import adfuller, kpss, acf, pacf
 import warnings

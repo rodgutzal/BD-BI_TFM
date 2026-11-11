@@ -5,13 +5,11 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import sys
-from datetime import datetime, timedelta, timezone
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from src.models.ensemble_predictor import EnsemblePredictor
-from src.database import RouteDatabase
 
 
 @pytest.fixture

@@ -10,7 +10,7 @@ sigue siendo funcional si se quiere correr por separado:
 """
 
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd

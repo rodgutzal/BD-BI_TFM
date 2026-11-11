@@ -1,6 +1,5 @@
 """Pruebas para el módulo de configuración (BD_BI_TFM: selección de fuente de datos)."""
 
-import os
 import sys
 from pathlib import Path
 

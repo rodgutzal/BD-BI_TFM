@@ -2,7 +2,6 @@
 
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 
 def create_travel_time_chart(df: pd.DataFrame) -> go.Figure:

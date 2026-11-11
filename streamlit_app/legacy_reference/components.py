@@ -1,7 +1,7 @@
 """Componentes reutilizables para el dashboard Streamlit."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
+from typing import Tuple
 
 import pandas as pd
 import streamlit as st
@@ -234,7 +234,6 @@ def render_traffic_status(latest_row: pd.Series):
 
 def render_map(origin: Tuple[float, float], destination: Tuple[float, float], polyline=None):
     """Renderiza el mapa con origen, destino y polyline."""
-    import json
 
     map_data = pd.DataFrame(
         [

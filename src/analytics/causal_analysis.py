@@ -3,8 +3,6 @@
 import numpy as np
 import pandas as pd
 from scipy import stats
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import NearestNeighbors
 import warnings
 
 warnings.filterwarnings('ignore')
