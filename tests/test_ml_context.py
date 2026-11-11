@@ -50,18 +50,21 @@ def via(fila, col, **tags):
 # ---------------------------------------------------------------------------
 
 def test_edificios_se_convierten_con_su_tipo_y_yes_por_defecto():
+    """Los edificios de OSM se convierten en POIs de categoría «edificio» con su tipo como subcategoría, y «yes» si no tienen tipo."""
     df = osm_context.elements_to_pois("edificios", [via(20, 20, building="apartments"), via(20, 21, building="yes"),
                                                     via(20, 22)])
     assert list(df["category"].unique()) == ["edificio"] and df["subcategory"].tolist() == ["apartments", "yes", "yes"]
 
 
 def test_los_elementos_sin_coordenadas_se_descartan():
+    """Los elementos de OSM sin coordenadas se descartan."""
     df = osm_context.elements_to_pois("edificios", [{"type": "way", "id": 3, "tags": {"building": "yes"}},
                                                     via(20, 20, building="yes")])
     assert len(df) == 1
 
 
 def test_transporte_conserva_paradas_y_descarta_las_posiciones_duplicadas():
+    """En transporte se conservan paradas, estaciones, andenes y terminales de ferry, y se descartan las posiciones de parada duplicadas."""
     df = osm_context.elements_to_pois("transporte", [
         nodo(20, 20, highway="bus_stop"), nodo(20, 21, public_transport="stop_position"),
         nodo(20, 22, amenity="ferry_terminal"), nodo(20, 23, railway="station"), nodo(20, 24, public_transport="platform")])
@@ -69,6 +72,7 @@ def test_transporte_conserva_paradas_y_descarta_las_posiciones_duplicadas():
 
 
 def test_alojamiento_e_industria():
+    """Alojamiento e industria se convierten en POIs con el tipo de OSM como subcategoría."""
     aloj = osm_context.elements_to_pois("alojamiento", [nodo(20, 20, tourism="hotel"), via(20, 21, tourism="hostel")])
     assert aloj["subcategory"].tolist() == ["hotel", "hostel"] and set(aloj["category"]) == {"alojamiento"}
     ind = osm_context.elements_to_pois("industria", [via(20, 20, landuse="industrial"), nodo(20, 21, shop="wholesale")])
@@ -76,11 +80,13 @@ def test_alojamiento_e_industria():
 
 
 def test_un_tema_desconocido_o_sin_uso_da_un_dataframe_vacio_con_las_columnas():
+    """Un tema desconocido o que no se usa devuelve una tabla vacía pero con sus columnas."""
     df = osm_context.elements_to_pois("suelo_residencial", [via(20, 20, landuse="residential")])
     assert df.empty and list(df.columns) == ["category", "subcategory", "latitude", "longitude"]
 
 
 def test_load_context_lee_los_json_ignora_los_corruptos_y_un_directorio_vacio_da_vacio(tmp_path):
+    """`load_context` lee los JSON de la carpeta, ignora los corruptos y devuelve una tabla vacía si el directorio no tiene datos."""
     (tmp_path / "edificios_0.json").write_text(json.dumps({"tema": "edificios", "trozo": 0, "elements": [via(20, 20, building="house")]}))
     (tmp_path / "alojamiento_0.json").write_text(json.dumps({"tema": "alojamiento", "trozo": 0, "elements": [nodo(21, 21, tourism="hotel")]}))
     (tmp_path / "roto.json").write_text("{esto no es json")
@@ -92,6 +98,7 @@ def test_load_context_lee_los_json_ignora_los_corruptos_y_un_directorio_vacio_da
 
 
 def test_no_residenciales_excluye_lo_que_no_es_vivienda():
+    """La lista de edificios no residenciales incluye los industriales, iglesias, escuelas y garajes, y no las viviendas."""
     assert {"industrial", "church", "school", "garage"} <= osm_context.NO_RESIDENCIALES
     assert not ({"yes", "apartments", "house", "residential", "terrace"} & osm_context.NO_RESIDENCIALES)
 
@@ -117,17 +124,20 @@ def test_las_celdas_activas_no_cambian_al_cargar_el_contexto():
 
 
 def test_residentes_cuenta_edificios_pero_no_los_industriales():
+    """La lente de residentes cuenta los edificios de vivienda de la celda pero no los industriales."""
     lentes = compute_lenses(_con_contexto(), bp.get_default_profile("food_drink"))
     assert lentes.loc["r20c20", "mercado_residentes"] == 6.0               # 6 'yes'; el industrial no cuenta
     assert lentes["mercado_estudiantes"].notna().all()
 
 
 def test_los_hoteles_cuentan_como_turistas_aunque_no_haya_atracciones():
+    """Los hoteles cuentan como turistas en su celda aunque no haya atracciones."""
     lentes = compute_lenses(_con_contexto(), bp.get_default_profile("food_drink"))
     assert lentes.loc["r20c20", "mercado_turistas"] == 1.0
 
 
 def test_sin_contexto_residentes_y_turistas_siguen_sin_datos():
+    """Sin contexto de OSM, las lentes de residentes y turistas quedan sin dato (NaN)."""
     cc = CellCounts.from_pois(pd.DataFrame([punto(20, 20, "food_drink", "cafe")]))
     lentes = compute_lenses(cc, bp.get_default_profile("food_drink"))
     assert lentes["mercado_residentes"].isna().all() and lentes["mercado_turistas"].isna().all()
@@ -153,6 +163,7 @@ def test_el_indice_de_mercado_es_una_media_y_no_una_suma():
 
 
 def test_las_variables_incluyen_el_contexto_solo_si_se_piden():
+    """Las variables del modelo incluyen las de contexto solo si se piden, y el índice de celdas es el mismo."""
     cc = _con_contexto()
     sin = features.build_features(cc, [Selector("food_drink")])
     con = features.build_features(cc, [Selector("food_drink")], categorias=features.CATEGORIAS + osm_context.CONTEXTO)
@@ -178,6 +189,7 @@ def _x_con_contexto():
 
 
 def test_boosting_poi_no_usa_las_variables_de_contexto_y_solo_edificios_solo_esas():
+    """El modelo `boosting_poi` no usa las variables de contexto y `solo_edificios` usa únicamente las de edificios."""
     X, _ = _x_con_contexto()
     poi = models.columnas_de("boosting_poi", X)
     assert not any(c.startswith(osm_context.CONTEXTO) for c in poi.columns) and "school_celda" in poi.columns
@@ -186,12 +198,14 @@ def test_boosting_poi_no_usa_las_variables_de_contexto_y_solo_edificios_solo_esa
 
 @pytest.mark.parametrize("nombre", models.OPCIONALES)
 def test_los_modelos_opcionales_predicen_valores_positivos(nombre):
+    """Los modelos opcionales (parametrizado) predicen valores positivos, por encima del mínimo esperado."""
     X, y = _x_con_contexto()
     p = models.fit_predict(nombre, X.iloc[:200], y[:200], X.iloc[200:])
     assert len(p) == len(X) - 200 and (p >= models.MIN_ESPERADO).all()
 
 
 def test_el_boosting_con_contexto_gana_al_que_no_lo_tiene_cuando_la_senal_esta_en_el_contexto():
+    """Cuando la señal está en el contexto, el boosting con contexto gana al que no lo usa y la comparación lo marca como mejora."""
     X, y = _x_con_contexto()
     ev = validation.evaluate(X, y, nombres=("boosting", "boosting_poi", "solo_densidad"), repeats=2, n_folds=4, seed=1)
     r = validation.compare_models(ev, "boosting", "boosting_poi", n_boot=200)
@@ -199,6 +213,7 @@ def test_el_boosting_con_contexto_gana_al_que_no_lo_tiene_cuando_la_senal_esta_e
 
 
 def test_compare_models_con_el_mismo_modelo_es_indistinguible():
+    """Comparar un modelo consigo mismo da diferencia cero y veredicto «indistinguible»."""
     X, y = _x_con_contexto()
     ev = validation.evaluate(X, y, nombres=("boosting",), repeats=2, n_folds=4, seed=1)
     r = validation.compare_models(ev, "boosting", "boosting", n_boot=100)
@@ -227,6 +242,7 @@ def _db_y_contexto(tmp_path):
 
 
 def test_validate_location_model_con_contexto_informa_si_el_contexto_aporta(tmp_path, capsys):
+    """El script de validación con contexto informa de si el contexto aporta y no modifica la base de datos."""
     db, ctx = _db_y_contexto(tmp_path)
     antes = db.read_bytes()
     assert vlm.main(["--db", str(db), "--contexto", str(ctx), "--target", "food_drink", "--repeats", "2", "--folds", "3", "--boot", "50"]) == 0
@@ -237,6 +253,7 @@ def test_validate_location_model_con_contexto_informa_si_el_contexto_aporta(tmp_
 
 
 def test_validate_location_model_sin_contexto_no_evalua_los_modelos_opcionales(tmp_path, capsys):
+    """Sin contexto, el script de validación no evalúa los modelos opcionales."""
     db, _ = _db_y_contexto(tmp_path)
     assert vlm.main(["--db", str(db), "--target", "food_drink", "--repeats", "2", "--folds", "3", "--boot", "50"]) == 0
     salida = capsys.readouterr().out
@@ -244,6 +261,7 @@ def test_validate_location_model_sin_contexto_no_evalua_los_modelos_opcionales(t
 
 
 def test_validate_location_model_con_un_directorio_de_contexto_vacio_valida_sin_contexto(tmp_path, capsys):
+    """Con un directorio de contexto vacío, el script valida sin contexto y lo avisa."""
     db, _ = _db_y_contexto(tmp_path)
     vacio = tmp_path / "vacio"
     vacio.mkdir()
@@ -252,6 +270,7 @@ def test_validate_location_model_con_un_directorio_de_contexto_vacio_valida_sin_
 
 
 def test_measure_lens_variance_con_contexto_da_datos_a_residentes(tmp_path, capsys):
+    """El script de varianza de lentes, con contexto, da datos a la lente de residentes."""
     db, ctx = _db_y_contexto(tmp_path)
     assert mlv.main(["--db", str(db), "--contexto", str(ctx)]) == 0
     salida = capsys.readouterr().out
@@ -289,6 +308,7 @@ class ClienteFalso:
 
 
 def test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes():
+    """Las franjas de descarga cubren toda el área sin huecos ni solapes, y pedir 0 franjas lanza `ValueError`."""
     franjas = dl.bbox_franjas(3)
     assert franjas[0][0] == grid.SOUTH and franjas[-1][2] == grid.NORTH
     for a, b in zip(franjas, franjas[1:]):
@@ -299,17 +319,20 @@ def test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes():
 
 
 def test_la_consulta_lleva_el_bbox_el_timeout_del_servidor_y_pide_centro_y_etiquetas():
+    """La consulta lleva el rectángulo, el timeout del servidor y pide el centro y las etiquetas."""
     q = dl.construir_consulta(['way["building"]({bbox});'], (35.84, 14.44, 35.9, 14.5))
     assert "(35.840000,14.440000,35.900000,14.500000)" in q and "[timeout:150]" in q and q.rstrip().endswith("out center tags;")
 
 
 def test_el_plan_pide_siete_trozos_y_el_edificado_va_en_franjas():
+    """El plan de descarga pide siete trozos y el edificado va dividido en tres franjas."""
     plan = dl.consultas(list(dl.TEMAS))
     assert len(plan) == 7 and [t for t, _, _ in plan].count("edificios") == 3
     assert len(dl.consultas(["alojamiento"])) == 1
 
 
 def test_descargar_guarda_un_archivo_por_trozo_y_resume(tmp_path):
+    """La descarga guarda un archivo por trozo y devuelve el resumen de elementos y trozos por tema."""
     cliente = ClienteFalso(lambda url, q: Respuesta({"elements": [nodo(20, 20, tourism="hotel")] * 3}))
     resumen = dl.descargar(cliente, tmp_path / "salida", ["alojamiento", "industria"], pausa_s=0, log=lambda *_: None)
     assert resumen["alojamiento"] == {"elementos": 3, "trozos_ok": 1, "trozos_fallidos": 0}
@@ -328,6 +351,7 @@ def test_se_espera_entre_peticiones_pero_no_despues_de_la_ultima(tmp_path, monke
 
 
 def test_si_un_espejo_falla_se_prueba_el_siguiente():
+    """Si un espejo de Overpass falla, se prueba el siguiente."""
     def responder(url, q):
         return Respuesta(error=True) if url == "https://uno" else Respuesta({"elements": [1, 2]})
 
@@ -336,11 +360,13 @@ def test_si_un_espejo_falla_se_prueba_el_siguiente():
 
 
 def test_si_todos_los_espejos_fallan_lanza_runtimeerror():
+    """Si todos los espejos fallan, se lanza `RuntimeError`."""
     with pytest.raises(RuntimeError, match="Todos los espejos"):
         dl.pedir(ClienteFalso(lambda url, q: Respuesta(error=True)), "q")
 
 
 def test_un_trozo_fallido_se_anota_y_el_resto_se_descarga(tmp_path):
+    """Un trozo fallido se anota en el resumen y el resto se descarga."""
     def responder(url, q):
         return Respuesta(error=True) if "wholesale" in q else Respuesta({"elements": [nodo(20, 20, tourism="hotel")]})
 
@@ -350,6 +376,7 @@ def test_un_trozo_fallido_se_anota_y_el_resto_se_descarga(tmp_path):
 
 
 def test_dry_run_no_hace_llamadas_de_red_ni_crea_la_carpeta(tmp_path, monkeypatch, capsys):
+    """Con `--dry-run` no se crea el cliente, no hay llamadas de red y no se crea la carpeta de salida."""
     monkeypatch.setattr(dl, "OverpassClient", lambda *a, **k: pytest.fail("dry-run no debe crear el cliente"))
     destino = tmp_path / "no_debe_existir"
     assert dl.main(["--out", str(destino), "--dry-run"]) == 0
@@ -357,6 +384,7 @@ def test_dry_run_no_hace_llamadas_de_red_ni_crea_la_carpeta(tmp_path, monkeypatc
 
 
 def test_main_descarga_con_un_cliente_falso_y_devuelve_el_codigo_segun_los_fallos(tmp_path, monkeypatch):
+    """`main` devuelve 0 si la descarga va bien y 1 si algún trozo falla."""
     monkeypatch.setattr(dl, "OverpassClient", lambda *a, **k: ClienteFalso(lambda url, q: Respuesta({"elements": []})))
     assert dl.main(["--out", str(tmp_path / "a"), "--themes", "alojamiento", "--pausa", "0"]) == 0
     monkeypatch.setattr(dl, "OverpassClient", lambda *a, **k: ClienteFalso(lambda url, q: Respuesta(error=True)))
@@ -364,6 +392,7 @@ def test_main_descarga_con_un_cliente_falso_y_devuelve_el_codigo_segun_los_fallo
 
 
 def test_la_descarga_no_escribe_fuera_del_directorio_indicado(tmp_path):
+    """La descarga solo escribe dentro de la carpeta indicada."""
     cliente = ClienteFalso(lambda url, q: Respuesta({"elements": []}))
     carpeta = tmp_path / "solo_aqui"
     dl.descargar(cliente, carpeta, ["alojamiento"], pausa_s=0, log=lambda *_: None)

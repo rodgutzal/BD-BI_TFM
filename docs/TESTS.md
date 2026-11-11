@@ -454,28 +454,28 @@
 > Usan una RouteDatabase real sobre un directorio temporal (no mocks), para
 > ejercitar también los métodos de database.py que consume el módulo.
 
-- `test_haversine_conocida`
-- `test_normalize_minmax_basico`
-- `test_normalize_minmax_sin_variacion_queda_en_medio_no_en_cero`
-- `test_normalize_minmax_conserva_nan`
-- `test_demanda_sin_demografia_es_nan_no_cero`
-- `test_demanda_lee_poblacion_guardada`
-- `test_competencia_cuenta_solo_dentro_del_radio`
-- `test_competencia_filtra_por_categoria`
-- `test_competencia_food_drink_se_corrige_por_cobertura_de_osm`
-- `test_competencia_sin_pois_es_cero`
-- `test_accesibilidad_promedia_rutas_que_tocan_la_zona`
-- `test_pesos_por_defecto_suman_uno`
-- `test_pesos_que_no_suman_uno_lanzan_error`
-- `test_mas_demanda_mejora_el_puntaje`
-- `test_mas_competencia_empeora_el_puntaje`
-- `test_mas_tiempo_de_viaje_empeora_el_puntaje`
-- `test_zona_sin_dato_se_trata_como_neutral_no_como_la_peor`
-- `test_un_peso_en_cero_ignora_esa_dimension`
-- `test_el_puntaje_queda_entre_0_y_1`
-- `test_recomienda_de_extremo_a_extremo`
-- `test_recomendar_con_texto_incomprensible_lanza_error`
-- `test_recomendar_acepta_pesos_personalizados`
+- `test_haversine_conocida` — La distancia haversine da el valor conocido (0,01 grados de latitud son unos 1112 m) y 0 para el mismo punto.
+- `test_normalize_minmax_basico` — La normalización min-max lleva el mínimo a 0, el máximo a 1 y el punto medio a 0,5.
+- `test_normalize_minmax_sin_variacion_queda_en_medio_no_en_cero` — Si todos los valores son iguales, la normalización los deja en 0,5 y no en 0.
+- `test_normalize_minmax_conserva_nan` — La normalización min-max conserva los NaN y normaliza el resto.
+- `test_demanda_sin_demografia_es_nan_no_cero` — Sin datos demográficos, la demanda de cada zona es NaN, no 0.
+- `test_demanda_lee_poblacion_guardada` — La demanda de una zona es su población guardada; las zonas sin dato quedan en NaN.
+- `test_competencia_cuenta_solo_dentro_del_radio` — La competencia cuenta solo los comercios dentro del radio de la zona y la marca como observada.
+- `test_competencia_filtra_por_categoria` — La competencia solo cuenta los POIs de la categoría pedida.
+- `test_competencia_food_drink_se_corrige_por_cobertura_de_osm` — En restauración y bares, la competencia se corrige dividiendo entre la cobertura de OpenStreetMap y lo indica en el método.
+- `test_competencia_sin_pois_es_cero` — Sin POIs, la competencia de todas las zonas es 0.
+- `test_accesibilidad_promedia_rutas_que_tocan_la_zona` — La accesibilidad de una zona es el tiempo de viaje medio de las rutas que la tocan; una zona sin rutas queda en NaN.
+- `test_pesos_por_defecto_suman_uno` — Los pesos por defecto suman 1 y valen 0,40, 0,35 y 0,25.
+- `test_pesos_que_no_suman_uno_lanzan_error` — Unos pesos que no suman 1 lanzan `ValueError`.
+- `test_mas_demanda_mejora_el_puntaje` — A igualdad de lo demás, más demanda mejora el puntaje de la zona.
+- `test_mas_competencia_empeora_el_puntaje` — A igualdad de lo demás, más competencia empeora el puntaje.
+- `test_mas_tiempo_de_viaje_empeora_el_puntaje` — A igualdad de lo demás, más tiempo de viaje empeora el puntaje.
+- `test_zona_sin_dato_se_trata_como_neutral_no_como_la_peor` — Una zona sin dato en una dimensión se trata como neutral (0,5), no como la peor, y se anota cuántas dimensiones tenían dato.
+- `test_un_peso_en_cero_ignora_esa_dimension` — Un peso en 0 hace que esa dimensión no influya en el puntaje.
+- `test_el_puntaje_queda_entre_0_y_1` — El puntaje de cada zona queda entre 0 y 1.
+- `test_recomienda_de_extremo_a_extremo` — La recomendación de extremo a extremo devuelve todas las zonas ordenadas por puntaje y con el desglose completo, no solo el puntaje final.
+- `test_recomendar_con_texto_incomprensible_lanza_error` — Un texto que no se entiende como negocio lanza `ValueError`.
+- `test_recomendar_acepta_pesos_personalizados` — Con pesos personalizados, todo el peso en demanda hace ganar a la zona más poblada.
 
 ## `tests/test_locations.py`
 
@@ -542,63 +542,63 @@
 > Tests de la fase 1b: contexto de OpenStreetMap (src/ml/osm_context.py) y su efecto en las lentes, las variables y los
 > modelos, y la herramienta de descarga tools/download_osm_context.py (sin red: cliente falso).
 
-- `test_edificios_se_convierten_con_su_tipo_y_yes_por_defecto`
-- `test_los_elementos_sin_coordenadas_se_descartan`
-- `test_transporte_conserva_paradas_y_descarta_las_posiciones_duplicadas`
-- `test_alojamiento_e_industria`
-- `test_un_tema_desconocido_o_sin_uso_da_un_dataframe_vacio_con_las_columnas`
-- `test_load_context_lee_los_json_ignora_los_corruptos_y_un_directorio_vacio_da_vacio`
-- `test_no_residenciales_excluye_lo_que_no_es_vivienda`
+- `test_edificios_se_convierten_con_su_tipo_y_yes_por_defecto` — Los edificios de OSM se convierten en POIs de categoría «edificio» con su tipo como subcategoría, y «yes» si no tienen tipo.
+- `test_los_elementos_sin_coordenadas_se_descartan` — Los elementos de OSM sin coordenadas se descartan.
+- `test_transporte_conserva_paradas_y_descarta_las_posiciones_duplicadas` — En transporte se conservan paradas, estaciones, andenes y terminales de ferry, y se descartan las posiciones de parada duplicadas.
+- `test_alojamiento_e_industria` — Alojamiento e industria se convierten en POIs con el tipo de OSM como subcategoría.
+- `test_un_tema_desconocido_o_sin_uso_da_un_dataframe_vacio_con_las_columnas` — Un tema desconocido o que no se usa devuelve una tabla vacía pero con sus columnas.
+- `test_load_context_lee_los_json_ignora_los_corruptos_y_un_directorio_vacio_da_vacio` — `load_context` lee los JSON de la carpeta, ignora los corruptos y devuelve una tabla vacía si el directorio no tiene datos.
+- `test_no_residenciales_excluye_lo_que_no_es_vivienda` — La lista de edificios no residenciales incluye los industriales, iglesias, escuelas y garajes, y no las viviendas.
 - `test_las_celdas_activas_no_cambian_al_cargar_el_contexto` — Un edificio lejos de cualquier POI no activa una celda: así el conjunto de celdas es el mismo con y sin contexto.
-- `test_residentes_cuenta_edificios_pero_no_los_industriales`
-- `test_los_hoteles_cuentan_como_turistas_aunque_no_haya_atracciones`
-- `test_sin_contexto_residentes_y_turistas_siguen_sin_datos`
+- `test_residentes_cuenta_edificios_pero_no_los_industriales` — La lente de residentes cuenta los edificios de vivienda de la celda pero no los industriales.
+- `test_los_hoteles_cuentan_como_turistas_aunque_no_haya_atracciones` — Los hoteles cuentan como turistas en su celda aunque no haya atracciones.
+- `test_sin_contexto_residentes_y_turistas_siguen_sin_datos` — Sin contexto de OSM, las lentes de residentes y turistas quedan sin dato (NaN).
 - `test_el_indice_de_mercado_va_de_0_a_1_y_los_edificios_no_aplastan_a_los_demas_segmentos` — Regresión: mercado_total sumaba conteos en bruto, y con ~90 edificios por celda frente a ~1 colegio el índice era solo 'cuántos edificios hay'. Ahora cada segmento se escala por su máximo antes de promediar.
 - `test_el_indice_de_mercado_es_una_media_y_no_una_suma` — Una celda que es el máximo en TODOS los segmentos con datos vale exactamente 1 (con una suma valdría 2).
-- `test_las_variables_incluyen_el_contexto_solo_si_se_piden`
-- `test_boosting_poi_no_usa_las_variables_de_contexto_y_solo_edificios_solo_esas`
-- `test_los_modelos_opcionales_predicen_valores_positivos`
-- `test_el_boosting_con_contexto_gana_al_que_no_lo_tiene_cuando_la_senal_esta_en_el_contexto`
-- `test_compare_models_con_el_mismo_modelo_es_indistinguible`
-- `test_validate_location_model_con_contexto_informa_si_el_contexto_aporta`
-- `test_validate_location_model_sin_contexto_no_evalua_los_modelos_opcionales`
-- `test_validate_location_model_con_un_directorio_de_contexto_vacio_valida_sin_contexto`
-- `test_measure_lens_variance_con_contexto_da_datos_a_residentes`
-- `test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes`
-- `test_la_consulta_lleva_el_bbox_el_timeout_del_servidor_y_pide_centro_y_etiquetas`
-- `test_el_plan_pide_siete_trozos_y_el_edificado_va_en_franjas`
-- `test_descargar_guarda_un_archivo_por_trozo_y_resume`
+- `test_las_variables_incluyen_el_contexto_solo_si_se_piden` — Las variables del modelo incluyen las de contexto solo si se piden, y el índice de celdas es el mismo.
+- `test_boosting_poi_no_usa_las_variables_de_contexto_y_solo_edificios_solo_esas` — El modelo `boosting_poi` no usa las variables de contexto y `solo_edificios` usa únicamente las de edificios.
+- `test_los_modelos_opcionales_predicen_valores_positivos` — Los modelos opcionales (parametrizado) predicen valores positivos, por encima del mínimo esperado.
+- `test_el_boosting_con_contexto_gana_al_que_no_lo_tiene_cuando_la_senal_esta_en_el_contexto` — Cuando la señal está en el contexto, el boosting con contexto gana al que no lo usa y la comparación lo marca como mejora.
+- `test_compare_models_con_el_mismo_modelo_es_indistinguible` — Comparar un modelo consigo mismo da diferencia cero y veredicto «indistinguible».
+- `test_validate_location_model_con_contexto_informa_si_el_contexto_aporta` — El script de validación con contexto informa de si el contexto aporta y no modifica la base de datos.
+- `test_validate_location_model_sin_contexto_no_evalua_los_modelos_opcionales` — Sin contexto, el script de validación no evalúa los modelos opcionales.
+- `test_validate_location_model_con_un_directorio_de_contexto_vacio_valida_sin_contexto` — Con un directorio de contexto vacío, el script valida sin contexto y lo avisa.
+- `test_measure_lens_variance_con_contexto_da_datos_a_residentes` — El script de varianza de lentes, con contexto, da datos a la lente de residentes.
+- `test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes` — Las franjas de descarga cubren toda el área sin huecos ni solapes, y pedir 0 franjas lanza `ValueError`.
+- `test_la_consulta_lleva_el_bbox_el_timeout_del_servidor_y_pide_centro_y_etiquetas` — La consulta lleva el rectángulo, el timeout del servidor y pide el centro y las etiquetas.
+- `test_el_plan_pide_siete_trozos_y_el_edificado_va_en_franjas` — El plan de descarga pide siete trozos y el edificado va dividido en tres franjas.
+- `test_descargar_guarda_un_archivo_por_trozo_y_resume` — La descarga guarda un archivo por trozo y devuelve el resumen de elementos y trozos por tema.
 - `test_se_espera_entre_peticiones_pero_no_despues_de_la_ultima` — Cortesía con el servicio público: pausa entre peticiones, y ninguna espera inútil al terminar.
-- `test_si_un_espejo_falla_se_prueba_el_siguiente`
-- `test_si_todos_los_espejos_fallan_lanza_runtimeerror`
-- `test_un_trozo_fallido_se_anota_y_el_resto_se_descarga`
-- `test_dry_run_no_hace_llamadas_de_red_ni_crea_la_carpeta`
-- `test_main_descarga_con_un_cliente_falso_y_devuelve_el_codigo_segun_los_fallos`
-- `test_la_descarga_no_escribe_fuera_del_directorio_indicado`
+- `test_si_un_espejo_falla_se_prueba_el_siguiente` — Si un espejo de Overpass falla, se prueba el siguiente.
+- `test_si_todos_los_espejos_fallan_lanza_runtimeerror` — Si todos los espejos fallan, se lanza `RuntimeError`.
+- `test_un_trozo_fallido_se_anota_y_el_resto_se_descarga` — Un trozo fallido se anota en el resumen y el resto se descarga.
+- `test_dry_run_no_hace_llamadas_de_red_ni_crea_la_carpeta` — Con `--dry-run` no se crea el cliente, no hay llamadas de red y no se crea la carpeta de salida.
+- `test_main_descarga_con_un_cliente_falso_y_devuelve_el_codigo_segun_los_fallos` — `main` devuelve 0 si la descarga va bien y 1 si algún trozo falla.
+- `test_la_descarga_no_escribe_fuera_del_directorio_indicado` — La descarga solo escribe dentro de la carpeta indicada.
 
 ## `tests/test_ml_grid.py`
 
 > Tests de la rejilla de ~250 m (src/ml/grid.py) y de los conteos por celda (src/ml/cell_counts.py).
 
-- `test_la_rejilla_es_fija_y_cubre_el_area`
-- `test_las_celdas_miden_unos_250_m_en_las_dos_direcciones`
-- `test_un_punto_cae_en_la_celda_cuyo_centro_esta_cerca`
-- `test_puntos_fuera_de_la_rejilla_o_sin_coordenadas_dan_menos_uno`
-- `test_los_bordes_de_la_rejilla`
-- `test_identificadores_de_celda`
-- `test_cells_frame_tiene_todas_las_celdas_y_cada_centro_cae_en_su_celda`
-- `test_count_grid_cuenta_por_celda_e_ignora_lo_de_fuera`
-- `test_los_anillos_tienen_las_celdas_esperadas` ×4
-- `test_la_suma_por_anillos_pondera_la_vecindad`
-- `test_los_bordes_no_dan_la_vuelta`
-- `test_activas_son_las_celdas_con_algun_poi_en_ella_o_en_su_vecindad`
-- `test_selector_toda_la_categoria_un_subconjunto_o_todo_menos_algo`
-- `test_los_conteos_se_separan_por_categoria_y_subcategoria`
-- `test_subcategoria_vacia_o_nula_se_cuenta_como_cadena_vacia`
-- `test_los_pois_fuera_de_la_rejilla_se_cuentan_aparte`
-- `test_sin_pois_los_conteos_estan_vacios_pero_las_consultas_funcionan`
-- `test_exclude_quita_del_conteo_lo_que_cumple_el_objetivo`
-- `test_la_tabla_celda_por_subcategoria`
+- `test_la_rejilla_es_fija_y_cubre_el_area` — La rejilla tiene forma fija (45 por 51 celdas) y cubre los POIs conocidos y los centros de las 7 zonas.
+- `test_las_celdas_miden_unos_250_m_en_las_dos_direcciones` — Las celdas miden unos 250 m en latitud y en longitud.
+- `test_un_punto_cae_en_la_celda_cuyo_centro_esta_cerca` — Un punto cae en la celda correcta y su centro queda a menos de 0,71 veces el lado de la celda.
+- `test_puntos_fuera_de_la_rejilla_o_sin_coordenadas_dan_menos_uno` — Un punto fuera de la rejilla o sin coordenadas recibe el índice -1.
+- `test_los_bordes_de_la_rejilla` — Los bordes de la rejilla: la esquina suroeste está dentro y justo fuera da -1.
+- `test_identificadores_de_celda` — Los identificadores de celda se escriben `rNNcNN`, se leen de vuelta y un formato incorrecto lanza `ValueError`.
+- `test_cells_frame_tiene_todas_las_celdas_y_cada_centro_cae_en_su_celda` — La tabla de celdas tiene todas las celdas, con identificador único, y el centro de cada una cae en su propia celda.
+- `test_count_grid_cuenta_por_celda_e_ignora_lo_de_fuera` — `count_grid` cuenta los puntos por celda e ignora los que están fuera de la rejilla.
+- `test_los_anillos_tienen_las_celdas_esperadas` ×4 — Cada anillo de vecindad (parametrizado) cubre el número de celdas esperado.
+- `test_la_suma_por_anillos_pondera_la_vecindad` — La suma por vecindad pondera 1 la celda, 0,5 el primer anillo y 0,25 el segundo, y nada más allá.
+- `test_los_bordes_no_dan_la_vuelta` — La suma por vecindad no da la vuelta en los bordes de la rejilla.
+- `test_activas_son_las_celdas_con_algun_poi_en_ella_o_en_su_vecindad` — Las celdas activas son las que tienen algún POI en ellas o en su vecindad.
+- `test_selector_toda_la_categoria_un_subconjunto_o_todo_menos_algo` — Un selector puede abarcar toda una categoría, un subconjunto de subcategorías o todo salvo algunas.
+- `test_los_conteos_se_separan_por_categoria_y_subcategoria` — Los conteos por celda se separan por categoría y subcategoría y se pueden agregar con un selector.
+- `test_subcategoria_vacia_o_nula_se_cuenta_como_cadena_vacia` — Una subcategoría vacía o nula se cuenta como cadena vacía.
+- `test_los_pois_fuera_de_la_rejilla_se_cuentan_aparte` — Los POIs fuera de la rejilla o sin categoría no entran en la cuenta de celdas y los de fuera se cuentan aparte.
+- `test_sin_pois_los_conteos_estan_vacios_pero_las_consultas_funcionan` — Sin POIs los conteos quedan vacíos pero las consultas siguen funcionando.
+- `test_exclude_quita_del_conteo_lo_que_cumple_el_objetivo` — `exclude` quita del conteo lo que cumple el selector excluido.
+- `test_la_tabla_celda_por_subcategoria` — La tabla celda por subcategoría tiene solo las celdas activas, con conteos enteros y una columna por subcategoría.
 
 ## `tests/test_ml_inputs_bundle.py`
 
@@ -647,44 +647,44 @@
 > Tests de los perfiles de negocio, las tres lentes y las variables con control de fuga (src/ml/*)
 > y de la herramienta tools/measure_lens_variance.py.
 
-- `test_hay_un_perfil_por_cada_categoria_de_overpass`
-- `test_cada_perfil_es_coherente`
-- `test_los_selectores_de_segmentos_y_proveedores_usan_categorias_reales`
-- `test_residentes_usan_edificios_y_los_distribuidores_sanitarios_siguen_sin_proxy`
-- `test_perfil_inexistente_lanza_error`
-- `test_el_comercio_generico_no_cuenta_las_oficinas_como_competencia`
-- `test_ajustar_no_modifica_el_perfil_por_defecto`
-- `test_una_lente_no_puede_quedar_vacia_y_se_conserva_el_valor_por_defecto`
-- `test_una_lente_que_ya_estaba_vacia_por_defecto_puede_seguir_vacia`
-- `test_los_nombres_desconocidos_se_descartan_con_aviso`
-- `test_quitar_mas_de_la_mitad_de_la_competencia_avisa_de_optimismo`
-- `test_anadir_competencia_no_cuenta_como_desviacion`
-- `test_el_perfil_por_defecto_tiene_desviacion_cero_y_cambiarlo_todo_da_uno`
-- `test_el_umbral_de_aviso_es_la_mitad`
-- `test_la_competencia_se_pondera_por_vecindad`
-- `test_solo_salen_las_celdas_activas_y_el_indice_es_cell_id`
-- `test_segmento_sin_pois_es_nan_y_no_cero`
-- `test_cero_y_sin_datos_son_cosas_distintas`
-- `test_proveedores_total_y_diversidad`
-- `test_el_apoyo_cuenta_pois_sin_ponderar_en_la_celda_y_sus_8_vecinas`
+- `test_hay_un_perfil_por_cada_categoria_de_overpass` — Hay un perfil de negocio por cada categoría de Overpass.
+- `test_cada_perfil_es_coherente` — Cada perfil (parametrizado) es coherente: tiene nombre y competencia directa, sus segmentos y proveedores existen y sus selectores usan categorías reales.
+- `test_los_selectores_de_segmentos_y_proveedores_usan_categorias_reales` — Los selectores de segmentos y proveedores usan categorías que existen en Overpass o en el contexto de OSM.
+- `test_residentes_usan_edificios_y_los_distribuidores_sanitarios_siguen_sin_proxy` — El segmento de residentes usa los edificios como proxy y los distribuidores sanitarios siguen sin proxy.
+- `test_perfil_inexistente_lanza_error` — Pedir el perfil de una categoría que no existe lanza `ValueError`.
+- `test_el_comercio_generico_no_cuenta_las_oficinas_como_competencia` — En el comercio genérico, las oficinas no cuentan como competencia pero sí las tiendas.
+- `test_ajustar_no_modifica_el_perfil_por_defecto` — Ajustar un perfil devuelve uno nuevo marcado como personalizado y no modifica el perfil por defecto.
+- `test_una_lente_no_puede_quedar_vacia_y_se_conserva_el_valor_por_defecto` — Una lente no puede quedar vacía: se conserva el valor por defecto y se avisa de cada una.
+- `test_una_lente_que_ya_estaba_vacia_por_defecto_puede_seguir_vacia` — Una lente que ya estaba vacía por defecto puede seguir vacía sin avisos.
+- `test_los_nombres_desconocidos_se_descartan_con_aviso` — Los nombres de segmento o proveedor desconocidos se descartan con un aviso.
+- `test_quitar_mas_de_la_mitad_de_la_competencia_avisa_de_optimismo` — Quitar más de la mitad de la competencia del perfil por defecto avisa de que el resultado será optimista; quitar menos no.
+- `test_anadir_competencia_no_cuenta_como_desviacion` — Añadir competencia al perfil no cuenta como desviación del perfil por defecto.
+- `test_el_perfil_por_defecto_tiene_desviacion_cero_y_cambiarlo_todo_da_uno` — El perfil por defecto tiene desviación 0 y cambiar toda su competencia da 1.
+- `test_el_umbral_de_aviso_es_la_mitad` — El umbral de desviación a partir del cual se avisa es 0,5.
+- `test_la_competencia_se_pondera_por_vecindad` — La competencia directa se pondera por vecindad: 1 en la celda, 0,5 en la vecina y 0,25 en el segundo anillo.
+- `test_solo_salen_las_celdas_activas_y_el_indice_es_cell_id` — Solo salen las celdas activas, con `cell_id` como índice; con una máscara completa salen las 2295.
+- `test_segmento_sin_pois_es_nan_y_no_cero` — Un segmento sin proxy o sin POIs en los datos queda en NaN, no en 0, y uno con datos se calcula por vecindad.
+- `test_cero_y_sin_datos_son_cosas_distintas` — Cero (hay datos y no hay nada cerca) y NaN (no se sabe) son cosas distintas en las lentes.
+- `test_proveedores_total_y_diversidad` — Los proveedores se suman por tipo, con el total y la diversidad (cuántos de los tipos del perfil están presentes).
+- `test_el_apoyo_cuenta_pois_sin_ponderar_en_la_celda_y_sus_8_vecinas` — El apoyo de competencia cuenta POIs sin ponderar en la celda y sus 8 vecinas.
 - `test_un_poi_cuenta_en_una_sola_lente_la_competencia_manda` — Precedencia: un bar es competencia de un restaurante y NO también 'vida nocturna'; una panadería, aquí proveedor, tampoco es competencia.
-- `test_los_museos_no_son_a_la_vez_competencia_y_turistas_en_ocio`
-- `test_lentes_con_datos_cuenta_cuantas_lentes_se_pueden_calcular`
-- `test_ajustar_el_perfil_cambia_la_lente_sin_tocar_los_datos`
-- `test_con_cero_pois_las_lentes_no_fallan`
-- `test_cobertura_de_las_lentes`
+- `test_los_museos_no_son_a_la_vez_competencia_y_turistas_en_ocio` — En ocio, un museo cuenta como competencia pero no como segmento de turistas.
+- `test_lentes_con_datos_cuenta_cuantas_lentes_se_pueden_calcular` — `lentes_con_datos` cuenta cuántas lentes se pueden calcular en cada celda.
+- `test_ajustar_el_perfil_cambia_la_lente_sin_tocar_los_datos` — Ajustar el perfil cambia el valor de la lente sin tocar los datos.
+- `test_con_cero_pois_las_lentes_no_fallan` — Con cero POIs, las lentes devuelven una tabla vacía sin fallar.
+- `test_cobertura_de_las_lentes` — La cobertura cuenta cuántos POIs alimentan cada lente y cada tipo del perfil.
 - `test_las_variables_no_incluyen_el_objetivo_ni_en_la_celda_ni_en_la_vecindad` — Control de fuga: mover o añadir restaurantes NO cambia ninguna variable (si cambiara, el modelo de oferta esperada copiaría su propia etiqueta).
-- `test_las_otras_categorias_si_entran_en_la_celda_y_en_los_anillos`
-- `test_nombres_y_numero_de_variables`
-- `test_el_objetivo_cuenta_solo_la_propia_celda`
-- `test_distancia_al_centro_de_zona_mas_cercano`
-- `test_poblacion_y_accesibilidad_suavizadas_con_las_zonas`
-- `test_una_zona_sin_dato_se_omite_y_los_pesos_se_renormalizan`
-- `test_la_herramienta_lee_en_solo_lectura`
-- `test_describe_lens_excluye_nan_y_los_cuenta_aparte`
-- `test_la_serie_constante_no_da_cv_infinito`
-- `test_cuadrante_de_oportunidad`
-- `test_la_herramienta_imprime_un_informe_por_perfil`
+- `test_las_otras_categorias_si_entran_en_la_celda_y_en_los_anillos` — Las demás categorías cuentan en la celda y en los anillos de vecindad como variables del modelo.
+- `test_nombres_y_numero_de_variables` — Las variables del modelo tienen los nombres esperados, 24 en total, y las de población y tiempo de viaje quedan en NaN sin datos de zona.
+- `test_el_objetivo_cuenta_solo_la_propia_celda` — El objetivo cuenta solo los POIs de la propia celda.
+- `test_distancia_al_centro_de_zona_mas_cercano` — La distancia al centro de la zona más cercana es corta para una celda que contiene un centro de zona.
+- `test_poblacion_y_accesibilidad_suavizadas_con_las_zonas` — La población y el tiempo de viaje suavizados quedan dentro del rango de las zonas y más cerca de la zona cercana.
+- `test_una_zona_sin_dato_se_omite_y_los_pesos_se_renormalizan` — Una zona sin dato se omite al suavizar y los pesos de las demás se renormalizan.
+- `test_la_herramienta_lee_en_solo_lectura` — La herramienta lee los POIs de la base en solo lectura: no la modifica ni crea archivos.
+- `test_describe_lens_excluye_nan_y_los_cuenta_aparte` — `describe_lens` excluye los NaN, los cuenta aparte y calcula media, desviación, coeficiente de variación y porcentaje de ceros.
+- `test_la_serie_constante_no_da_cv_infinito` — Una serie constante en cero da un coeficiente de variación NaN, no infinito.
+- `test_cuadrante_de_oportunidad` — La proporción de celdas de oportunidad (mercado alto y competencia baja) es 0,25 si son independientes y 0 si están correlacionadas.
+- `test_la_herramienta_imprime_un_informe_por_perfil` — La herramienta imprime un informe por cada perfil con las celdas activas y la correlación de Spearman entre lentes.
 
 ## `tests/test_ml_panorama.py`
 
