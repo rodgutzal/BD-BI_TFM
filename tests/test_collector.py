@@ -94,11 +94,13 @@ def _tabla(db, sql, params=()):
 # ---------------------------------------------------------------------------
 
 def test_rechaza_una_fuente_desconocida(entorno):
+    """Una fuente de tráfico que no sea «ors» o «tomtom» lanza `ValueError`."""
     with pytest.raises(ValueError, match="'ors' o 'tomtom'"):
         entorno("google")
 
 
 def test_la_fuente_elige_el_cliente(entorno, monkeypatch):
+    """La fuente elegida («tomtom» u «ors») decide qué cliente de tráfico se crea."""
     class Tom(TraficoFalso):
         pass
 
@@ -111,6 +113,7 @@ def test_la_fuente_elige_el_cliente(entorno, monkeypatch):
 
 
 def test_timescale_solo_se_activa_con_configuracion(entorno):
+    """Timescale solo se activa si hay configuración y no se pide desactivarlo expresamente."""
     assert entorno().enable_timescale is False
     assert entorno(timescale_config={"host": "x"}).enable_timescale is True
     assert entorno(timescale_config={"host": "x"}, enable_timescale=False).enable_timescale is False
@@ -135,6 +138,7 @@ def test_una_senal_de_parada_baja_la_bandera_sin_salir_ni_cerrar_los_clientes(en
 
 
 def test_una_segunda_senal_sale_sin_esperar(entorno):
+    """La primera señal de parada solo pide parar; la segunda sale de inmediato con código 1."""
     c = entorno()
     c._signal_handler(signal.SIGTERM, None)
     with pytest.raises(SystemExit) as salida:
@@ -161,6 +165,7 @@ def test_la_senal_durante_un_ciclo_deja_que_termine_y_lo_guarda(entorno, monkeyp
 
 
 def test_close_no_falla_si_un_cliente_ya_estaba_cerrado_o_falla(entorno):
+    """`close()` no propaga el error si un cliente falla al cerrarse y cierra igualmente el resto."""
     c = entorno()
 
     def falla():
@@ -172,6 +177,7 @@ def test_close_no_falla_si_un_cliente_ya_estaba_cerrado_o_falla(entorno):
 
 
 def test_run_continuous_cierra_los_clientes_aunque_el_ciclo_lance_una_excepcion(entorno, monkeypatch):
+    """`run_continuous` cierra los clientes aunque un ciclo lance una excepción."""
     c = entorno()
     monkeypatch.setattr(c, "collect_cycle", lambda: (_ for _ in ()).throw(RuntimeError("inesperado")))
     with pytest.raises(RuntimeError):
@@ -184,6 +190,7 @@ def test_run_continuous_cierra_los_clientes_aunque_el_ciclo_lance_una_excepcion(
 # ---------------------------------------------------------------------------
 
 def test_un_ciclo_guarda_todas_las_rutas_en_csv_y_sqlite(entorno):
+    """Un ciclo guarda una fila por ruta en el CSV y en SQLite, con un único instante y la fuente correcta, y escribe el heartbeat."""
     c = entorno()
     assert c.collect_cycle() == N_RUTAS
     csv = pd.read_csv(entorno.tmp / "d.csv")
@@ -195,6 +202,7 @@ def test_un_ciclo_guarda_todas_las_rutas_en_csv_y_sqlite(entorno):
 
 
 def test_cada_ruta_lleva_el_clima_de_su_origen_y_destino_y_se_pide_una_vez_por_lugar(entorno):
+    """Cada ruta lleva el clima de su origen y destino, y el clima se pide una vez por lugar, no una vez por ruta."""
     c = entorno()
     c.collect_cycle()
     assert len(c.weather.llamadas) == len(UBICACIONES)             # no una por ruta
@@ -219,6 +227,7 @@ def test_el_nivel_de_movilidad_cambia_justo_por_encima_de_20_minutos(entorno):
 
 
 def test_si_falla_el_clima_de_un_lugar_la_ruta_se_guarda_sin_clima(entorno):
+    """Si falla el clima de un lugar, las rutas de ese origen se guardan sin clima y las demás conservan el suyo."""
     c = entorno()
     origen = ROUTES[0][0]
     c.weather.falla_en = {UBICACIONES[origen].latitude}
@@ -230,6 +239,7 @@ def test_si_falla_el_clima_de_un_lugar_la_ruta_se_guarda_sin_clima(entorno):
 
 
 def test_si_falla_una_ruta_se_siguen_guardando_las_demas(entorno):
+    """Si falla una ruta, las demás se siguen guardando y el ciclo cuenta solo las que se guardaron."""
     c = entorno()
     destino = ROUTES[0][1]
     c.traffic_client.falla_en = {UBICACIONES[destino].latitude}
@@ -240,6 +250,7 @@ def test_si_falla_una_ruta_se_siguen_guardando_las_demas(entorno):
 
 
 def test_si_fallan_todas_las_rutas_no_se_guarda_nada_ni_hay_latido(entorno):
+    """Si fallan todas las rutas no se guarda nada y no se escribe el heartbeat."""
     c = entorno()
     c.traffic_client.falla_en = {u.latitude for u in UBICACIONES.values()}
     assert c.collect_cycle() == 0
@@ -247,6 +258,7 @@ def test_si_fallan_todas_las_rutas_no_se_guarda_nada_ni_hay_latido(entorno):
 
 
 def test_si_falla_el_guardado_devuelve_cero_y_no_hay_latido(entorno, monkeypatch):
+    """Si falla el guardado en SQLite, el ciclo devuelve 0 y no escribe el heartbeat."""
     c = entorno()
 
     def revienta(records):
@@ -257,6 +269,7 @@ def test_si_falla_el_guardado_devuelve_cero_y_no_hay_latido(entorno, monkeypatch
 
 
 def test_con_timescale_activo_se_guarda_tambien_alli_con_su_configuracion(entorno, monkeypatch):
+    """Con Timescale activo, el ciclo guarda también allí todos los registros con su configuración."""
     config = {"host": "ts", "dbname": "x"}
     c = entorno(timescale_config=config)
     guardado = []
@@ -266,12 +279,14 @@ def test_con_timescale_activo_se_guarda_tambien_alli_con_su_configuracion(entorn
 
 
 def test_sin_timescale_no_se_intenta_guardar_alli(entorno, monkeypatch):
+    """Sin Timescale, el ciclo no intenta guardar allí."""
     c = entorno()
     monkeypatch.setattr(c.db, "save_records_to_timescale", lambda *a: pytest.fail("no debería llamarse"))
     assert c.collect_cycle() == N_RUTAS
 
 
 def test_el_heartbeat_se_escribe_en_logs_del_proyecto_con_la_hora_del_ciclo(tmp_path, monkeypatch):
+    """El heartbeat se escribe en `logs/` del proyecto con la hora actual."""
     monkeypatch.setattr(collector, "__file__", str(tmp_path / "src" / "collector.py"))
     c = collector.DataCollector.__new__(collector.DataCollector)
     c._write_heartbeat()
@@ -280,6 +295,7 @@ def test_el_heartbeat_se_escribe_en_logs_del_proyecto_con_la_hora_del_ciclo(tmp_
 
 
 def test_un_heartbeat_que_no_se_puede_escribir_no_rompe_el_ciclo(tmp_path, monkeypatch):
+    """Un heartbeat que no se puede escribir no rompe el ciclo."""
     monkeypatch.setattr(collector, "__file__", str(tmp_path / "fichero" / "src" / "collector.py"))
     (tmp_path / "fichero").write_text("esto es un archivo, no un directorio")      # mkdir fallará
     c = collector.DataCollector.__new__(collector.DataCollector)
@@ -291,6 +307,7 @@ def test_un_heartbeat_que_no_se_puede_escribir_no_rompe_el_ciclo(tmp_path, monke
 # ---------------------------------------------------------------------------
 
 def test_el_ciclo_alimenta_bronze_silver_y_gold_solo_con_sus_registros(entorno):
+    """Con el medallón activo, el ciclo alimenta Bronze, Silver y Gold con los registros del ciclo."""
     c = entorno()
     c.collect_cycle()
     bronze = _tabla(entorno.tmp / "d.db", "SELECT * FROM bronze_measurements")
@@ -325,6 +342,7 @@ def test_cada_ciclo_procesa_solo_sus_propios_registros_en_silver(entorno):
 
 
 def test_sin_medallon_no_se_crean_las_capas(entorno):
+    """Con el medallón desactivado no se crean las tablas de las capas."""
     entorno(enable_medallion=False).collect_cycle()
     tablas = set(_tabla(entorno.tmp / "d.db", "SELECT name FROM sqlite_master WHERE type='table'")["name"])
     assert "bronze_measurements" not in tablas
@@ -340,6 +358,7 @@ def test_un_fallo_del_medallon_no_impide_guardar_ni_cambia_el_resultado(entorno,
 
 
 def test_si_bronze_no_responde_success_se_omite_silver_y_gold(entorno, monkeypatch):
+    """Si Bronze no responde «success», se omiten Silver y Gold pero el ciclo sigue contando sus registros."""
     bronze = MagicMock()
     bronze.return_value.ingest.return_value = {"status": "error"}
     silver, gold = MagicMock(), MagicMock()
@@ -358,6 +377,7 @@ def test_si_bronze_no_responde_success_se_omite_silver_y_gold(entorno, monkeypat
 # ---------------------------------------------------------------------------
 
 def test_run_once_hace_un_solo_ciclo(entorno, monkeypatch):
+    """`run_once` hace un único ciclo."""
     c = entorno()
     ciclos = []
     monkeypatch.setattr(c, "collect_cycle", lambda: ciclos.append(1) or 0)
@@ -366,6 +386,7 @@ def test_run_once_hace_un_solo_ciclo(entorno, monkeypatch):
 
 
 def test_run_continuous_espera_el_intervalo_segundo_a_segundo_y_se_detiene(entorno, monkeypatch):
+    """`run_continuous` espera el intervalo de segundo en segundo, para al bajar la bandera y no hace más ciclos."""
     c = entorno()
     ciclos, dormidas = [], []
     monkeypatch.setattr(c, "collect_cycle", lambda: ciclos.append(1) or 0)
@@ -383,6 +404,7 @@ def test_run_continuous_espera_el_intervalo_segundo_a_segundo_y_se_detiene(entor
 
 
 def test_run_continuous_termina_si_se_detiene_durante_el_ciclo(entorno, monkeypatch):
+    """Si se pide parar durante un ciclo, `run_continuous` termina sin esperar el intervalo."""
     c = entorno()
 
     def ciclo():
@@ -421,12 +443,14 @@ def _parar_tras(h, monkeypatch, esperas):
 
 
 def test_el_hibrido_registra_un_unico_manejador_y_guarda_los_intervalos(hibrido):
+    """El planificador híbrido registra SIGINT y SIGTERM con un único manejador y guarda los intervalos de ORS y TomTom."""
     assert hibrido.senales == [(signal.SIGINT, hibrido._signal_handler), (signal.SIGTERM, hibrido._signal_handler)]
     assert [e["name"] for e in hibrido.entries] == ["ors", "tomtom"]
     assert [e["interval"] for e in hibrido.entries] == [timedelta(minutes=15), timedelta(minutes=27)]
 
 
 def test_en_el_primer_tick_corren_las_dos_fuentes_y_despues_ninguna_hasta_su_intervalo(hibrido, monkeypatch):
+    """En el primer tick corren las dos fuentes y después ninguna hasta que vence su intervalo."""
     _parar_tras(hibrido, monkeypatch, esperas=3)                 # 3 ticks de 1 s
     hibrido.run(tick_seconds=1)
     assert hibrido.ors.collect_cycle.call_count == 1 and hibrido.tom.collect_cycle.call_count == 1
@@ -434,6 +458,7 @@ def test_en_el_primer_tick_corren_las_dos_fuentes_y_despues_ninguna_hasta_su_int
 
 
 def test_una_fuente_vencida_corre_y_la_otra_no(hibrido, monkeypatch):
+    """Solo corre la fuente cuyo intervalo ya venció; su reloj se reinicia y el de la otra no cambia."""
     ahora = datetime.now(timezone.utc)
     hibrido.entries[0]["last_run"] = ahora - timedelta(minutes=16)     # ORS (15 min): vencida
     hibrido.entries[1]["last_run"] = ahora - timedelta(minutes=26)     # TomTom (27 min): aún no
@@ -445,6 +470,7 @@ def test_una_fuente_vencida_corre_y_la_otra_no(hibrido, monkeypatch):
 
 
 def test_si_se_detiene_durante_un_ciclo_no_dispara_la_otra_fuente(hibrido, monkeypatch):
+    """Si se pide parar durante el ciclo de una fuente, no se dispara la otra."""
     hibrido.ors.collect_cycle.side_effect = lambda: setattr(hibrido, "running", False)
     monkeypatch.setattr(collector.time, "sleep", lambda s: pytest.fail("no debería esperar"))
     hibrido.run(tick_seconds=1)
@@ -453,12 +479,14 @@ def test_si_se_detiene_durante_un_ciclo_no_dispara_la_otra_fuente(hibrido, monke
 
 @pytest.mark.parametrize("senal", [signal.SIGINT, signal.SIGTERM])
 def test_el_hibrido_ante_una_senal_baja_la_bandera_sin_salir(hibrido, senal):
+    """Ante una señal de parada (parametrizada), el híbrido baja la bandera sin salir ni cerrar todavía."""
     hibrido._signal_handler(senal, None)                            # no lanza SystemExit
     assert hibrido.running is False
     hibrido.ors.close.assert_not_called()                           # los clientes se cierran al salir del bucle
 
 
 def test_el_hibrido_con_una_segunda_senal_sale_sin_esperar(hibrido):
+    """En el híbrido, la segunda señal sale de inmediato con código 1."""
     hibrido._signal_handler(signal.SIGTERM, None)
     with pytest.raises(SystemExit) as salida:
         hibrido._signal_handler(signal.SIGTERM, None)
@@ -476,6 +504,7 @@ def test_el_hibrido_termina_el_ciclo_en_curso_y_cierra_los_dos_collectors(hibrid
 
 
 def test_el_hibrido_cierra_los_collectors_aunque_el_ciclo_lance_una_excepcion(hibrido, monkeypatch):
+    """El híbrido cierra los dos colectores aunque un ciclo lance una excepción."""
     hibrido.ors.collect_cycle.side_effect = RuntimeError("inesperado")
     with pytest.raises(RuntimeError):
         hibrido.run(tick_seconds=1)

@@ -70,6 +70,7 @@ def _sql(at, consulta):
 # ---------------------------------------------------------------------------
 
 def test_el_editor_sql_ejecuta_selects_y_ofrece_la_descarga(entorno):
+    """El editor SQL ejecuta un SELECT, muestra el número de filas y la tabla con el resultado correcto."""
     at = _sql(_abrir(), "SELECT destination, COUNT(*) AS n FROM route_measurements GROUP BY destination ORDER BY destination")
     assert not at.exception, [e.value for e in at.exception]
     assert any(s.value == "2 filas" for s in at.success)
@@ -78,6 +79,7 @@ def test_el_editor_sql_ejecuta_selects_y_ofrece_la_descarga(entorno):
 
 
 def test_el_editor_sql_acepta_with_recursivo_y_funciones(entorno):
+    """El editor SQL de solo lectura acepta consultas con `WITH RECURSIVE` y funciones de SQLite."""
     r = ad._read_only_query(entorno[1] / "data" / "mobility.db",
                             "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 3) "
                             "SELECT x, ROUND(x / 2.0, 1) AS m, datetime('now') > '2000' AS ok FROM c")
@@ -94,6 +96,7 @@ def test_el_editor_sql_acepta_with_recursivo_y_funciones(entorno):
     "PRAGMA writable_schema = 1",
 ])
 def test_el_editor_sql_rechaza_escrituras_y_pragmas_sin_tocar_los_datos(entorno, consulta):
+    """Cada consulta que escribe o usa PRAGMA (parametrizado) se rechaza con «Error en la consulta» y el archivo de la base queda byte a byte igual."""
     _, tmp = entorno
     ruta = tmp / "data" / "mobility.db"
     antes = ruta.read_bytes()
@@ -123,11 +126,13 @@ def test_el_editor_sql_cierra_la_conexion_aunque_la_consulta_falle(entorno):
 
 
 def test_el_editor_sql_con_consulta_vacia_avisa(entorno):
+    """Una consulta vacía o de solo espacios muestra el aviso «Escribe una consulta»."""
     at = _sql(_abrir(), "   ")
     assert not at.exception and any("Escribe una consulta" in w.value for w in at.warning)
 
 
 def test_un_ejemplo_del_editor_rellena_la_consulta(entorno):
+    """Elegir un ejemplo en el selector del editor rellena el cuadro de texto con su consulta."""
     at = _abrir()
     at.selectbox[[s.label for s in at.selectbox].index("Ejemplos")].select("Tablas disponibles").run()
     assert "sqlite_master" in at.text_area[0].value
@@ -159,6 +164,7 @@ def _generar(at):
 
 
 def test_la_exportacion_incluye_todas_las_rutas_y_la_polyline_por_defecto(entorno):
+    """La exportación por defecto incluye las filas de todas las rutas e informa de cuántas son."""
     at = _generar(_abrir())
     assert not at.exception, [e.value for e in at.exception]
     assert any("100 filas de 2 rutas" in s.value for s in at.success)
@@ -184,6 +190,7 @@ def test_la_exportacion_ligera_omite_la_polyline(entorno, monkeypatch, con_fecha
 
 
 def test_la_exportacion_con_rango_de_fechas_filtra(entorno):
+    """Con el rango de fechas activado y un día de historial, la exportación trae menos filas que sin filtro."""
     at = _abrir()
     at.checkbox[[c.label for c in at.checkbox].index("Limitar por rango de fechas")].set_value(True)
     at.slider[[s.label for s in at.slider].index("Días de historial a incluir")].set_value(1).run()
@@ -194,6 +201,7 @@ def test_la_exportacion_con_rango_de_fechas_filtra(entorno):
 
 
 def test_la_exportacion_sin_datos_avisa(entorno):
+    """Si la tabla está vacía, la exportación avisa «No hay datos disponibles» en vez de fallar."""
     db, tmp = entorno
     con = sqlite3.connect(tmp / "t.db")
     con.execute("DELETE FROM route_measurements")
@@ -209,18 +217,21 @@ def test_la_exportacion_sin_datos_avisa(entorno):
 # ---------------------------------------------------------------------------
 
 def test_el_explorador_muestra_los_datos_de_la_ruta_elegida(entorno):
+    """El Data Explorer muestra una tabla con las 60 filas de la ruta elegida."""
     at = _abrir()
     assert not at.exception, [e.value for e in at.exception]
     assert any(len(d.value) == 60 for d in at.dataframe)                  # Msida → Gzira: 60 filas
 
 
 def test_las_pruebas_estadisticas_corren_con_datos_suficientes(entorno):
+    """Con datos suficientes, la pestaña de pruebas estadísticas muestra las pruebas de estacionariedad y sus resultados."""
     at = _abrir()
     assert not at.exception, [e.value for e in at.exception]
     assert any("Stationarity Tests" in m.value for m in at.markdown) and len(at.json) >= 1
 
 
 def test_las_correlaciones_se_dibujan_con_las_columnas_por_defecto(entorno):
+    """La pestaña de correlaciones preselecciona las columnas por defecto (tiempo de viaje, velocidad y temperatura)."""
     at = _abrir()
     assert not at.exception
     ms = [m for m in at.multiselect if m.label == "Select columns for correlation"][0]
@@ -228,6 +239,7 @@ def test_las_correlaciones_se_dibujan_con_las_columnas_por_defecto(entorno):
 
 
 def test_analyst_con_la_base_vacia_no_lanza_excepciones(tmp_path, monkeypatch):
+    """El Analyst se abre sin excepciones con una base vacía."""
     db = RouteDatabase(tmp_path / "t.csv", tmp_path / "t.db")
     db.init_sqlite()
     st.cache_data.clear()
@@ -240,6 +252,7 @@ def test_analyst_con_la_base_vacia_no_lanza_excepciones(tmp_path, monkeypatch):
 
 
 def test_la_pestana_de_modelos_marca_las_rutas_con_modelo_entrenado(entorno):
+    """La pestaña de modelos marca como entrenadas las rutas que tienen su archivo de modelo y como no entrenadas las demás."""
     _, tmp = entorno
     (tmp / "models").mkdir()
     (tmp / "models" / "Msida_Gzira_ensemble.pkl").write_bytes(b"x")
@@ -285,6 +298,7 @@ def test_las_demas_pestanas_siguen_mostrandose_cuando_una_falla(entorno, monkeyp
 
 
 def test_sin_fallos_no_aparece_ningun_aviso_de_pestana(entorno):
+    """Si ninguna pestaña falla, no aparece ningún aviso «No se pudo mostrar»."""
     at = _abrir()
     assert not at.exception and not any("No se pudo mostrar" in e.value for e in at.error)
 

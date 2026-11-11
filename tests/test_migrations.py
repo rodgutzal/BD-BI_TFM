@@ -43,6 +43,7 @@ def _filas_db(db_path):
 # ---------------------------------------------------------------------------
 
 def test_migra_el_csv_a_sqlite(tmp_path):
+    """Migra las filas del CSV a SQLite conservando la fuente, el tiempo de viaje, el clima y los nulos."""
     db = tmp_path / "m.db"
     assert migration.migrate_csv_to_sqlite(_csv(tmp_path, *FILAS_OK), db) == 2
     filas = _filas_db(db)
@@ -52,12 +53,14 @@ def test_migra_el_csv_a_sqlite(tmp_path):
 
 
 def test_dry_run_no_crea_la_base(tmp_path):
+    """Con `dry_run`, cuenta las filas pero no crea la base de datos."""
     db = tmp_path / "m.db"
     assert migration.migrate_csv_to_sqlite(_csv(tmp_path, *FILAS_OK), db, dry_run=True) == 2
     assert not db.exists()
 
 
 def test_descarta_filas_sin_campos_obligatorios(tmp_path):
+    """Se descartan las filas a las que les falta el timestamp o el origen."""
     ruta = _csv(tmp_path, FILAS_OK[0], ",Msida,Gzira,tomtom,3,9,1,20,50,x,Normal",
                 "2026-09-01T11:00:00+00:00,,Gzira,tomtom,3,9,1,20,50,x,Normal")
     assert migration.migrate_csv_to_sqlite(ruta, tmp_path / "m.db") == 1
@@ -65,6 +68,7 @@ def test_descarta_filas_sin_campos_obligatorios(tmp_path):
 
 
 def test_data_source_vacio_o_ausente_pasa_a_unknown(tmp_path):
+    """Una fuente de datos vacía o ausente en el CSV se guarda como «unknown»."""
     vacio = _csv(tmp_path, "2026-09-01T10:00:00+00:00,Msida,Gzira,,3,9,1,20,50,x,Normal")
     assert migration.migrate_csv_to_sqlite(vacio, tmp_path / "a.db") == 1
     assert _filas_db(tmp_path / "a.db")[0]["data_source"] == "unknown"
@@ -76,12 +80,14 @@ def test_data_source_vacio_o_ausente_pasa_a_unknown(tmp_path):
 
 
 def test_un_valor_numerico_ilegible_queda_nulo_sin_romper_la_migracion(tmp_path):
+    """Un valor numérico ilegible queda como nulo y la fila se migra igualmente."""
     ruta = _csv(tmp_path, "2026-09-01T10:00:00+00:00,Msida,Gzira,tomtom,3,abc,1,20,50,x,Normal")
     assert migration.migrate_csv_to_sqlite(ruta, tmp_path / "m.db") == 1
     assert _filas_db(tmp_path / "m.db")[0]["travel_time_min"] is None
 
 
 def test_csv_inexistente_vacio_o_sin_columnas_obligatorias_devuelve_cero(tmp_path):
+    """Un CSV inexistente, vacío o sin las columnas obligatorias devuelve 0 filas y no crea la base."""
     assert migration.migrate_csv_to_sqlite(tmp_path / "no_existe.csv", tmp_path / "m.db") == 0
     solo_cabecera = _csv(tmp_path)
     assert migration.migrate_csv_to_sqlite(solo_cabecera, tmp_path / "m.db") == 0
@@ -92,6 +98,7 @@ def test_csv_inexistente_vacio_o_sin_columnas_obligatorias_devuelve_cero(tmp_pat
 
 
 def test_las_lineas_corruptas_del_csv_se_saltan(tmp_path):
+    """Las líneas corruptas del CSV se saltan y se migran las demás."""
     ruta = _csv(tmp_path, FILAS_OK[0], "esto,no,es,una,fila,valida,porque,tiene,demasiadas,columnas,"
                                        "a,b,c,d,e,f", FILAS_OK[1])
     assert migration.migrate_csv_to_sqlite(ruta, tmp_path / "m.db") == 2
@@ -132,15 +139,18 @@ def cli(monkeypatch):
 
 
 def test_cli_dry_run_no_pide_confirmacion(cli):
+    """La línea de comandos con `--dry-run` no pide confirmación y migra en modo ensayo."""
     assert cli("--dry-run") == 0
     assert cli.llamadas[0]["dry_run"] is True
 
 
 def test_cli_cancelada_no_migra(cli):
+    """Si el usuario cancela la confirmación, no se migra nada."""
     assert cli(respuesta="no") == 0 and cli.llamadas == []
 
 
 def test_cli_confirmada_o_con_skip_migra_y_usa_las_rutas_del_proyecto(cli):
+    """Con confirmación o `--skip-confirmation` se migra usando las rutas del CSV y de la base del proyecto."""
     assert cli(respuesta="yes") == 0
     assert cli("--skip-confirmation") == 0
     assert len(cli.llamadas) == 2 and all(c["dry_run"] is False for c in cli.llamadas)
@@ -149,6 +159,7 @@ def test_cli_confirmada_o_con_skip_migra_y_usa_las_rutas_del_proyecto(cli):
 
 
 def test_cli_devuelve_error_si_no_se_importa_nada_o_falla(cli):
+    """La línea de comandos devuelve código de error si no se importa ninguna fila o la migración falla."""
     cli.falso.resultado = 0
     assert cli("--skip-confirmation") == 1
 
@@ -204,6 +215,7 @@ def pg(monkeypatch):
 
 
 def test_backfill_inserta_las_filas_con_el_orden_de_columnas_de_traffic_trips(tmp_path, pg):
+    """El backfill a Timescale inserta cada fila de `traffic_trips` con el orden de columnas correcto y hace commit."""
     assert timescale_migration.backfill(_csv(tmp_path, *FILAS_OK)) == 2
     assert pg.commits == 1 and pg.cerrada
     assert "INSERT INTO traffic_trips" in pg.sql and pg.sql.count("%s") == 11
@@ -227,12 +239,14 @@ def test_backfill_celdas_vacias_van_como_null_y_no_como_nan(tmp_path, pg):
 
 
 def test_backfill_con_error_hace_rollback_y_devuelve_cero(tmp_path, pg):
+    """Si el backfill falla, hace rollback, cierra la conexión y devuelve 0."""
     pg.falla = True
     assert timescale_migration.backfill(_csv(tmp_path, *FILAS_OK)) == 0
     assert pg.rollbacks == 1 and pg.commits == 0 and pg.cerrada
 
 
 def test_backfill_csv_inexistente_o_vacio_no_se_conecta(tmp_path, monkeypatch):
+    """Con un CSV inexistente o vacío, el backfill no abre ninguna conexión."""
     def no_debe_conectar(**kwargs):
         raise AssertionError("no debería abrir conexión")
 
@@ -242,11 +256,13 @@ def test_backfill_csv_inexistente_o_vacio_no_se_conecta(tmp_path, monkeypatch):
 
 
 def test_backfill_sin_psycopg2_instalado_devuelve_cero(tmp_path, monkeypatch):
+    """Si `psycopg2` no está instalado, el backfill devuelve 0 en vez de fallar."""
     monkeypatch.setitem(sys.modules, "psycopg2", None)                  # import -> ImportError
     assert timescale_migration.backfill(_csv(tmp_path, *FILAS_OK)) == 0
 
 
 def test_backfill_main_devuelve_el_codigo_segun_las_filas(monkeypatch):
+    """`main` del backfill devuelve 0 si migró filas y 1 si no migró ninguna."""
     monkeypatch.setattr(timescale_migration, "backfill", lambda csv: 5)
     assert timescale_migration.main() == 0
     monkeypatch.setattr(timescale_migration, "backfill", lambda csv: 0)

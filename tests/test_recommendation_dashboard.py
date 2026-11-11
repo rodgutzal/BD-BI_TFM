@@ -36,6 +36,7 @@ def out(tmp_path):
 
 
 def test_la_tabla_muestra_cada_factor_crudo_y_normalizado(out):
+    """La tabla de resultados trae, por cada factor, el valor crudo y el normalizado, y una fila por zona."""
     tabla = build_results_table(out)
     for columna in (
         "Zona", "Puntaje",
@@ -49,6 +50,7 @@ def test_la_tabla_muestra_cada_factor_crudo_y_normalizado(out):
 
 
 def test_las_columnas_normalizadas_estan_entre_0_y_1(out):
+    """Las columnas normalizadas (demanda, baja competencia, accesibilidad) quedan entre 0 y 1."""
     tabla = build_results_table(out)
     for columna in ("Demanda (0-1)", "Baja competencia (0-1)", "Accesibilidad (0-1)"):
         valores = tabla[columna].dropna()
@@ -80,6 +82,7 @@ def test_el_puntaje_es_la_suma_ponderada_de_las_columnas_mostradas(out):
 
 
 def test_una_zona_sin_dato_queda_en_blanco_y_se_nota(out):
+    """Una zona sin dato queda en blanco (NaN) en vez de en 0 y su recuento de datos completos baja de 3."""
     tabla = build_results_table(out).set_index("Zona")
     assert math.isnan(tabla.loc["Marsaskala", "Población"])
     assert math.isnan(tabla.loc["Marsaskala", "Demanda (0-1)"])      # blanco -> "sin dato" en pantalla
@@ -87,6 +90,7 @@ def test_una_zona_sin_dato_queda_en_blanco_y_se_nota(out):
 
 
 def test_normalize_weights_conserva_proporciones_y_suma_uno():
+    """Los pesos normalizados conservan las proporciones y suman 1; con todo en cero se usan los pesos por defecto sin dividir entre cero."""
     w = normalize_weights(40, 35, 25)
     assert sum(w.values()) == pytest.approx(1.0)
     assert w["demanda"] == pytest.approx(0.40)

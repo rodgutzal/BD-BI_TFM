@@ -43,6 +43,7 @@ def db(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_ultima_medicion_de_cada_ruta_en_una_consulta(db):
+    """`get_latest_per_route` devuelve la medición más reciente de cada ruta en una sola consulta."""
     db.save_records_to_sqlite([
         _fila(30, "Msida", "Gzira", "ors", None, viaje=5.0),
         _fila(5, "Msida", "Gzira", "ors", None, viaje=6.0),      # la más reciente de Msida→Gzira
@@ -55,12 +56,14 @@ def test_ultima_medicion_de_cada_ruta_en_una_consulta(db):
 
 
 def test_no_trae_la_polilinea(db):
+    """`get_latest_per_route` no trae la polilínea ni columnas auxiliares."""
     db.save_records_to_sqlite([_fila(5, "Msida", "Gzira", "ors", None)])
     assert "polyline" not in db.get_latest_per_route().columns
     assert "rn" not in db.get_latest_per_route().columns
 
 
 def test_require_column_trae_la_ultima_fila_que_tiene_ese_dato(db):
+    """Con `require_column`, trae la última fila que sí tiene ese dato, aunque haya otra más reciente sin él."""
     db.save_records_to_sqlite([
         _fila(40, "Msida", "Gzira", "tomtom", 3.5),   # última CON tráfico
         _fila(5, "Msida", "Gzira", "ors", None),      # la más reciente, pero sin tráfico
@@ -72,16 +75,19 @@ def test_require_column_trae_la_ultima_fila_que_tiene_ese_dato(db):
 
 
 def test_require_column_omite_las_rutas_que_nunca_tuvieron_ese_dato(db):
+    """Con `require_column`, se omiten las rutas que nunca tuvieron ese dato."""
     db.save_records_to_sqlite([_fila(5, "Msida", "Gzira", "ors", None)])
     assert db.get_latest_per_route(require_column="traffic_delay_min").empty
 
 
 def test_require_column_rechaza_columnas_inexistentes(db):
+    """`require_column` rechaza con `ValueError` una columna que no existe o con inyección SQL."""
     with pytest.raises(ValueError):
         db.get_latest_per_route(require_column="no_existe; DROP TABLE route_measurements")
 
 
 def test_base_vacia(db):
+    """Con una base vacía, `get_latest_per_route` devuelve una tabla vacía."""
     assert db.get_latest_per_route().empty
 
 
@@ -98,6 +104,7 @@ def _grid(db):
 
 
 def test_ruta_cuya_ultima_medicion_es_de_ors_usa_la_lectura_de_tomtom(db):
+    """Si la última medición de una ruta es de ORS, el estado y el retraso salen de la última lectura de TomTom, no de un 0 inventado."""
     db.save_records_to_sqlite([
         _fila(20, "Msida", "Gzira", "tomtom", 0.5),
         _fila(3, "Msida", "Gzira", "ors", None, viaje=7.0),
@@ -120,6 +127,7 @@ def test_ruta_sin_ninguna_lectura_de_trafico_nunca_se_pinta_de_verde(db):
 
 
 def test_lectura_de_trafico_desactualizada_se_avisa(db):
+    """Si la última lectura de tráfico es demasiado antigua, el estado indica «Lectura desactualizada»."""
     db.save_records_to_sqlite([
         _fila(STALE_TRAFFIC_MINUTES + 30, "Msida", "Gzira", "tomtom", 0.2),
         _fila(2, "Msida", "Gzira", "ors", None),
@@ -133,11 +141,13 @@ def test_lectura_de_trafico_desactualizada_se_avisa(db):
     (4.1, "🔴 Heavy"), (12.0, "🔴 Heavy"),
 ])
 def test_umbrales_de_estado(db, delay, esperado):
+    """El estado de la ruta (libre, moderado o denso) sigue los umbrales de retraso (parametrizado)."""
     db.save_records_to_sqlite([_fila(5, "Msida", "Gzira", "tomtom", delay)])
     assert _grid(db).loc["Msida → Gzira", "Status"] == esperado
 
 
 def test_una_fila_por_ruta_con_las_columnas_esperadas(db):
+    """La tabla de estado tiene una fila por ruta y las columnas esperadas."""
     db.save_records_to_sqlite([
         _fila(5, "Msida", "Gzira", "tomtom", 1.0),
         _fila(5, "Msida", "Sliema", "ors", None),

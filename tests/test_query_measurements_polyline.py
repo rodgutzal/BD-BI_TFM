@@ -40,12 +40,14 @@ def db(tmp_path):
 
 
 def test_por_defecto_no_carga_la_polilinea(db):
+    """Por defecto `query_measurements` no carga la columna `polyline`."""
     df = db.query_measurements(limit=1000)
     assert "polyline" not in df.columns
     assert len(df) == 41
 
 
 def test_include_polyline_la_devuelve_intacta(db):
+    """Con `include_polyline=True` la polilínea vuelve idéntica a la guardada."""
     df = db.query_measurements(limit=1000, include_polyline=True)
     assert "polyline" in df.columns
     assert json.loads(df.iloc[0]["polyline"]) == POLILINEA
@@ -62,11 +64,13 @@ def test_las_demas_columnas_son_exactamente_las_mismas(db):
 
 
 def test_por_defecto_tampoco_lee_created_at_pero_con_include_polyline_si(db):
+    """`created_at` solo se lee con `include_polyline=True`."""
     assert "created_at" not in db.query_measurements(limit=5).columns
     assert "created_at" in db.query_measurements(limit=5, include_polyline=True).columns
 
 
 def test_los_filtros_y_el_orden_no_cambian(db):
+    """Los filtros por origen, destino y fecha y el orden (más reciente primero) siguen igual que antes."""
     solo_msida = db.query_measurements(origin="Msida", destination="Gzira", limit=1000)
     assert len(solo_msida) == 40 and set(solo_msida["origin"]) == {"Msida"}
     assert solo_msida["timestamp"].is_monotonic_decreasing       # más reciente primero
@@ -85,6 +89,7 @@ def test_sin_la_polilinea_la_memoria_baja_mucho(db):
 
 
 def test_base_vacia_no_falla(tmp_path):
+    """Con una base vacía `query_measurements` devuelve un DataFrame vacío sin fallar."""
     vacia = RouteDatabase(tmp_path / "t.csv", tmp_path / "t.db")
     assert vacia.query_measurements().empty
 
