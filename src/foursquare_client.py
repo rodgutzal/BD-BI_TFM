@@ -135,7 +135,7 @@ _CATEGORY_RULES: List[Tuple[str, tuple]] = [
         "entertainment",
     )),
     ("services", (
-        "bank", "salon", "spa", "barber", "hair", "laundry", "insurance", "real estate",
+        "bank", "salon", "spa", "barber", "barbershop", "hair", "laundry", "insurance", "real estate",
         "financial", "atm", "post office", "veterinarian",
     )),
     ("health", ("hospital", "clinic", "doctor", "pharmacy", "drugstore", "medical", "emergency room")),

@@ -48,11 +48,11 @@ def test_barbershop_no_se_confunde_con_bar():
     """Regresión: "bar" dentro de "Barbershop" no puede mandarlo a restaurant
     (se usa \\b, no un simple `in`).
 
-    Limitación conocida: "Barbershop" (una sola palabra) tampoco matchea la
-    palabra clave "barber" de `services` y cae en "other"; "Barber Shop" sí
-    llega a `services`. Aquí solo se garantiza lo documentado: nunca restaurant.
+    Con \\b, "Barbershop" (una sola palabra) tampoco matchea la palabra clave
+    "barber"; por eso `services` lleva también "barbershop" y ninguna de las
+    dos grafías cae en "other".
     """
-    assert _cat("Barbershop") != "restaurant"
+    assert _cat("Barbershop") == "services"
     assert _cat("Barber Shop") == "services"
 
 
