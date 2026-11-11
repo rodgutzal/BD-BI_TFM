@@ -100,6 +100,47 @@ def test_la_lista_de_celdas_empieza_por_las_de_mercado_alto_y_competencia_baja()
     assert any("celdas** (" in t and "Es un filtro, no un puntaje" in t for t in textos(at.caption))
 
 
+def test_el_porcentaje_de_candidatas_no_se_redondea_a_cero():
+    """5 de 1139 es 0,4 %: con cero decimales se leía «0%», que parece «ninguna celda». Se muestra con un decimal."""
+    from streamlit_app.dashboards.panorama_section import porcentaje
+    assert porcentaje(5, 1139) == "0.4%"
+    assert porcentaje(0, 1139) == "0.0%"
+    assert porcentaje(1139, 1139) == "100.0%"
+    assert porcentaje(3, 0) == "—"  # sin celdas no se divide entre cero
+
+
+def _vista_y_mapa(capa=None, elegida="auto"):
+    from src.ml.business_profiles import DEFAULT_PROFILES
+    from src.ml import panorama_view as pv
+    from streamlit_app.dashboards import panorama_section as ps
+    guardado, counts, _ = ps.load_data(ROOT / "data" / "ml")
+    vista = pv.compute_view(counts, DEFAULT_PROFILES["food_drink"], guardado, "food_drink")
+    capa = capa or pv.available_layers(vista)[0]
+    sel = vista.index[0] if elegida == "auto" else elegida
+    return vista, sel, ps.build_map(vista, capa, sel)
+
+
+def test_el_mapa_rotula_la_celda_elegida():
+    """El punto azul de la celda elegida lleva su identificador, para que se sepa cuál es sin abrir la ficha."""
+    vista, sel, fig = _vista_y_mapa()
+    elegido = [t for t in fig.data if t.name == "celda elegida"]
+    assert len(elegido) == 1
+    assert elegido[0].mode == "markers+text" and elegido[0].text == (f"Celda elegida: {sel}",)
+
+
+def test_el_mapa_sin_celda_elegida_no_dibuja_el_marcador():
+    """Si no hay celda elegida no se añade ningún marcador (ni rótulo) extra."""
+    _, _, fig = _vista_y_mapa(elegida=None)
+    assert not [t for t in fig.data if t.name == "celda elegida"]
+
+
+def test_los_puntos_del_mapa_son_legibles():
+    """Los puntos de celda no son diminutos ni casi transparentes (se confundían con las etiquetas del mapa base)."""
+    _, _, fig = _vista_y_mapa()
+    capa = next(t for t in fig.data if t.name not in ("celda elegida", "sin datos"))
+    assert capa.marker.size >= 9 and capa.marker.opacity >= 0.9
+
+
 def test_la_ficha_muestra_las_tres_lentes_y_la_confianza():
     """La ficha de la celda elegida trae competencia, mercado, proveedores y la confianza (que no es una probabilidad)."""
     at = abrir("food_drink")
