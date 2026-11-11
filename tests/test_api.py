@@ -60,6 +60,7 @@ def client(api):
 
 
 def test_la_api_usa_la_base_indicada_por_variable_de_entorno(api, tmp_path):
+    """La API usa la base de datos que indica la variable de entorno."""
     assert api.DB_PATH == tmp_path / "t.db"
 
 
@@ -75,12 +76,14 @@ def test_la_api_usa_la_base_indicada_por_variable_de_entorno(api, tmp_path):
     "/api/time-series/Nada/Nunca",
 ])
 def test_ruta_sin_datos_responde_404_y_no_400(client, url):
+    """Una ruta sin datos responde 404 (en cada URL parametrizada) y el `detail` no lleva el 404 anidado."""
     r = client.get(url)
     assert r.status_code == 404, r.text
     assert not r.json()["detail"].startswith("404:"), "el detail no debe llevar el 404 anidado"
 
 
 def test_el_detail_del_404_es_el_mensaje_original(client):
+    """El `detail` del 404 es el mensaje original de cada endpoint."""
     assert client.get("/api/statistics/Nada/Nunca").json()["detail"] == "No data available"
     assert client.get("/api/predict/Nada/Nunca").json()["detail"] == "No data for this route"
 
@@ -90,6 +93,7 @@ def test_el_detail_del_404_es_el_mensaje_original(client):
 # ---------------------------------------------------------------------------
 
 def test_analisis_invalido_es_422(client):
+    """Un tipo de análisis de serie temporal no válido responde 422."""
     assert client.get("/api/time-series/Msida/Gzira?analysis=invalido").status_code == 422
 
 
@@ -99,6 +103,7 @@ def test_analisis_invalido_es_422(client):
     "/api/statistics/Msida/Gzira?hours=0",
 ])
 def test_parametros_fuera_de_rango_son_422(client, url):
+    """Los parámetros fuera de rango (en cada URL parametrizada) responden 422."""
     assert client.get(url).status_code == 422
 
 
@@ -107,28 +112,33 @@ def test_parametros_fuera_de_rango_son_422(client, url):
 # ---------------------------------------------------------------------------
 
 def test_health(client):
+    """`/api/health` responde «healthy» con el número de rutas."""
     j = client.get("/api/health").json()
     assert j["status"] == "healthy" and j["routes"] == 1
 
 
 def test_routes(client):
+    """`/api/routes` lista el total y cada ruta con origen y destino."""
     j = client.get("/api/routes").json()
     assert j == {"total_routes": 1, "routes": [{"origin": "Msida", "destination": "Gzira"}]}
 
 
 def test_rankings_con_gold_vacio_no_falla(client):
+    """`/api/routes/rankings` responde 200 con listas vacías cuando la capa Gold no tiene datos."""
     r = client.get("/api/routes/rankings")
     assert r.status_code == 200
     assert r.json()["best_routes"] == []
 
 
 def test_statistics(client):
+    """`/api/statistics` devuelve la ruta y las estadísticas con el recuento de mediciones."""
     j = client.get("/api/statistics/Msida/Gzira?hours=720").json()
     assert j["route"] == "Msida → Gzira"
     assert j["statistics"]["count"] == 80
 
 
 def test_anomalies(client):
+    """`/api/anomalies` responde 200 con la ruta y la lista de anomalías."""
     r = client.get("/api/anomalies/Msida/Gzira")
     assert r.status_code == 200
     assert r.json()["route"] == "Msida → Gzira" and "anomalies" in r.json()
@@ -166,6 +176,7 @@ def test_time_series_patrones_con_un_dia_de_una_sola_muestra(tmp_path, monkeypat
 
 
 def test_time_series_patrones(client):
+    """`/api/time-series` con `analysis=patterns` responde 200 con ese tipo de análisis."""
     r = client.get("/api/time-series/Msida/Gzira?analysis=patterns")
     assert r.status_code == 200
     assert r.json()["analysis_type"] == "patterns"
