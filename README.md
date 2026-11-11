@@ -596,7 +596,7 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 
 `.github/workflows/tests.yml` corre en cada push/PR a `main`/`develop`:
 1. **`test`**: pytest en Python 3.11/3.12 (Python ≥ 3.11, que es lo que exigen los pines de `requirements.txt`) + un chequeo explícito de que `src.analytics` (módulo) y `src.analytics.time_series_analysis`/`causal_analysis` (submódulos) importan correctamente — regresión directa contra un bug de estructura que encontramos durante la fusión (ver `INTEGRATION_NOTES.md`). Incluye calidad de código:
-   - **Bloqueante**: `flake8 --select=E9,F63,F7,F82` (sintaxis y nombres sin definir) y `pylint --enable=E,F` (errores y fatales). Si fallan, el pipeline falla.
+   - **Bloqueante**: `flake8 --select=E9,F63,F7,F82` (sintaxis y nombres sin definir), `flake8 --select=F401` (imports sin usar en `src/`, `tests/` y `streamlit_app/`) y `pylint --enable=E,F` (errores y fatales). Si fallan, el pipeline falla.
    - **Informativo** (`continue-on-error`, no bloquea): `flake8` de estilo completo.
 2. **`docker-compose-lint`**: valida `docker-compose.yml` con `docker compose config`
 3. **`lint`**: `black` + `isort`, **informativos** por ahora (`continue-on-error`): el código actual no está formateado con ellos, así que se muestran como aviso en vez de bloquear. Para volverlos obligatorios: aplicar el formato una vez y quitar `continue-on-error` de `.github/workflows/tests.yml`.
