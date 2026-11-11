@@ -12,7 +12,6 @@ streamlit_app/legacy_reference/ asumían lo contrario y crasheaban con
 """
 
 import sys
-import tempfile
 from pathlib import Path
 
 import pandas as pd

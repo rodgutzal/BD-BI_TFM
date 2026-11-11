@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-import pandas as pd
 
 from src.database import RouteDatabase
 from src.models.travel_time_model import TravelTimePredictor
