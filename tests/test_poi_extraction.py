@@ -58,16 +58,29 @@ def logs(tmp_path, monkeypatch):
 
 def _pois_osm(n):
     return [
-        {"osm_type": "node", "osm_id": i, "category": "business" if i % 2 else "school",
-         "subcategory": "x", "name": f"p{i}", "latitude": 35.9, "longitude": 14.4}
+        {
+            "osm_type": "node",
+            "osm_id": i,
+            "category": "business" if i % 2 else "school",
+            "subcategory": "x",
+            "name": f"p{i}",
+            "latitude": 35.9,
+            "longitude": 14.4,
+        }
         for i in range(n)
     ]
 
 
 def _pois_fsq(n):
     return [
-        {"fsq_place_id": f"f{i}", "category": "restaurant", "subcategory": "Bar",
-         "name": f"p{i}", "latitude": 35.9, "longitude": 14.4}
+        {
+            "fsq_place_id": f"f{i}",
+            "category": "restaurant",
+            "subcategory": "Bar",
+            "name": f"p{i}",
+            "latitude": 35.9,
+            "longitude": 14.4,
+        }
         for i in range(n)
     ]
 
@@ -75,6 +88,7 @@ def _pois_fsq(n):
 # ---------------------------------------------------------------------------
 # Overpass: run_once y heartbeat
 # ---------------------------------------------------------------------------
+
 
 def test_overpass_run_once_guarda_los_pois_y_escribe_el_heartbeat(db, logs):
     """`run_once` de Overpass guarda los POIs en la base y escribe el heartbeat."""
@@ -129,6 +143,7 @@ def test_overpass_heartbeat_no_rompe_si_no_puede_escribir(tmp_path, monkeypatch,
 # Overpass: main
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def main_overpass(monkeypatch):
     """Prepara ov.main() con doble de cliente/BD y run_once registrado."""
@@ -149,6 +164,7 @@ def test_overpass_main_sin_intervalo_hace_un_ciclo_y_cierra_el_cliente(main_over
 
 def test_overpass_main_con_intervalo_repite_y_ctrl_c_sale_con_0(main_overpass, monkeypatch):
     """`main` de Overpass con intervalo repite los ciclos esperando el intervalo en horas, y Ctrl+C sale con código 0."""
+
     def dormir(segundos):
         main_overpass["esperas"].append(segundos)
         if len(main_overpass["esperas"]) == 2:
@@ -166,6 +182,7 @@ def test_overpass_main_con_intervalo_repite_y_ctrl_c_sale_con_0(main_overpass, m
 
 def test_overpass_main_un_error_fatal_sale_con_1_y_cierra_el_cliente(main_overpass, monkeypatch):
     """Un error fatal en `main` de Overpass sale con código 1 y cierra el cliente."""
+
     def romper(*args):
         raise RuntimeError("fallo")
 
@@ -180,6 +197,7 @@ def test_overpass_main_un_error_fatal_sale_con_1_y_cierra_el_cliente(main_overpa
 # ---------------------------------------------------------------------------
 # Foursquare: contador de llamadas
 # ---------------------------------------------------------------------------
+
 
 def test_contador_nuevo_empieza_en_las_llamadas_dadas_y_guarda_el_mes(logs):
     """El contador mensual nuevo empieza con las llamadas dadas y guarda el mes en curso."""
@@ -217,6 +235,7 @@ def test_contador_no_rompe_si_no_puede_guardar(logs, caplog):
 # ---------------------------------------------------------------------------
 # Foursquare: run_once
 # ---------------------------------------------------------------------------
+
 
 def test_foursquare_run_once_guarda_los_pois_cuenta_las_llamadas_y_escribe_el_heartbeat(db, logs):
     """`run_once` de Foursquare guarda los POIs, suma las llamadas del ciclo al contador y escribe el heartbeat."""
@@ -264,6 +283,7 @@ def test_foursquare_heartbeat_no_rompe_si_no_puede_escribir(tmp_path, monkeypatc
 # ---------------------------------------------------------------------------
 # Foursquare: main
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def main_foursquare(monkeypatch):

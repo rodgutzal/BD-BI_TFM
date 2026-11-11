@@ -32,10 +32,7 @@ def _get_required_api_key(name: str) -> str:
     if api_key:
         return api_key
 
-    raise RuntimeError(
-        f"Missing {name} environment variable. "
-        "Set it in your shell or add it to a local .env file."
-    )
+    raise RuntimeError(f"Missing {name} environment variable. " "Set it in your shell or add it to a local .env file.")
 
 
 def get_tomtom_api_key() -> str:
@@ -62,9 +59,7 @@ def get_data_source() -> str:
     """
     source = (get_env("DATA_SOURCE", "ors") or "ors").strip().lower()
     if source not in ("ors", "tomtom"):
-        raise RuntimeError(
-            f"DATA_SOURCE inválido: '{source}'. Usa 'ors' o 'tomtom'."
-        )
+        raise RuntimeError(f"DATA_SOURCE inválido: '{source}'. Usa 'ors' o 'tomtom'.")
     return source
 
 

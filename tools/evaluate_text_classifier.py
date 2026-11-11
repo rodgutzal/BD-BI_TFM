@@ -56,21 +56,28 @@ def validar_datos(tr: pd.DataFrame, ev: pd.DataFrame) -> list:
             problemas.append(f"{nombre}: frases vacías o repetidas")
     comunes = set(tr["frase"].str.lower().str.strip()) & set(ev["frase"].str.lower().str.strip())
     if comunes:
-        problemas.append(f"{len(comunes)} frases están a la vez en entrenamiento y evaluación (p. ej. {sorted(comunes)[:3]})")
+        problemas.append(
+            f"{len(comunes)} frases están a la vez en entrenamiento y evaluación (p. ej. {sorted(comunes)[:3]})"
+        )
     return problemas
 
 
-def evaluar(tr: pd.DataFrame, ev: pd.DataFrame, seed: int = 0, n_boot: int = 5000, n_folds: int = 5,
-            con_mlp: bool = True) -> dict:
+def evaluar(
+    tr: pd.DataFrame, ev: pd.DataFrame, seed: int = 0, n_boot: int = 5000, n_folds: int = 5, con_mlp: bool = True
+) -> dict:
     """Todo lo que luego se imprime y se exporta. No toca la evaluación para elegir nada."""
     X, y = list(tr["frase"]), list(tr["categoria"])
     frases, reales, tipos = list(ev["frase"]), list(ev["categoria"]), list(ev["tipo"])
 
     # umbrales: solo con el entrenamiento (validación cruzada)
-    c_lr, p_lr = tt.probabilidades_oof(X, y, lambda a, b, c: tt.probabilidades_sklearn(a, b, c, seed=seed), n_folds, seed)
+    c_lr, p_lr = tt.probabilidades_oof(
+        X, y, lambda a, b, c: tt.probabilidades_sklearn(a, b, c, seed=seed), n_folds, seed
+    )
     umbral_lr, umbral_mlp = tt.elegir_umbral(c_lr, p_lr, y), None
     if con_mlp:
-        c_mlp, p_mlp = tt.probabilidades_oof(X, y, lambda a, b, c: tt.probabilidades_mlp(a, b, c, seed=seed), n_folds, seed)
+        c_mlp, p_mlp = tt.probabilidades_oof(
+            X, y, lambda a, b, c: tt.probabilidades_mlp(a, b, c, seed=seed), n_folds, seed
+        )
         umbral_mlp = tt.elegir_umbral(c_mlp, p_mlp, y)
 
     modelo = tt.entrenar_logistica(X, y, seed=seed)
@@ -88,57 +95,102 @@ def evaluar(tr: pd.DataFrame, ev: pd.DataFrame, seed: int = 0, n_boot: int = 500
     for u in tt.UMBRALES:
         h = tt.hibrido(sistemas["palabras"], tt.respuesta(clases_l, pl, u))
         d = tt.decidir(sistemas["palabras"], h, reales, 1000, seed)
-        sensibilidad.append({"umbral": u, **tt.resumen(h, reales), "ic_inf": d["exactitud"]["ic_inf"], "cumple_errores": d["cumple_errores"]})
+        sensibilidad.append(
+            {
+                "umbral": u,
+                **tt.resumen(h, reales),
+                "ic_inf": d["exactitud"]["ic_inf"],
+                "cumple_errores": d["cumple_errores"],
+            }
+        )
     return {
         "sensibilidad": sensibilidad,
-        "modelo": modelo, "umbral": {"logistica": umbral_lr, "mlp": umbral_mlp},
-        "frases": frases, "reales": reales, "tipos": tipos, "sistemas": sistemas,
+        "modelo": modelo,
+        "umbral": {"logistica": umbral_lr, "mlp": umbral_mlp},
+        "frases": frases,
+        "reales": reales,
+        "tipos": tipos,
+        "sistemas": sistemas,
         "resumen": {k: tt.resumen(v, reales) for k, v in sistemas.items()},
         "por_tipo": {k: tt.por_tipo(sistemas[k], reales, tipos) for k in ("palabras", "logistica", "hibrido")},
         "decision": tt.decidir(sistemas["palabras"], sistemas["hibrido"], reales, n_boot, seed),
-        "logistica_vs_mlp": (tt.bootstrap_pareado(tt.aciertos(sistemas["logistica"], reales), tt.aciertos(sistemas["mlp"], reales),
-                                                  n_boot, seed) if con_mlp else None),
-        "n_entrenamiento": len(tr), "n_evaluacion": len(ev),
+        "logistica_vs_mlp": (
+            tt.bootstrap_pareado(
+                tt.aciertos(sistemas["logistica"], reales), tt.aciertos(sistemas["mlp"], reales), n_boot, seed
+            )
+            if con_mlp
+            else None
+        ),
+        "n_entrenamiento": len(tr),
+        "n_evaluacion": len(ev),
     }
 
 
 def imprimir(r: dict) -> None:
-    print(f"Entrenamiento: {r['n_entrenamiento']} frases | evaluación reservada: {r['n_evaluacion']} frases "
-          f"({sum(1 for c in r['reales'] if c == NINGUNA)} fuera de alcance)")
+    print(
+        f"Entrenamiento: {r['n_entrenamiento']} frases | evaluación reservada: {r['n_evaluacion']} frases "
+        f"({sum(1 for c in r['reales'] if c == NINGUNA)} fuera de alcance)"
+    )
     mlp = f", MLP {r['umbral']['mlp']:.2f}" if r["umbral"]["mlp"] is not None else ""
-    print(f"Umbral de confianza elegido por validación cruzada del entrenamiento: logística {r['umbral']['logistica']:.2f}{mlp}\n")
+    print(
+        f"Umbral de confianza elegido por validación cruzada del entrenamiento: logística {r['umbral']['logistica']:.2f}{mlp}\n"
+    )
     print(f"{'sistema':14} {'exactitud':>10} {'equivocadas':>12} {'sin respuesta':>14}")
     for nombre, s in r["resumen"].items():
         print(f"{nombre:14} {s['exactitud']:>10.1%} {s['equivocadas']:>12.1%} {s['sin_respuesta']:>14.1%}")
-    print("\n«equivocadas» = respondió una categoría que no es (incluye responder a una frase fuera de alcance); "
-          "«sin respuesta» = no respondió a una frase que sí describía un negocio.")
+    print(
+        "\n«equivocadas» = respondió una categoría que no es (incluye responder a una frase fuera de alcance); "
+        "«sin respuesta» = no respondió a una frase que sí describía un negocio."
+    )
     print("\nPor tipo de frase (exactitud / equivocadas):")
     tipos = list(r["por_tipo"]["palabras"].index)
     print(f"   {'tipo':10} {'n':>3} " + " ".join(f"{k:>22}" for k in r["por_tipo"]))
     for t in tipos:
-        celdas = [f"{r['por_tipo'][k].loc[t, 'exactitud']:>9.0%} / {r['por_tipo'][k].loc[t, 'equivocadas']:<8.0%}" for k in r["por_tipo"]]
+        celdas = [
+            f"{r['por_tipo'][k].loc[t, 'exactitud']:>9.0%} / {r['por_tipo'][k].loc[t, 'equivocadas']:<8.0%}"
+            for k in r["por_tipo"]
+        ]
         print(f"   {t:10} {int(r['por_tipo']['palabras'].loc[t, 'n']):>3} " + " ".join(f"{c:>22}" for c in celdas))
-    print("\nLa composición del conjunto (más sinónimos, erratas y frases largas que frases directas) la fijó el autor; "
-          "el número global depende de ella. Lo que se compara es el desglose por tipo.")
+    print(
+        "\nLa composición del conjunto (más sinónimos, erratas y frases largas que frases directas) la fijó el autor; "
+        "el número global depende de ella. Lo que se compara es el desglose por tipo."
+    )
     d = r["decision"]
     e = d["exactitud"]
     print(f"\nRegla de decisión (híbrido frente a palabras clave):")
-    print(f"   exactitud: {e['diferencia']:+.1%} [{e['ic_inf']:+.1%}, {e['ic_sup']:+.1%}] -> "
-          + ("IC por encima de 0" if d["cumple_exactitud"] else "el IC incluye 0"))
-    print(f"   respuestas equivocadas: híbrido {d['equivocadas_candidato']:.1%} frente a {d['equivocadas_palabras']:.1%} "
-          f"(tolerancia +{tt.TOLERANCIA_ERRORES:.0%}) -> " + ("cumple" if d["cumple_errores"] else "NO cumple"))
-    print("   DECISIÓN: " + ("se adopta el híbrido." if d["adoptar"] else "NO se adopta el híbrido; se queda el método de palabras clave."))
+    print(
+        f"   exactitud: {e['diferencia']:+.1%} [{e['ic_inf']:+.1%}, {e['ic_sup']:+.1%}] -> "
+        + ("IC por encima de 0" if d["cumple_exactitud"] else "el IC incluye 0")
+    )
+    print(
+        f"   respuestas equivocadas: híbrido {d['equivocadas_candidato']:.1%} frente a {d['equivocadas_palabras']:.1%} "
+        f"(tolerancia +{tt.TOLERANCIA_ERRORES:.0%}) -> " + ("cumple" if d["cumple_errores"] else "NO cumple")
+    )
+    print(
+        "   DECISIÓN: "
+        + (
+            "se adopta el híbrido."
+            if d["adoptar"]
+            else "NO se adopta el híbrido; se queda el método de palabras clave."
+        )
+    )
     v = r["logistica_vs_mlp"]
     if v is not None:
-        print(f"\nLogística − MLP (exactitud): {v['diferencia']:+.1%} [{v['ic_inf']:+.1%}, {v['ic_sup']:+.1%}] -> "
-              + ("la red no se distingue de la logística" if v["ic_inf"] <= 0 <= v["ic_sup"] else "diferencia clara"))
+        print(
+            f"\nLogística − MLP (exactitud): {v['diferencia']:+.1%} [{v['ic_inf']:+.1%}, {v['ic_sup']:+.1%}] -> "
+            + ("la red no se distingue de la logística" if v["ic_inf"] <= 0 <= v["ic_sup"] else "diferencia clara")
+        )
     print("\nSensibilidad al umbral (descriptiva; NO se usa para elegir): híbrido sobre la evaluación")
     print(f"   {'umbral':>6} {'exactitud':>10} {'equivocadas':>12} {'sin resp.':>10}  cumpliría la regla")
     for s in r["sensibilidad"][::2]:
-        print(f"   {s['umbral']:>6.2f} {s['exactitud']:>10.1%} {s['equivocadas']:>12.1%} {s['sin_respuesta']:>10.1%}  "
-              + ("sí" if s["cumple_errores"] and s["ic_inf"] > 0 else "no"))
-    print("   Elegir ahora un umbral con esta tabla sería ajustar a la evaluación: cualquier cambio de protocolo exige una "
-          "evaluación nueva.")
+        print(
+            f"   {s['umbral']:>6.2f} {s['exactitud']:>10.1%} {s['equivocadas']:>12.1%} {s['sin_respuesta']:>10.1%}  "
+            + ("sí" if s["cumple_errores"] and s["ic_inf"] > 0 else "no")
+        )
+    print(
+        "   Elegir ahora un umbral con esta tabla sería ajustar a la evaluación: cualquier cambio de protocolo exige una "
+        "evaluación nueva."
+    )
     print("\nRespuestas equivocadas del híbrido:")
     for f, real, resp in zip(r["frases"], r["reales"], r["sistemas"]["hibrido"]):
         if resp is not None and resp != real:
@@ -153,20 +205,47 @@ def exportar(r: dict, destino: Path, entrenamiento=ENTRENAMIENTO, evaluacion=EVA
     r["modelo"].save(ruta)
     d = r["decision"]
     manifiesto = {
-        "formato": 1, "adoptado": d["adoptar"], "umbral": r["umbral"]["logistica"],
-        "modelo": {"archivo": ruta.name, "sha256": file_hash(ruta), "clases": r["modelo"].clases,
-                   "ngramas": list(r["modelo"].ngramas), "n_ngramas": len(r["modelo"].vocabulario)},
-        "decision": {"exactitud": d["exactitud"], "equivocadas_hibrido": d["equivocadas_candidato"],
-                     "equivocadas_palabras": d["equivocadas_palabras"], "tolerancia_errores": tt.TOLERANCIA_ERRORES},
+        "formato": 1,
+        "adoptado": d["adoptar"],
+        "umbral": r["umbral"]["logistica"],
+        "modelo": {
+            "archivo": ruta.name,
+            "sha256": file_hash(ruta),
+            "clases": r["modelo"].clases,
+            "ngramas": list(r["modelo"].ngramas),
+            "n_ngramas": len(r["modelo"].vocabulario),
+        },
+        "decision": {
+            "exactitud": d["exactitud"],
+            "equivocadas_hibrido": d["equivocadas_candidato"],
+            "equivocadas_palabras": d["equivocadas_palabras"],
+            "tolerancia_errores": tt.TOLERANCIA_ERRORES,
+        },
         "resumen": r["resumen"],
-        "datos": {"entrenamiento": {"archivo": Path(entrenamiento).name, "frases": r["n_entrenamiento"], "sha256": file_hash(entrenamiento)},
-                  "evaluacion": {"archivo": Path(evaluacion).name, "frases": r["n_evaluacion"], "sha256": file_hash(evaluacion)}},
-        "advertencia": ("Frases de entrenamiento y de evaluación escritas por el mismo autor (no son consultas reales de usuarios): "
-                        "la exactitud sobre ellas es optimista y depende de la composición del conjunto."),
-        "procedencia": {"commit": commit or "desconocido", **{f"version.{k}": v for k, v in library_versions().items()}},
+        "datos": {
+            "entrenamiento": {
+                "archivo": Path(entrenamiento).name,
+                "frases": r["n_entrenamiento"],
+                "sha256": file_hash(entrenamiento),
+            },
+            "evaluacion": {
+                "archivo": Path(evaluacion).name,
+                "frases": r["n_evaluacion"],
+                "sha256": file_hash(evaluacion),
+            },
+        },
+        "advertencia": (
+            "Frases de entrenamiento y de evaluación escritas por el mismo autor (no son consultas reales de usuarios): "
+            "la exactitud sobre ellas es optimista y depende de la composición del conjunto."
+        ),
+        "procedencia": {
+            "commit": commit or "desconocido",
+            **{f"version.{k}": v for k, v in library_versions().items()},
+        },
     }
     (destino / "text_classifier_manifest.json").write_text(
-        json.dumps(manifiesto, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+        json.dumps(manifiesto, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+    )
     return manifiesto
 
 
@@ -181,7 +260,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--entrenamiento", default=str(ENTRENAMIENTO))
     ap.add_argument("--evaluacion", default=str(EVALUACION))
-    ap.add_argument("--exportar", default=None, help="directorio donde escribir el modelo y su manifiesto (p. ej. data/ml)")
+    ap.add_argument(
+        "--exportar", default=None, help="directorio donde escribir el modelo y su manifiesto (p. ej. data/ml)"
+    )
     ap.add_argument("--sin-mlp", action="store_true", help="omite la red MLP (es lo que más tarda: ~1 minuto)")
     ap.add_argument("--boot", type=int, default=5000)
     ap.add_argument("--seed", type=int, default=0)
@@ -196,7 +277,9 @@ def main(argv=None) -> int:
     imprimir(r)
     if args.exportar:
         m = exportar(r, Path(args.exportar), args.entrenamiento, args.evaluacion, _commit())
-        print(f"\nEscrito en {args.exportar}: text_classifier.json ({m['modelo']['n_ngramas']} n-gramas) y text_classifier_manifest.json")
+        print(
+            f"\nEscrito en {args.exportar}: text_classifier.json ({m['modelo']['n_ngramas']} n-gramas) y text_classifier_manifest.json"
+        )
     return 0
 
 

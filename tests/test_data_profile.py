@@ -23,9 +23,15 @@ AHORA = datetime.now(timezone.utc)
 def _fila(minutos_atras, origin, destination, fuente="tomtom", **extra):
     base = {
         "timestamp": (AHORA - timedelta(minutes=minutos_atras)).isoformat(),
-        "origin": origin, "destination": destination, "data_source": fuente,
-        "travel_time_min": 10.0, "distance_km": 3.0, "average_speed_kmh": 30.0,
-        "traffic_delay_min": 1.0, "origin_temperature": 20.0, "origin_humidity": 50.0,
+        "origin": origin,
+        "destination": destination,
+        "data_source": fuente,
+        "travel_time_min": 10.0,
+        "distance_km": 3.0,
+        "average_speed_kmh": 30.0,
+        "traffic_delay_min": 1.0,
+        "origin_temperature": 20.0,
+        "origin_humidity": 50.0,
     }
     base.update(extra)
     return base
@@ -50,6 +56,7 @@ def db_con_datos(db):
 # Los números
 # ---------------------------------------------------------------------------
 
+
 def test_totales_y_rutas(db_con_datos):
     """El perfil da el total de filas, de rutas y de orígenes, y las filas de cada ruta."""
     p = db_con_datos.get_data_profile()
@@ -57,7 +64,9 @@ def test_totales_y_rutas(db_con_datos):
     assert p["n_routes"] == 3
     assert p["n_origins"] == 2
     assert dict(zip(zip(p["routes"]["origin"], p["routes"]["destination"]), p["routes"]["rows"])) == {
-        ("Msida", "Gzira"): 10, ("Msida", "Sliema"): 6, ("Valletta", "Sliema"): 1,
+        ("Msida", "Gzira"): 10,
+        ("Msida", "Sliema"): 6,
+        ("Valletta", "Sliema"): 1,
     }
 
 
@@ -96,7 +105,7 @@ def test_id_polyline_y_created_at_no_son_columnas_de_medicion(db_con_datos):
 
 def test_una_polilinea_nula_no_cuenta_como_dato_faltante(db):
     """Las filas históricas de TomTom no tienen polyline: eso no debe bajar la completitud."""
-    db.save_records_to_sqlite([_fila(i, "Msida", "Gzira") for i in range(5)])      # sin polyline (NULL)
+    db.save_records_to_sqlite([_fila(i, "Msida", "Gzira") for i in range(5)])  # sin polyline (NULL)
     p = db.get_data_profile()
     assert "polyline" not in p["null_counts"]
     nulos_reales = sum(p["null_counts"].values())
@@ -121,13 +130,18 @@ def test_cuenta_duplicados_de_ruta_instante_y_fuente(tmp_path):
         "origin TEXT NOT NULL, destination TEXT NOT NULL, data_source TEXT NOT NULL, travel_time_min REAL, "
         "polyline TEXT, created_at TEXT)"
     )
-    filas = [("2026-11-01T00:00:00", "A", "B", "ors", 5.0, None, "x")] * 3 + [("2026-11-01T00:15:00", "A", "B", "ors", 6.0, None, "x")]
-    conn.executemany("INSERT INTO route_measurements (timestamp, origin, destination, data_source, travel_time_min, polyline, created_at) VALUES (?,?,?,?,?,?,?)", filas)
+    filas = [("2026-11-01T00:00:00", "A", "B", "ors", 5.0, None, "x")] * 3 + [
+        ("2026-11-01T00:15:00", "A", "B", "ors", 6.0, None, "x")
+    ]
+    conn.executemany(
+        "INSERT INTO route_measurements (timestamp, origin, destination, data_source, travel_time_min, polyline, created_at) VALUES (?,?,?,?,?,?,?)",
+        filas,
+    )
     conn.commit()
     conn.close()
     base = RouteDatabase(tmp_path / "t.csv", ruta)
     p = base.get_data_profile()
-    assert p["total_rows"] == 4 and p["duplicates"] == 2          # 3 filas iguales = 2 repetidas
+    assert p["total_rows"] == 4 and p["duplicates"] == 2  # 3 filas iguales = 2 repetidas
 
 
 def test_en_la_tabla_real_no_hay_duplicados(db_con_datos):
@@ -138,6 +152,7 @@ def test_en_la_tabla_real_no_hay_duplicados(db_con_datos):
 # ---------------------------------------------------------------------------
 # UNA sola pasada por la tabla (el motivo de existir)
 # ---------------------------------------------------------------------------
+
 
 def test_el_perfil_hace_una_sola_consulta_sobre_la_tabla(db_con_datos, monkeypatch):
     """El perfil recorre la tabla de mediciones con una sola consulta."""
@@ -151,13 +166,18 @@ def test_el_perfil_hace_una_sola_consulta_sobre_la_tabla(db_con_datos, monkeypat
 
     monkeypatch.setattr(RouteDatabase, "_connect", conectar)
     db_con_datos.get_data_profile()
-    sobre_la_tabla = [q for q in consultas if "FROM route_measurements" in q and q.lstrip().upper().startswith("SELECT")]
-    assert len(sobre_la_tabla) == 1, f"se esperaba 1 recorrido de la tabla y hubo {len(sobre_la_tabla)}: {sobre_la_tabla}"
+    sobre_la_tabla = [
+        q for q in consultas if "FROM route_measurements" in q and q.lstrip().upper().startswith("SELECT")
+    ]
+    assert (
+        len(sobre_la_tabla) == 1
+    ), f"se esperaba 1 recorrido de la tabla y hubo {len(sobre_la_tabla)}: {sobre_la_tabla}"
 
 
 # ---------------------------------------------------------------------------
 # Lo barato: último timestamp y resumen sin rutas
 # ---------------------------------------------------------------------------
+
 
 def test_ultimo_timestamp(db_con_datos):
     """`get_last_timestamp` devuelve el máximo de los timestamps."""

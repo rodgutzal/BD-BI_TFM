@@ -13,6 +13,7 @@ from dataclasses import dataclass
 @dataclass
 class Location:
     """Representa una ubicación geográfica."""
+
     name: str
     latitude: float
     longitude: float

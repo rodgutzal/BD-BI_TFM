@@ -32,8 +32,15 @@ from src.ml.cell_counts import CellCounts  # noqa: E402
 from src.ml.lenses import compute_lenses, lens_coverage  # noqa: E402
 
 DEFAULT_DB = ROOT / "data" / "mobility.db"
-INDICADORES = ["competencia_directa", "competencia_indirecta", "mercado_total", "mercado_residentes", "mercado_turistas",
-               "proveedores_total", "proveedores_diversidad"]
+INDICADORES = [
+    "competencia_directa",
+    "competencia_indirecta",
+    "mercado_total",
+    "mercado_residentes",
+    "mercado_turistas",
+    "proveedores_total",
+    "proveedores_diversidad",
+]
 
 
 def load_pois(db_path: Path) -> pd.DataFrame:
@@ -52,10 +59,14 @@ def describe_lens(serie: pd.Series) -> dict:
         return {"n": 0, "sin_datos": len(serie)}
     media, desv = float(valida.mean()), float(valida.std(ddof=0))
     return {
-        "n": int(len(valida)), "sin_datos": int(len(serie) - len(valida)),
-        "pct_cero": float((valida == 0).mean()), "media": media, "desv": desv,
+        "n": int(len(valida)),
+        "sin_datos": int(len(serie) - len(valida)),
+        "pct_cero": float((valida == 0).mean()),
+        "media": media,
+        "desv": desv,
         "cv": desv / media if media > 0 else float("nan"),
-        "iqr": float(valida.quantile(0.75) - valida.quantile(0.25)), "max": float(valida.max()),
+        "iqr": float(valida.quantile(0.75) - valida.quantile(0.25)),
+        "max": float(valida.max()),
     }
 
 
@@ -79,22 +90,29 @@ def opportunity_share(lentes: pd.DataFrame) -> float:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--db", default=str(DEFAULT_DB), help=f"ruta de la base (default: {DEFAULT_DB})")
-    ap.add_argument("--contexto", default=None,
-                    help="directorio con el contexto de OSM de tools/download_osm_context.py (fase 1b): da datos a residentes y turistas")
+    ap.add_argument(
+        "--contexto",
+        default=None,
+        help="directorio con el contexto de OSM de tools/download_osm_context.py (fase 1b): da datos a residentes y turistas",
+    )
     args = ap.parse_args(argv)
 
     pois = load_pois(Path(args.db))
     contexto = data_access.load_context(args.db, args.contexto)
     if args.contexto or not contexto.empty:
-        print(f"Contexto de OSM cargado: {contexto.groupby('category').size().to_dict() if not contexto.empty else 'sin datos'}")
+        print(
+            f"Contexto de OSM cargado: {contexto.groupby('category').size().to_dict() if not contexto.empty else 'sin datos'}"
+        )
     if not contexto.empty:
         counts = CellCounts.from_pois(pd.concat([pois, contexto], ignore_index=True))
     else:
         counts = CellCounts.from_pois(pois)
     activas = counts.active_mask()
-    print(f"POIs leídos: {len(pois)} | elementos dentro de la rejilla (POIs{' + contexto' if args.contexto else ''}): "
-          f"{counts.n_total - counts.n_fuera} (fuera: {counts.n_fuera}) | "
-          f"celdas totales: {grid.N_ROWS * grid.N_COLS} | celdas activas (algún POI en la celda o su vecindad): {int(activas.sum())}")
+    print(
+        f"POIs leídos: {len(pois)} | elementos dentro de la rejilla (POIs{' + contexto' if args.contexto else ''}): "
+        f"{counts.n_total - counts.n_fuera} (fuera: {counts.n_fuera}) | "
+        f"celdas totales: {grid.N_ROWS * grid.N_COLS} | celdas activas (algún POI en la celda o su vecindad): {int(activas.sum())}"
+    )
 
     for clave, perfil in DEFAULT_PROFILES.items():
         lentes = compute_lenses(counts, perfil, activas)
@@ -111,12 +129,17 @@ def main(argv=None) -> int:
             if d["n"] == 0:
                 print(f"   {col:24} {'—':>5}   sin datos")
                 continue
-            print(f"   {col:24} {d['n']:>5} {d['pct_cero']:>6.0%} {d['media']:>8.2f} {d['desv']:>8.2f} {d['cv']:>6.2f} "
-                  f"{d['iqr']:>7.2f} {d['max']:>7.1f}")
+            print(
+                f"   {col:24} {d['n']:>5} {d['pct_cero']:>6.0%} {d['media']:>8.2f} {d['desv']:>8.2f} {d['cv']:>6.2f} "
+                f"{d['iqr']:>7.2f} {d['max']:>7.1f}"
+            )
         corr = lens_correlations(lentes)
         if corr.shape[0] > 1:
-            pares = [(a, b, corr.loc[a, b]) for i, a in enumerate(corr.index) for b in corr.columns[i + 1:]]
-            print("   Spearman entre lentes:", "; ".join(f"{a.split('_')[0]}~{b.split('_')[0]} {v:+.2f}" for a, b, v in pares))
+            pares = [(a, b, corr.loc[a, b]) for i, a in enumerate(corr.index) for b in corr.columns[i + 1 :]]
+            print(
+                "   Spearman entre lentes:",
+                "; ".join(f"{a.split('_')[0]}~{b.split('_')[0]} {v:+.2f}" for a, b, v in pares),
+            )
         oportunidad = opportunity_share(lentes)
         if not np.isnan(oportunidad):
             print(f"   celdas con mercado alto y competencia baja (independientes darían ~25 %): {oportunidad:.0%}")

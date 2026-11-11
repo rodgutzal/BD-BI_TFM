@@ -75,16 +75,25 @@ def spearman(y_true, y_pred) -> float:
 @dataclass
 class Evaluation:
     """Resultado de una validación: predicciones fuera de muestra (R repeticiones × n celdas) por modelo."""
+
     nombres: List[str]
     y: np.ndarray
     oof: Dict[str, np.ndarray]
-    bloques: np.ndarray                  # bloques de la cuadrícula SIN desplazar, para el bootstrap
-    metricas: pd.DataFrame               # una fila por (modelo, repetición)
+    bloques: np.ndarray  # bloques de la cuadrícula SIN desplazar, para el bootstrap
+    metricas: pd.DataFrame  # una fila por (modelo, repetición)
     k_top: int
 
 
-def evaluate(X: pd.DataFrame, y, nombres: Sequence[str] = models.TODOS, repeats: int = 10, n_folds: int = 5,
-             seed: int = 0, k_top: int = 50, progress: Optional[Callable[[int, int], None]] = None) -> Evaluation:
+def evaluate(
+    X: pd.DataFrame,
+    y,
+    nombres: Sequence[str] = models.TODOS,
+    repeats: int = 10,
+    n_folds: int = 5,
+    seed: int = 0,
+    k_top: int = 50,
+    progress: Optional[Callable[[int, int], None]] = None,
+) -> Evaluation:
     """Validación cruzada espacial por bloques, repetida. `X` está indexada por cell_id; `y` es el conteo real."""
     y = np.asarray(y, dtype=float)
     filas, cols = positions(X.index)
@@ -105,19 +114,29 @@ def evaluate(X: pd.DataFrame, y, nombres: Sequence[str] = models.TODOS, repeats:
     filas_m = []
     for n in nombres:
         for r in range(repeats):
-            filas_m.append({"modelo": n, "repeticion": r,
-                            "desviacion": float(poisson_deviance(y, oof[n][r]).mean()),
-                            "spearman": spearman(y, oof[n][r]), "precision_k": precision_at_k(y, oof[n][r], k_top)})
+            filas_m.append(
+                {
+                    "modelo": n,
+                    "repeticion": r,
+                    "desviacion": float(poisson_deviance(y, oof[n][r]).mean()),
+                    "spearman": spearman(y, oof[n][r]),
+                    "precision_k": precision_at_k(y, oof[n][r], k_top),
+                }
+            )
     return Evaluation(list(nombres), y, oof, block_labels(filas, cols), pd.DataFrame(filas_m), k_top)
 
 
 def summarize(ev: Evaluation) -> pd.DataFrame:
     """Media y desviación entre repeticiones de cada métrica, por modelo, ordenado por desviación (mejor primero)."""
     g = ev.metricas.groupby("modelo")
-    out = pd.DataFrame({
-        "desviacion": g["desviacion"].mean(), "desviacion_sd": g["desviacion"].std(ddof=1),
-        "spearman": g["spearman"].mean(), "precision_k": g["precision_k"].mean(),
-    })
+    out = pd.DataFrame(
+        {
+            "desviacion": g["desviacion"].mean(),
+            "desviacion_sd": g["desviacion"].std(ddof=1),
+            "spearman": g["spearman"].mean(),
+            "precision_k": g["precision_k"].mean(),
+        }
+    )
     return out.sort_values("desviacion")
 
 
@@ -140,8 +159,11 @@ def block_bootstrap_mean(d, bloques, n_boot: int = 2000, seed: int = 0, nivel: f
         s = rng.integers(0, len(ids), len(ids))
         medias[i] = suma[s].sum() / n_celdas[s].sum()
     alfa = (1 - nivel) / 2
-    return {"diferencia": float(d.mean()), "ic_inf": float(np.quantile(medias, alfa)),
-            "ic_sup": float(np.quantile(medias, 1 - alfa))}
+    return {
+        "diferencia": float(d.mean()),
+        "ic_inf": float(np.quantile(medias, alfa)),
+        "ic_sup": float(np.quantile(medias, 1 - alfa)),
+    }
 
 
 def deviance_per_cell(ev: Evaluation, nombre: str) -> np.ndarray:
@@ -158,8 +180,13 @@ def compare_models(ev: Evaluation, a: str, b: str, n_boot: int = 2000, seed: int
     return r
 
 
-def decide(ev: Evaluation, candidatos: Sequence[str] = models.CANDIDATOS, baselines: Sequence[str] = models.BASELINES,
-           n_boot: int = 2000, seed: int = 0) -> dict:
+def decide(
+    ev: Evaluation,
+    candidatos: Sequence[str] = models.CANDIDATOS,
+    baselines: Sequence[str] = models.BASELINES,
+    n_boot: int = 2000,
+    seed: int = 0,
+) -> dict:
     """Aplica la regla de decisión: ¿algún candidato supera a la mejor línea base con el intervalo por debajo de 0?
 
     Devuelve {mejor_baseline, comparaciones: {candidato: {diferencia, ic_inf, ic_sup, veredicto}}, ganador}.
@@ -206,14 +233,20 @@ def gap_from_evaluation(ev: Evaluation, nombre: str) -> pd.DataFrame:
     oof = ev.oof[nombre]
     por_repeticion = np.stack([brecha_relativa(oof[r], ev.y) for r in range(oof.shape[0])])
     esperado = oof.mean(axis=0)
-    return pd.DataFrame({"esperado": esperado, "brecha_relativa": brecha_relativa(esperado, ev.y),
-                         "brecha_p10": np.percentile(por_repeticion, 10, axis=0),
-                         "brecha_p90": np.percentile(por_repeticion, 90, axis=0)})
+    return pd.DataFrame(
+        {
+            "esperado": esperado,
+            "brecha_relativa": brecha_relativa(esperado, ev.y),
+            "brecha_p10": np.percentile(por_repeticion, 10, axis=0),
+            "brecha_p90": np.percentile(por_repeticion, 90, axis=0),
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Contraste con una fuente independiente (Foursquare)
 # ---------------------------------------------------------------------------
+
 
 def auc_presence(score, presencia) -> float:
     """AUC de `score` para distinguir las celdas donde la fuente independiente tiene al menos un local. NaN si todas
@@ -234,5 +267,7 @@ def gap_artifact_share(brecha, osm, fsq, k: int) -> dict:
     k = min(k, len(brecha))
     top = np.argsort(-brecha, kind="stable")[:k]
     con_locales = (osm > 0) | (fsq > 0)
-    return {"top_k": float((fsq[top] > osm[top]).mean()),
-            "referencia": float((fsq[con_locales] > osm[con_locales]).mean()) if con_locales.any() else float("nan")}
+    return {
+        "top_k": float((fsq[top] > osm[top]).mean()),
+        "referencia": float((fsq[con_locales] > osm[con_locales]).mean()) if con_locales.any() else float("nan"),
+    }

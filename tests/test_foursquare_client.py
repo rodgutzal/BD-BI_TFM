@@ -68,6 +68,7 @@ def test_nunca_descarta_un_poi_sin_categoria():
 # build_search_points
 # ---------------------------------------------------------------------------
 
+
 def test_sin_rutas_solo_devuelve_las_zonas():
     """Sin rutas, los puntos de búsqueda son solo las zonas."""
     puntos = build_search_points(LOCATIONS)
@@ -111,6 +112,7 @@ def test_ignora_rutas_con_zonas_desconocidas():
 # _parse_results
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def cliente():
     return FoursquareClient(api_key="clave-falsa")
@@ -118,22 +120,41 @@ def cliente():
 
 def test_acepta_la_forma_nueva_de_la_respuesta(cliente):
     """Se interpreta la respuesta nueva de la API (`fsq_place_id` con latitud y longitud planas)."""
-    pois = cliente._parse_results([{
-        "fsq_place_id": "abc", "name": "La Pizzeria", "latitude": 35.9, "longitude": 14.5,
-        "categories": [{"name": "Pizzeria"}],
-    }])
-    assert pois == [{
-        "fsq_place_id": "abc", "category": "restaurant", "subcategory": "Pizzeria",
-        "name": "La Pizzeria", "latitude": 35.9, "longitude": 14.5,
-    }]
+    pois = cliente._parse_results(
+        [
+            {
+                "fsq_place_id": "abc",
+                "name": "La Pizzeria",
+                "latitude": 35.9,
+                "longitude": 14.5,
+                "categories": [{"name": "Pizzeria"}],
+            }
+        ]
+    )
+    assert pois == [
+        {
+            "fsq_place_id": "abc",
+            "category": "restaurant",
+            "subcategory": "Pizzeria",
+            "name": "La Pizzeria",
+            "latitude": 35.9,
+            "longitude": 14.5,
+        }
+    ]
 
 
 def test_acepta_la_forma_antigua_con_geocodes(cliente):
     """Se interpreta la respuesta antigua de la API (`fsq_id` con coordenadas dentro de `geocodes`)."""
-    pois = cliente._parse_results([{
-        "fsq_id": "xyz", "name": "Farmacia", "categories": [{"name": "Pharmacy"}],
-        "geocodes": {"main": {"latitude": 35.8, "longitude": 14.4}},
-    }])
+    pois = cliente._parse_results(
+        [
+            {
+                "fsq_id": "xyz",
+                "name": "Farmacia",
+                "categories": [{"name": "Pharmacy"}],
+                "geocodes": {"main": {"latitude": 35.8, "longitude": 14.4}},
+            }
+        ]
+    )
     assert len(pois) == 1
     assert pois[0]["fsq_place_id"] == "xyz"
     assert (pois[0]["latitude"], pois[0]["longitude"]) == (35.8, 14.4)
@@ -142,10 +163,12 @@ def test_acepta_la_forma_antigua_con_geocodes(cliente):
 
 def test_descarta_lugares_sin_id_o_sin_coordenadas(cliente):
     """Un lugar sin identificador o sin coordenadas se descarta."""
-    pois = cliente._parse_results([
-        {"name": "Sin id", "latitude": 35.9, "longitude": 14.5, "categories": []},
-        {"fsq_place_id": "sin-coords", "name": "Sin coords", "categories": []},
-    ])
+    pois = cliente._parse_results(
+        [
+            {"name": "Sin id", "latitude": 35.9, "longitude": 14.5, "categories": []},
+            {"fsq_place_id": "sin-coords", "name": "Sin coords", "categories": []},
+        ]
+    )
     assert pois == []
 
 

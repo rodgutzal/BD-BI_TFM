@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**43 archivos · 709 funciones de test · 798 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**44 archivos · 713 funciones de test · 802 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -27,6 +27,7 @@
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 7 | 7 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
+| [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
 | [`tests/test_foursquare_client.py`](#teststest_foursquare_clientpy) | 12 | 28 |
 | [`tests/test_hybrid_scheduler.py`](#teststest_hybrid_schedulerpy) | 3 | 3 |
 | [`tests/test_location_scoring.py`](#teststest_location_scoringpy) | 22 | 22 |
@@ -418,6 +419,18 @@
 - `test_las_referencias_no_usan_datos_del_futuro` — Cambiar los valores a partir del corte no debe alterar ninguna referencia.
 - `test_la_validacion_compara_con_las_referencias` — evaluate + summarize: con un ciclo diario limpio el perfil y el SARIMA ganan a media y persistencia.
 - `test_la_validacion_lee_la_base_en_solo_lectura` — load_hourly_share abre la base con immutable=1: no crea -wal/-shm ni modifica el archivo.
+
+## `tests/test_formatter_pins.py`
+
+> Las versiones de black e isort están fijadas en varios sitios; que no se desincronicen.
+>
+> Cada versión mayor de black puede cambiar el formato, así que el CI y `requirements-dev.txt` tienen que
+> usar la misma. Si una copia se actualiza y otra no, el chequeo bloqueante pasa en local y falla en el CI.
+
+- `test_black_tiene_la_misma_version_fijada_en_el_ci_los_requisitos_y_el_readme` — `black==X` aparece con la misma versión en el workflow, en requirements-dev.txt y en el README.
+- `test_isort_tiene_la_misma_version_fijada_en_el_ci_los_requisitos_y_el_readme` — `isort==X` aparece con la misma versión en el workflow, en requirements-dev.txt y en el README.
+- `test_el_ci_comprueba_el_formato_de_todos_los_archivos_de_codigo_sin_neutralizar_el_paso` — Black e isort se ejecutan en modo comprobación sobre todo el código, sin `|| true` ni opciones propias.
+- `test_los_archivos_formateados_existen_y_pyproject_fija_la_configuracion` — Las rutas que formatea el CI existen, y la línea de 120 y el perfil black salen de pyproject.toml.
 
 ## `tests/test_foursquare_client.py`
 

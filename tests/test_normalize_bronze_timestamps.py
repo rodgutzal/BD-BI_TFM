@@ -22,8 +22,8 @@ _spec.loader.exec_module(nb)
 
 from src.data_warehouse.bronze_layer import BronzeLayer
 
-LEGACY_A = "2026-05-25 23:54:03.692522+00:00"     # formato antiguo
-ISO_A = "2026-05-25T23:54:03.692522+00:00"       # la misma medición, en ISO
+LEGACY_A = "2026-05-25 23:54:03.692522+00:00"  # formato antiguo
+ISO_A = "2026-05-25T23:54:03.692522+00:00"  # la misma medición, en ISO
 LEGACY_B = "2026-05-26 00:10:00.000000+00:00"
 ISO_B = "2026-05-26T00:10:00.000000+00:00"
 
@@ -54,7 +54,7 @@ def _sha(path):
 @pytest.fixture
 def db_path(tmp_path):
     path = tmp_path / "t.db"
-    BronzeLayer(path)      # crea el esquema real, incluido idx_bronze_unique
+    BronzeLayer(path)  # crea el esquema real, incluido idx_bronze_unique
     return path
 
 
@@ -74,14 +74,17 @@ def db_mixta(db_path):
     conn.execute("DROP INDEX IF EXISTS idx_bronze_unique")
     conn.commit()
     conn.close()
-    _insertar(db_path, [
-        (LEGACY_A, "Msida", "Gzira", 5.0),
-        (ISO_A, "Msida", "Gzira", 5.0),
-        (LEGACY_B, "Msida", "Sliema", 7.0),
-        ("2026-06-01 10:00:00+00:00", "Valletta", "Sliema", 9.0),
-        ("2026-06-01 10:00:00+00:00", "Valletta", "Sliema", 9.0),   # duplicada exacta entre antiguas
-        ("2026-07-01T08:00:00+00:00", "Msida", "Gzira", 6.0),
-    ])
+    _insertar(
+        db_path,
+        [
+            (LEGACY_A, "Msida", "Gzira", 5.0),
+            (ISO_A, "Msida", "Gzira", 5.0),
+            (LEGACY_B, "Msida", "Sliema", 7.0),
+            ("2026-06-01 10:00:00+00:00", "Valletta", "Sliema", 9.0),
+            ("2026-06-01 10:00:00+00:00", "Valletta", "Sliema", 9.0),  # duplicada exacta entre antiguas
+            ("2026-07-01T08:00:00+00:00", "Msida", "Gzira", 6.0),
+        ],
+    )
     return db_path
 
 
@@ -89,24 +92,25 @@ def db_mixta(db_path):
 # Funciones puras
 # ---------------------------------------------------------------------------
 
+
 def test_is_legacy_y_normalize():
     """`is_legacy` reconoce el formato antiguo de timestamp, `normalize` lo pasa a ISO y normalizar dos veces da lo mismo."""
     assert nb.is_legacy(LEGACY_A) and not nb.is_legacy(ISO_A)
     assert not nb.is_legacy("") and not nb.is_legacy(None)
     assert nb.normalize(LEGACY_A) == ISO_A
-    assert nb.normalize(nb.normalize(LEGACY_A)) == ISO_A     # idempotente
+    assert nb.normalize(nb.normalize(LEGACY_A)) == ISO_A  # idempotente
 
 
 def test_plan_clasifica_cada_fila():
     """El plan clasifica cada fila: gemelas de otra fila ISO, duplicadas entre antiguas, a renombrar y las que no se tocan."""
     rows = [
-        (1, LEGACY_A, "Msida", "Gzira"),     # tiene gemela ISO (id 2)
+        (1, LEGACY_A, "Msida", "Gzira"),  # tiene gemela ISO (id 2)
         (2, ISO_A, "Msida", "Gzira"),
-        (3, LEGACY_B, "Msida", "Sliema"),    # sin gemela
+        (3, LEGACY_B, "Msida", "Sliema"),  # sin gemela
         (4, "2026-06-01 10:00:00+00:00", "V", "S"),
-        (5, "2026-06-01 10:00:00+00:00", "V", "S"),   # duplicada entre antiguas
+        (5, "2026-06-01 10:00:00+00:00", "V", "S"),  # duplicada entre antiguas
         (6, "2026-07-01T08:00:00+00:00", "Msida", "Gzira"),
-        (7, "otro-formato", "Msida", "Gzira"),        # ni ISO ni antiguo: no se toca
+        (7, "otro-formato", "Msida", "Gzira"),  # ni ISO ni antiguo: no se toca
     ]
     plan = nb.build_plan(rows)
     assert plan.total_rows == 7 and plan.legacy_rows == 4
@@ -132,6 +136,7 @@ def test_base_sin_filas_antiguas_no_necesita_cambios():
 # Ensayo (dry-run)
 # ---------------------------------------------------------------------------
 
+
 def test_el_ensayo_no_modifica_nada_ni_crea_archivos(db_mixta, capsys):
     """El ensayo (sin `--apply`) no modifica la base ni crea archivos, y lo dice en su salida."""
     antes = _sha(db_mixta)
@@ -140,7 +145,7 @@ def test_el_ensayo_no_modifica_nada_ni_crea_archivos(db_mixta, capsys):
     assert nb.main(["--db", str(db_mixta)]) == 0
 
     assert _sha(db_mixta) == antes
-    assert set(p.name for p in db_mixta.parent.iterdir()) == carpeta     # ni respaldo, ni -wal, ni -shm
+    assert set(p.name for p in db_mixta.parent.iterdir()) == carpeta  # ni respaldo, ni -wal, ni -shm
     salida = capsys.readouterr().out
     assert "ENSAYO" in salida and "no se modificó nada" in salida
     assert "con separador antiguo" in salida
@@ -159,24 +164,27 @@ def test_main_con_base_inexistente_o_sin_tabla(tmp_path, capsys):
 # Aplicar
 # ---------------------------------------------------------------------------
 
+
 def test_aplicar_borra_duplicados_renombra_el_resto_y_deja_un_respaldo(db_mixta):
     """`--apply` borra las gemelas y duplicadas, renombra el resto al formato ISO y deja un respaldo de la base."""
     original = _filas(db_mixta)
     assert nb.main(["--db", str(db_mixta), "--apply"]) == 0
 
     despues = _filas(db_mixta)
-    assert len(despues) == 4                                         # 6 - 1 (gemela) - 1 (duplicada)
+    assert len(despues) == 4  # 6 - 1 (gemela) - 1 (duplicada)
     assert not any(nb.is_legacy(ts) for ts, _o, _d in despues)
-    assert sorted(despues) == sorted([
-        (ISO_A, "Msida", "Gzira"),
-        (ISO_B, "Msida", "Sliema"),
-        ("2026-06-01T10:00:00+00:00", "Valletta", "Sliema"),
-        ("2026-07-01T08:00:00+00:00", "Msida", "Gzira"),
-    ])
+    assert sorted(despues) == sorted(
+        [
+            (ISO_A, "Msida", "Gzira"),
+            (ISO_B, "Msida", "Sliema"),
+            ("2026-06-01T10:00:00+00:00", "Valletta", "Sliema"),
+            ("2026-07-01T08:00:00+00:00", "Msida", "Gzira"),
+        ]
+    )
 
     respaldos = list(db_mixta.parent.glob("t.db.bak-*"))
     assert len(respaldos) == 1
-    assert _filas(respaldos[0]) == original                          # el respaldo es la base de antes
+    assert _filas(respaldos[0]) == original  # el respaldo es la base de antes
 
 
 def test_aplicar_es_idempotente(db_mixta, capsys):
@@ -188,7 +196,7 @@ def test_aplicar_es_idempotente(db_mixta, capsys):
     assert nb.main(["--db", str(db_mixta), "--apply"]) == 0
     assert _filas(db_mixta) == despues
     assert "Nada que hacer" in capsys.readouterr().out
-    assert len(list(db_mixta.parent.glob("t.db.bak-*"))) == 1        # no hizo un segundo respaldo
+    assert len(list(db_mixta.parent.glob("t.db.bak-*"))) == 1  # no hizo un segundo respaldo
 
 
 def test_antes_de_correr_el_pipeline_solo_renombra(db_path):
@@ -242,11 +250,12 @@ def test_no_toca_otras_tablas(db_mixta):
 # Seguridad
 # ---------------------------------------------------------------------------
 
+
 def test_si_la_base_esta_en_uso_aborta_sin_cambiar_nada(db_mixta):
     """Otro proceso (el collector) con una escritura abierta: no se aplica nada."""
     antes = _filas(db_mixta)
     otro = sqlite3.connect(db_mixta, isolation_level=None)
-    otro.execute("BEGIN IMMEDIATE")           # toma el bloqueo de escritura
+    otro.execute("BEGIN IMMEDIATE")  # toma el bloqueo de escritura
     try:
         with pytest.raises(RuntimeError, match="en uso"):
             nb.apply_changes(db_mixta, lock_timeout=0.2)
@@ -266,7 +275,7 @@ def test_si_la_verificacion_falla_se_revierte_todo(db_mixta, monkeypatch):
     monkeypatch.setattr(nb, "verify", verificacion_que_falla)
     with pytest.raises(RuntimeError, match="fallo simulado"):
         nb.apply_changes(db_mixta)
-    assert _filas(db_mixta) == antes          # ROLLBACK: ni borrados ni renombrados
+    assert _filas(db_mixta) == antes  # ROLLBACK: ni borrados ni renombrados
 
 
 def test_el_respaldo_se_puede_omitir_solo_por_codigo(db_mixta):

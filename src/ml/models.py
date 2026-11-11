@@ -48,10 +48,13 @@ _PREFIJOS_CONTEXTO = tuple(f"{c}_" for c in CONTEXTO)
 def densidad(X: pd.DataFrame) -> pd.DataFrame:
     """Densidad urbana: POIs de todas las categorías (el objetivo ya viene excluido de X) en la celda y los anillos
     1 y 2, en log(1 + n)."""
-    return pd.DataFrame({
-        f"densidad_{zona}": np.log1p(sum(X[f"{cat}_{zona}"] for cat in CATEGORIAS))
-        for zona in ("celda", "anillo1", "anillo2")
-    }, index=X.index)
+    return pd.DataFrame(
+        {
+            f"densidad_{zona}": np.log1p(sum(X[f"{cat}_{zona}"] for cat in CATEGORIAS))
+            for zona in ("celda", "anillo1", "anillo2")
+        },
+        index=X.index,
+    )
 
 
 def columnas_de(nombre: str, X: pd.DataFrame) -> pd.DataFrame:
@@ -63,7 +66,9 @@ def columnas_de(nombre: str, X: pd.DataFrame) -> pd.DataFrame:
     if nombre == "solo_densidad":
         return densidad(X)
     if nombre == "solo_edificios":
-        return pd.DataFrame({f"edificios_{z}": np.log1p(X[f"edificio_{z}"]) for z in ("celda", "anillo1", "anillo2")}, index=X.index)
+        return pd.DataFrame(
+            {f"edificios_{z}": np.log1p(X[f"edificio_{z}"]) for z in ("celda", "anillo1", "anillo2")}, index=X.index
+        )
     if nombre == "boosting_poi":
         return X[[c for c in X.columns if not c.startswith(_PREFIJOS_CONTEXTO)]]
     if nombre in CANDIDATOS:
@@ -72,15 +77,24 @@ def columnas_de(nombre: str, X: pd.DataFrame) -> pd.DataFrame:
 
 
 def _poisson_lineal(Xa: pd.DataFrame, y, Xb: pd.DataFrame) -> np.ndarray:
-    modelo = make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), PoissonRegressor(alpha=1e-3, max_iter=500))
+    modelo = make_pipeline(
+        SimpleImputer(strategy="median"), StandardScaler(), PoissonRegressor(alpha=1e-3, max_iter=500)
+    )
     modelo.fit(Xa, y)
     return modelo.predict(Xb)
 
 
 def _boosting(Xa: pd.DataFrame, y, Xb: pd.DataFrame, seed: int) -> np.ndarray:
-    modelo = HistGradientBoostingRegressor(loss="poisson", learning_rate=0.05, max_iter=200, max_depth=3,
-                                           min_samples_leaf=20, l2_regularization=1.0, early_stopping=False,
-                                           random_state=seed)
+    modelo = HistGradientBoostingRegressor(
+        loss="poisson",
+        learning_rate=0.05,
+        max_iter=200,
+        max_depth=3,
+        min_samples_leaf=20,
+        l2_regularization=1.0,
+        early_stopping=False,
+        random_state=seed,
+    )
     modelo.fit(Xa, y)
     return modelo.predict(Xb)
 
@@ -94,9 +108,16 @@ def _mlp(Xa: pd.DataFrame, y, Xb: pd.DataFrame, seed: int) -> np.ndarray:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=ConvergenceWarning)
         for k in range(MLP_SEMILLAS):
-            red = MLPRegressor(hidden_layer_sizes=(32, 16), alpha=1e-2, learning_rate_init=1e-3, max_iter=600,
-                               early_stopping=True, validation_fraction=0.15, n_iter_no_change=20,
-                               random_state=seed * 100 + k)
+            red = MLPRegressor(
+                hidden_layer_sizes=(32, 16),
+                alpha=1e-2,
+                learning_rate_init=1e-3,
+                max_iter=600,
+                early_stopping=True,
+                validation_fraction=0.15,
+                n_iter_no_change=20,
+                random_state=seed * 100 + k,
+            )
             red.fit(A, objetivo)
             predicciones.append(np.expm1(red.predict(B)))
     return np.mean(predicciones, axis=0)
@@ -116,7 +137,7 @@ def fit_predict(nombre: str, X_train: pd.DataFrame, y_train, X_test: pd.DataFram
         try:
             A, B = columnas_de(nombre, X_train), columnas_de(nombre, X_test)
         except KeyError:
-            nombre = "media"            # su única variable no tiene datos (p. ej. sin demografía cargada): sin información
+            nombre = "media"  # su única variable no tiene datos (p. ej. sin demografía cargada): sin información
     if nombre == "media":
         esperado = np.full(len(X_test), y.mean())
     elif nombre in ("solo_distancia", "solo_poblacion", "solo_densidad", "solo_edificios"):
@@ -130,8 +151,9 @@ def fit_predict(nombre: str, X_train: pd.DataFrame, y_train, X_test: pd.DataFram
     return np.clip(np.asarray(esperado, dtype=float), MIN_ESPERADO, None)
 
 
-def fit_predict_ensemble(nombre: str, X_train: pd.DataFrame, y_train, X_test: pd.DataFrame, n: int = 10,
-                         seed: int = 0) -> Dict[str, np.ndarray]:
+def fit_predict_ensemble(
+    nombre: str, X_train: pd.DataFrame, y_train, X_test: pd.DataFrame, n: int = 10, seed: int = 0
+) -> Dict[str, np.ndarray]:
     """Conjunto de `n` modelos entrenados sobre remuestreos bootstrap del entrenamiento (con semillas distintas).
     Devuelve el esperado medio y su dispersión: la incertidumbre que verá el usuario como intervalo de la 'brecha'."""
     rng = np.random.default_rng(seed)
@@ -141,5 +163,9 @@ def fit_predict_ensemble(nombre: str, X_train: pd.DataFrame, y_train, X_test: pd
         idx = rng.integers(0, len(X_train), len(X_train))
         preds.append(fit_predict(nombre, X_train.iloc[idx], y[idx], X_test, seed=seed + k))
     preds = np.stack(preds)
-    return {"esperado": preds.mean(axis=0), "desv": preds.std(axis=0, ddof=1) if n > 1 else np.zeros(preds.shape[1]),
-            "p10": np.percentile(preds, 10, axis=0), "p90": np.percentile(preds, 90, axis=0)}
+    return {
+        "esperado": preds.mean(axis=0),
+        "desv": preds.std(axis=0, ddof=1) if n > 1 else np.zeros(preds.shape[1]),
+        "p10": np.percentile(preds, 10, axis=0),
+        "p90": np.percentile(preds, 90, axis=0),
+    }

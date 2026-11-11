@@ -42,21 +42,35 @@ UNIFIED_DB = ROOT_DIR / "data" / "mobility.db"
 HIGH_DELAY_THRESHOLD_MIN = 20
 
 UNIFIED_COLUMNS = [
-    "timestamp", "origin", "destination", "data_source",
-    "distance_km", "travel_time_min", "no_traffic_time_min", "traffic_delay_min",
-    "traffic_length_km", "average_speed_kmh", "departure_time", "arrival_time",
-    "origin_temperature", "origin_feels_like", "origin_humidity", "origin_weather",
-    "destination_temperature", "destination_feels_like", "destination_humidity",
-    "destination_weather", "mobility_level", "polyline",
+    "timestamp",
+    "origin",
+    "destination",
+    "data_source",
+    "distance_km",
+    "travel_time_min",
+    "no_traffic_time_min",
+    "traffic_delay_min",
+    "traffic_length_km",
+    "average_speed_kmh",
+    "departure_time",
+    "arrival_time",
+    "origin_temperature",
+    "origin_feels_like",
+    "origin_humidity",
+    "origin_weather",
+    "destination_temperature",
+    "destination_feels_like",
+    "destination_humidity",
+    "destination_weather",
+    "mobility_level",
+    "polyline",
 ]
 
 
 def load_ors_legacy() -> pd.DataFrame:
     df = pd.read_csv(LEGACY_ORS_CSV)
     out = pd.DataFrame()
-    out["timestamp"] = pd.to_datetime(df["datetime"]).dt.tz_localize("UTC").dt.strftime(
-        "%Y-%m-%dT%H:%M:%S.%f+00:00"
-    )
+    out["timestamp"] = pd.to_datetime(df["datetime"]).dt.tz_localize("UTC").dt.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
     out["origin"] = df["origin"]
     out["destination"] = df["destination"]
     out["data_source"] = "ors"
@@ -134,7 +148,7 @@ def main():
 
     batch_size = 500
     for i in range(0, len(records), batch_size):
-        db.save_records_to_sqlite(records[i:i + batch_size])
+        db.save_records_to_sqlite(records[i : i + batch_size])
         print(f"  Insertadas {min(i + batch_size, len(records))}/{len(records)} filas en SQLite...")
 
     print(f"SQLite unificado escrito en: {UNIFIED_DB}")

@@ -25,9 +25,24 @@ UMBRAL_DESVIACION = 0.5
 SEGMENTOS = ("residentes", "oficinistas", "estudiantes", "turistas", "vida_nocturna")
 
 # Etiquetas de OSM que se tratan como 'oficina': la subcategoría de la categoría `business` (shop/office).
-_OFICINAS = ("company", "government", "insurance", "estate_agent", "lawyer", "accountant", "financial",
-             "consulting", "coworking", "it", "architect", "notary", "employment_agency", "property_management",
-             "telecommunication", "engineer")
+_OFICINAS = (
+    "company",
+    "government",
+    "insurance",
+    "estate_agent",
+    "lawyer",
+    "accountant",
+    "financial",
+    "consulting",
+    "coworking",
+    "it",
+    "architect",
+    "notary",
+    "employment_agency",
+    "property_management",
+    "telecommunication",
+    "engineer",
+)
 
 # Segmentos de mercado → qué POIs los generan.
 # `residentes` se aproxima con los EDIFICIOS que no son claramente no residenciales (categoría `edificio`, que solo
@@ -39,8 +54,10 @@ SEGMENTOS_POI: Dict[str, Tuple[Selector, ...]] = {
     "residentes": (selector_except("edificio", *NO_RESIDENCIALES),),
     "oficinistas": (selector("business", *_OFICINAS),),
     "estudiantes": (selector("school"),),
-    "turistas": (selector("leisure", "museum", "gallery", "theatre", "casino", "zoo", "aquarium", "theme_park"),
-                 selector("alojamiento")),
+    "turistas": (
+        selector("leisure", "museum", "gallery", "theatre", "casino", "zoo", "aquarium", "theme_park"),
+        selector("alojamiento"),
+    ),
     "vida_nocturna": (selector("leisure", "nightclub", "casino"), selector("food_drink", "bar", "pub", "biergarten")),
 }
 
@@ -59,19 +76,20 @@ PROVEEDORES_POI: Dict[str, Tuple[Selector, ...]] = {
     "papeleria": (selector("business", "stationery", "copyshop"),),
     "equipamiento_deportivo": (selector("business", "sports", "outdoor"),),
     "droguerias": (selector("business", "chemist"),),
-    "distribuidores_sanitarios": (),          # no hay etiqueta en OSM para esto: sin datos
+    "distribuidores_sanitarios": (),  # no hay etiqueta en OSM para esto: sin datos
 }
 
 
 @dataclass(frozen=True)
 class BusinessProfile:
     """Perfil de un tipo de negocio (una de las 7 categorías de Overpass)."""
+
     key: str
     nombre: str
     competencia_directa: Tuple[Selector, ...]
     competencia_indirecta: Tuple[Selector, ...]
-    segmentos: Tuple[str, ...]                 # a quién le vende (claves de SEGMENTOS_POI)
-    proveedores: Tuple[str, ...]               # qué proveedores le importan (claves de PROVEEDORES_POI)
+    segmentos: Tuple[str, ...]  # a quién le vende (claves de SEGMENTOS_POI)
+    proveedores: Tuple[str, ...]  # qué proveedores le importan (claves de PROVEEDORES_POI)
     personalizado: bool = False
 
 
@@ -79,46 +97,70 @@ def _perfil(key, nombre, directa, indirecta, segmentos, proveedores) -> Business
     return BusinessProfile(key, nombre, tuple(directa), tuple(indirecta), tuple(segmentos), tuple(proveedores))
 
 
-DEFAULT_PROFILES: Dict[str, BusinessProfile] = {p.key: p for p in [
-    # Supermercados y panaderías son PROVEEDORES (el local compra ahí), no sustitutos: un POI cuenta en una sola lente.
-    _perfil("food_drink", "Restaurante, café o bar",
+DEFAULT_PROFILES: Dict[str, BusinessProfile] = {
+    p.key: p
+    for p in [
+        # Supermercados y panaderías son PROVEEDORES (el local compra ahí), no sustitutos: un POI cuenta en una sola lente.
+        _perfil(
+            "food_drink",
+            "Restaurante, café o bar",
             [selector("food_drink")],
             [selector("business", "convenience", "deli", "confectionery")],
             ["residentes", "oficinistas", "estudiantes", "turistas", "vida_nocturna"],
-            ["mayoristas", "carnicerias", "pescaderias", "verdulerias", "panaderias", "bebidas", "supermercados"]),
-    # Comercio GENÉRICO: las oficinas no son competencia (son mercado: 'oficinistas'). Para un comercio concreto
-    # (panadería, peluquería...) hará falta elegir la subcategoría; el proveedor típico de un comercio genérico es el mayorista.
-    _perfil("business", "Comercio u oficina",
+            ["mayoristas", "carnicerias", "pescaderias", "verdulerias", "panaderias", "bebidas", "supermercados"],
+        ),
+        # Comercio GENÉRICO: las oficinas no son competencia (son mercado: 'oficinistas'). Para un comercio concreto
+        # (panadería, peluquería...) hará falta elegir la subcategoría; el proveedor típico de un comercio genérico es el mayorista.
+        _perfil(
+            "business",
+            "Comercio u oficina",
             [selector_except("business", *_OFICINAS)],
             [selector("mall")],
             ["residentes", "oficinistas", "turistas", "estudiantes"],
-            ["mayoristas"]),
-    _perfil("hospital", "Farmacia, clínica o consulta",
+            ["mayoristas"],
+        ),
+        _perfil(
+            "hospital",
+            "Farmacia, clínica o consulta",
             [selector("hospital")],
             [selector("business", "chemist", "optician", "health_food")],
             ["residentes", "oficinistas", "estudiantes"],
-            ["distribuidores_sanitarios", "droguerias"]),
-    _perfil("school", "Colegio o centro educativo",
+            ["distribuidores_sanitarios", "droguerias"],
+        ),
+        _perfil(
+            "school",
+            "Colegio o centro educativo",
             [selector("school")],
             [selector("business", "educational_institution")],
             ["residentes"],
-            ["papeleria"]),
-    _perfil("sport", "Gimnasio o centro deportivo",
+            ["papeleria"],
+        ),
+        _perfil(
+            "sport",
+            "Gimnasio o centro deportivo",
             [selector("sport")],
-            [],       # sin sustitutos cartografiados en OSM (probado: ni 'dance' ni 'miniature_golf' tienen POIs)
+            [],  # sin sustitutos cartografiados en OSM (probado: ni 'dance' ni 'miniature_golf' tienen POIs)
             ["residentes", "oficinistas", "estudiantes"],
-            ["equipamiento_deportivo"]),
-    _perfil("leisure", "Ocio y cultura",
+            ["equipamiento_deportivo"],
+        ),
+        _perfil(
+            "leisure",
+            "Ocio y cultura",
             [selector("leisure")],
             [selector("food_drink", "bar", "pub")],
             ["turistas", "residentes", "vida_nocturna"],
-            []),
-    _perfil("mall", "Centro comercial",
+            [],
+        ),
+        _perfil(
+            "mall",
+            "Centro comercial",
             [selector("mall")],
             [selector("business", "clothes", "shoes", "electronics", "jewelry", "furniture")],
             ["residentes", "turistas", "oficinistas"],
-            ["mayoristas"]),
-]}
+            ["mayoristas"],
+        ),
+    ]
+}
 
 
 def get_default_profile(categoria: str) -> BusinessProfile:
@@ -138,10 +180,14 @@ def supplier_selectors(profile: BusinessProfile) -> Dict[str, Tuple[Selector, ..
     return {p: PROVEEDORES_POI[p] for p in profile.proveedores}
 
 
-def apply_overrides(profile: BusinessProfile, *, competencia_directa: Optional[Tuple[Selector, ...]] = None,
-                    competencia_indirecta: Optional[Tuple[Selector, ...]] = None,
-                    segmentos: Optional[Tuple[str, ...]] = None,
-                    proveedores: Optional[Tuple[str, ...]] = None) -> Tuple[BusinessProfile, List[str]]:
+def apply_overrides(
+    profile: BusinessProfile,
+    *,
+    competencia_directa: Optional[Tuple[Selector, ...]] = None,
+    competencia_indirecta: Optional[Tuple[Selector, ...]] = None,
+    segmentos: Optional[Tuple[str, ...]] = None,
+    proveedores: Optional[Tuple[str, ...]] = None,
+) -> Tuple[BusinessProfile, List[str]]:
     """Aplica los ajustes del usuario a un perfil y devuelve (perfil nuevo, avisos).
 
     Un ajuste que dejaría VACÍA una lente que el perfil original sí tiene se ignora y se avisa (la lente conserva
@@ -167,16 +213,23 @@ def apply_overrides(profile: BusinessProfile, *, competencia_directa: Optional[T
     nuevo = replace(
         profile,
         competencia_directa=conservar_si_vacio(competencia_directa, profile.competencia_directa, "competencia directa"),
-        competencia_indirecta=tuple(competencia_indirecta) if competencia_indirecta is not None else profile.competencia_indirecta,
-        segmentos=conservar_si_vacio(solo_conocidos(segmentos, SEGMENTOS_POI, "segmentos"), profile.segmentos, "mercado"),
-        proveedores=conservar_si_vacio(solo_conocidos(proveedores, PROVEEDORES_POI, "proveedores"), profile.proveedores, "proveedores"),
+        competencia_indirecta=(
+            tuple(competencia_indirecta) if competencia_indirecta is not None else profile.competencia_indirecta
+        ),
+        segmentos=conservar_si_vacio(
+            solo_conocidos(segmentos, SEGMENTOS_POI, "segmentos"), profile.segmentos, "mercado"
+        ),
+        proveedores=conservar_si_vacio(
+            solo_conocidos(proveedores, PROVEEDORES_POI, "proveedores"), profile.proveedores, "proveedores"
+        ),
         personalizado=True,
     )
     base = DEFAULT_PROFILES.get(profile.key)
     if base is not None and desviacion_competencia(nuevo, base) > UMBRAL_DESVIACION:
         avisos.append(
             f"Has quitado más de la mitad de la competencia por defecto ({desviacion_competencia(nuevo, base):.0%}): "
-            "el panorama será más optimista de lo que los datos respaldan.")
+            "el panorama será más optimista de lo que los datos respaldan."
+        )
     return nuevo, avisos
 
 

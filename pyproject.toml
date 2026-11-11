@@ -1,0 +1,9 @@
+# Solo configuración de herramientas de formato (el proyecto no se empaqueta con este archivo).
+# El CI (.github/workflows/tests.yml) ejecuta black e isort con esta configuración sobre src/, tests/, streamlit_app/, tools/ y los scripts de la raiz (collect.py, setup.py, train_*.py).
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120

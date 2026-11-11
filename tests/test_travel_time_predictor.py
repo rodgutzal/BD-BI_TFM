@@ -22,11 +22,15 @@ FEATURES = ["hour_of_day", "day_of_week", "temperature", "humidity", "no_traffic
 def _df(n=120, seed=0, sin_tiempo_sin_trafico=False):
     rng = np.random.default_rng(seed)
     sin_trafico = rng.uniform(8, 12, n)
-    df = pd.DataFrame({
-        "timestamp": pd.date_range("2026-09-01", periods=n, freq="1h", tz="UTC"),
-        "origin_temperature": rng.uniform(15, 30, n), "origin_humidity": rng.uniform(40, 80, n),
-        "no_traffic_time_min": sin_trafico, "travel_time_min": sin_trafico + rng.uniform(0, 4, n),
-    })
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2026-09-01", periods=n, freq="1h", tz="UTC"),
+            "origin_temperature": rng.uniform(15, 30, n),
+            "origin_humidity": rng.uniform(40, 80, n),
+            "no_traffic_time_min": sin_trafico,
+            "travel_time_min": sin_trafico + rng.uniform(0, 4, n),
+        }
+    )
     return df.drop(columns="no_traffic_time_min") if sin_tiempo_sin_trafico else df
 
 
@@ -40,6 +44,7 @@ def entrenado():
 # ---------------------------------------------------------------------------
 # TravelTimePredictor
 # ---------------------------------------------------------------------------
+
 
 def test_prepare_features_devuelve_las_seis_variables_y_el_objetivo():
     """`prepare_features` devuelve las seis variables esperadas y el objetivo, con la hora entre 0 y 23 y el día de la semana entre 0 y 6."""
@@ -79,8 +84,12 @@ def test_prepare_features_con_dataframe_vacio():
 def test_entrena_y_registra_las_features(entrenado):
     """El modelo entrena, registra sus variables y su estado, y las importancias suman 1."""
     assert entrenado.is_trained and entrenado.feature_names == FEATURES
-    assert entrenado.get_status() == {"is_trained": True, "min_samples_required": 50, "feature_count": 6,
-                                      "features": FEATURES}
+    assert entrenado.get_status() == {
+        "is_trained": True,
+        "min_samples_required": 50,
+        "feature_count": 6,
+        "features": FEATURES,
+    }
     imp = entrenado.get_feature_importance()
     assert list(imp) == FEATURES and sum(imp.values()) == pytest.approx(1.0, abs=0.01)
 
@@ -114,9 +123,15 @@ def test_predict_responde_a_los_datos_de_entrada():
     rng = np.random.default_rng(1)
     n = 200
     base = rng.uniform(5, 25, n)
-    df = pd.DataFrame({"timestamp": pd.date_range("2026-09-01", periods=n, freq="1h", tz="UTC"),
-                       "origin_temperature": 20.0, "origin_humidity": 50.0,
-                       "no_traffic_time_min": base, "travel_time_min": base * 1.2})
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2026-09-01", periods=n, freq="1h", tz="UTC"),
+            "origin_temperature": 20.0,
+            "origin_humidity": 50.0,
+            "no_traffic_time_min": base,
+            "travel_time_min": base * 1.2,
+        }
+    )
     m = TravelTimePredictor()
     assert m.train(df)
     corto = m.predict(hour=8, day_of_week=1, temperature=20, humidity=50, no_traffic_time=6, historical_avg=7)
@@ -153,15 +168,15 @@ def test_el_lag_es_la_media_movil_de_5_valores_del_tiempo_de_viaje():
     df = _df(10)
     df["travel_time_min"] = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
     X, _ = TravelTimePredictor().prepare_features(df)
-    assert X["travel_time_min_lag"].tolist()[:5] == [10.0, 15.0, 20.0, 25.0, 30.0]    # min_periods=1
-    assert X["travel_time_min_lag"].iloc[9] == 80.0                                    # media de 60..100
+    assert X["travel_time_min_lag"].tolist()[:5] == [10.0, 15.0, 20.0, 25.0, 30.0]  # min_periods=1
+    assert X["travel_time_min_lag"].iloc[9] == 80.0  # media de 60..100
 
 
 def test_guardar_y_cargar_reproduce_las_predicciones(entrenado, tmp_path):
     """Un modelo guardado y vuelto a cargar da las mismas predicciones."""
     ruta = tmp_path / "sub" / "m.pkl"
     assert entrenado.save(ruta) and ruta.exists()
-    otro = TravelTimePredictor(ruta)                       # el constructor carga el archivo si existe
+    otro = TravelTimePredictor(ruta)  # el constructor carga el archivo si existe
     assert otro.is_trained and otro.feature_names == FEATURES
     args = dict(hour=10, day_of_week=2, temperature=20, humidity=60, no_traffic_time=10)
     assert otro.predict(**args) == entrenado.predict(**args)
@@ -184,19 +199,33 @@ def test_no_guarda_un_modelo_sin_entrenar_y_carga_falla_con_gracia(tmp_path):
 # RoutePredictor (orquestador)
 # ---------------------------------------------------------------------------
 
+
 def _registros(origen, destino, n, base=10.0):
     ahora = pd.Timestamp.now(tz="UTC").floor("h")
-    return [{"timestamp": (ahora - pd.Timedelta(hours=i)).isoformat(), "origin": origen, "destination": destino,
-             "data_source": "tomtom", "travel_time_min": base + (i % 5), "no_traffic_time_min": base,
-             "traffic_delay_min": 1.0, "average_speed_kmh": 30.0, "distance_km": 3.0,
-             "origin_temperature": 20.0 + i % 4, "origin_humidity": 50.0 + i % 7} for i in range(n)]
+    return [
+        {
+            "timestamp": (ahora - pd.Timedelta(hours=i)).isoformat(),
+            "origin": origen,
+            "destination": destino,
+            "data_source": "tomtom",
+            "travel_time_min": base + (i % 5),
+            "no_traffic_time_min": base,
+            "traffic_delay_min": 1.0,
+            "average_speed_kmh": 30.0,
+            "distance_km": 3.0,
+            "origin_temperature": 20.0 + i % 4,
+            "origin_humidity": 50.0 + i % 7,
+        }
+        for i in range(n)
+    ]
 
 
 @pytest.fixture
 def predictor(tmp_path):
     db = tmp_path / "m.db"
     RouteDatabase(tmp_path / "m.csv", db).save_records_to_sqlite(
-        _registros("Msida", "Gzira", 80) + _registros("Msida", "Sliema", 10) + _registros("Sliema", "Gzira", 60, 7.0))
+        _registros("Msida", "Gzira", 80) + _registros("Msida", "Sliema", 10) + _registros("Sliema", "Gzira", 60, 7.0)
+    )
     return RoutePredictor(db, tmp_path / "models", min_samples=50)
 
 
@@ -244,8 +273,9 @@ def test_train_all_models_devuelve_un_resultado_por_ruta(predictor):
 def test_predice_el_tiempo_de_viaje_de_una_ruta_entrenada(predictor):
     """Una ruta entrenada predice un tiempo de viaje plausible con una confianza entre 50 y 100."""
     predictor.train_route_model("Msida", "Gzira")
-    tiempo, confianza = predictor.predict_travel_time("Msida", "Gzira", current_temp=21, current_humidity=55,
-                                                      no_traffic_time=10)
+    tiempo, confianza = predictor.predict_travel_time(
+        "Msida", "Gzira", current_temp=21, current_humidity=55, no_traffic_time=10
+    )
     assert 9 < tiempo < 16 and 50 <= confianza <= 100
 
 

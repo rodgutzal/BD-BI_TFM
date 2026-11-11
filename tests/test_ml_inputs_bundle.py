@@ -40,36 +40,62 @@ def _punto(fila, col, cat, sub):
 def crear_base(path, con_fsq=True, con_demografia=True, con_rutas=True, pois=True):
     """Base mínima con el mismo esquema (y columnas de más) que mobility.db."""
     conn = sqlite3.connect(path)
-    conn.execute("CREATE TABLE pois (id INTEGER PRIMARY KEY, osm_type TEXT, osm_id INTEGER, category TEXT, subcategory TEXT, "
-                 "name TEXT, latitude REAL, longitude REAL, updated_at TEXT)")
+    conn.execute(
+        "CREATE TABLE pois (id INTEGER PRIMARY KEY, osm_type TEXT, osm_id INTEGER, category TEXT, subcategory TEXT, "
+        "name TEXT, latitude REAL, longitude REAL, updated_at TEXT)"
+    )
     if pois:
-        filas = [_punto(10 + i % 5, 10 + i // 5, "restaurant" if i % 2 else "retail", "cafe" if i % 2 else "shop")
-                 for i in range(20)]
-        conn.executemany("INSERT INTO pois (category, subcategory, name, latitude, longitude, osm_type) VALUES (?,?,?,?,?,'node')", filas)
+        filas = [
+            _punto(10 + i % 5, 10 + i // 5, "restaurant" if i % 2 else "retail", "cafe" if i % 2 else "shop")
+            for i in range(20)
+        ]
+        conn.executemany(
+            "INSERT INTO pois (category, subcategory, name, latitude, longitude, osm_type) VALUES (?,?,?,?,?,'node')",
+            filas,
+        )
     if con_fsq:
-        conn.execute("CREATE TABLE pois_foursquare (id INTEGER PRIMARY KEY, fsq_place_id TEXT, category TEXT, subcategory TEXT, "
-                     "name TEXT, latitude REAL, longitude REAL, updated_at TEXT)")
-        conn.executemany("INSERT INTO pois_foursquare (category, subcategory, name, latitude, longitude) VALUES (?,?,?,?,?)",
-                         [_punto(11, 11, "restaurant", "pizza"), _punto(12, 12, "retail", "shoes")])
+        conn.execute(
+            "CREATE TABLE pois_foursquare (id INTEGER PRIMARY KEY, fsq_place_id TEXT, category TEXT, subcategory TEXT, "
+            "name TEXT, latitude REAL, longitude REAL, updated_at TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO pois_foursquare (category, subcategory, name, latitude, longitude) VALUES (?,?,?,?,?)",
+            [_punto(11, 11, "restaurant", "pizza"), _punto(12, 12, "retail", "shoes")],
+        )
     if con_demografia:
-        conn.execute("CREATE TABLE zone_demographics (id INTEGER PRIMARY KEY, zone_name TEXT, dcid TEXT, population INTEGER, "
-                     "observation_date TEXT, source TEXT)")
-        conn.executemany("INSERT INTO zone_demographics (zone_name, population) VALUES (?,?)",
-                         [(z, 1000 * (i + 1)) for i, z in enumerate(ZONAS)])
+        conn.execute(
+            "CREATE TABLE zone_demographics (id INTEGER PRIMARY KEY, zone_name TEXT, dcid TEXT, population INTEGER, "
+            "observation_date TEXT, source TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO zone_demographics (zone_name, population) VALUES (?,?)",
+            [(z, 1000 * (i + 1)) for i, z in enumerate(ZONAS)],
+        )
     if con_rutas:
-        conn.execute("CREATE TABLE route_measurements (id INTEGER PRIMARY KEY, timestamp TEXT, origin TEXT, destination TEXT, "
-                     "travel_time_min REAL, polyline TEXT)")
-        conn.executemany("INSERT INTO route_measurements (timestamp, origin, destination, travel_time_min, polyline) VALUES (?,?,?,?,?)",
-                         [("t1", ZONAS[0], ZONAS[1], 10.0, "x" * 50), ("t2", ZONAS[0], ZONAS[1], 20.0, "y" * 50),
-                          ("t1", ZONAS[1], ZONAS[2], 7.0, "z")])
+        conn.execute(
+            "CREATE TABLE route_measurements (id INTEGER PRIMARY KEY, timestamp TEXT, origin TEXT, destination TEXT, "
+            "travel_time_min REAL, polyline TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO route_measurements (timestamp, origin, destination, travel_time_min, polyline) VALUES (?,?,?,?,?)",
+            [
+                ("t1", ZONAS[0], ZONAS[1], 10.0, "x" * 50),
+                ("t2", ZONAS[0], ZONAS[1], 20.0, "y" * 50),
+                ("t1", ZONAS[1], ZONAS[2], 7.0, "z"),
+            ],
+        )
     conn.commit()
     conn.close()
     return path
 
 
 def contexto_df():
-    return pd.DataFrame([{"category": "edificio", "subcategory": "yes", "latitude": 35.9, "longitude": 14.45},
-                         {"category": "alojamiento", "subcategory": "hotel", "latitude": 35.91, "longitude": 14.46}])
+    return pd.DataFrame(
+        [
+            {"category": "edificio", "subcategory": "yes", "latitude": 35.9, "longitude": 14.45},
+            {"category": "alojamiento", "subcategory": "hotel", "latitude": 35.91, "longitude": 14.46},
+        ]
+    )
 
 
 def sha(path):
@@ -120,8 +146,10 @@ def test_table_hash_tabla_vacia_es_estable():
 # ---- exportación -------------------------------------------------------------------------------------------------
 def test_el_paquete_se_lee_igual_que_la_base(base, paquete):
     """Las funciones de data_access devuelven lo mismo con el paquete que con la base de origen."""
-    pd.testing.assert_frame_equal(data_access.load_pois(base).sort_values(["latitude", "longitude"]).reset_index(drop=True),
-                                  data_access.load_pois(paquete).sort_values(["latitude", "longitude"]).reset_index(drop=True))
+    pd.testing.assert_frame_equal(
+        data_access.load_pois(base).sort_values(["latitude", "longitude"]).reset_index(drop=True),
+        data_access.load_pois(paquete).sort_values(["latitude", "longitude"]).reset_index(drop=True),
+    )
     assert len(data_access.load_pois_foursquare(paquete)) == len(data_access.load_pois_foursquare(base)) == 2
     pd.testing.assert_frame_equal(data_access.load_zone_table(base), data_access.load_zone_table(paquete))
 
@@ -148,8 +176,10 @@ def test_el_paquete_pesa_mucho_menos_que_la_base(tmp_path):
     """Con mediciones de rutas voluminosas, el paquete es una fracción del tamaño de la base."""
     db = crear_base(tmp_path / "grande.db")
     conn = sqlite3.connect(db)
-    conn.executemany("INSERT INTO route_measurements (timestamp, origin, destination, travel_time_min, polyline) VALUES (?,?,?,?,?)",
-                     [(f"t{i}", ZONAS[3], ZONAS[4], 5.0, "p" * 400) for i in range(3000)])
+    conn.executemany(
+        "INSERT INTO route_measurements (timestamp, origin, destination, travel_time_min, polyline) VALUES (?,?,?,?,?)",
+        [(f"t{i}", ZONAS[3], ZONAS[4], 5.0, "p" * 400) for i in range(3000)],
+    )
     conn.commit()
     conn.close()
     out = tmp_path / "p.sqlite"
@@ -285,10 +315,18 @@ def test_con_la_base_completa_y_sin_directorio_no_hay_contexto(base):
 def test_el_directorio_tiene_prioridad_sobre_la_tabla_del_paquete(paquete, tmp_path):
     """Si se da --contexto, se usa ese directorio aunque el paquete traiga su propia tabla."""
     import json
+
     d = tmp_path / "ctx"
     d.mkdir()
-    (d / "transporte_0.json").write_text(json.dumps({"tema": "transporte", "elements": [
-        {"type": "node", "lat": 35.9, "lon": 14.5, "tags": {"highway": "bus_stop"}}]}), encoding="utf-8")
+    (d / "transporte_0.json").write_text(
+        json.dumps(
+            {
+                "tema": "transporte",
+                "elements": [{"type": "node", "lat": 35.9, "lon": 14.5, "tags": {"highway": "bus_stop"}}],
+            }
+        ),
+        encoding="utf-8",
+    )
     ctx = data_access.load_context(paquete, str(d))
     assert list(ctx["category"]) == ["transporte"]
 
@@ -382,15 +420,20 @@ def test_measure_lens_variance_usa_el_contexto_del_paquete(paquete, capsys):
 def test_requirements_fija_scipy_y_statsmodels():
     """Las dos librerías estadísticas del dashboard van con == (antes >=): una versión nueva puede cambiar resultados o
     no tener wheels para el Python de Docker y CI."""
-    lineas = [l.split("#")[0].strip().lower() for l in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()]
+    lineas = [
+        l.split("#")[0].strip().lower() for l in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
+    ]
     for paquete in ("scipy", "statsmodels"):
         fijas = [l for l in lineas if l.startswith(paquete)]
-        assert len(fijas) == 1 and fijas[0].startswith(paquete + "=="), f"{paquete} no está fijado con == en requirements.txt"
+        assert len(fijas) == 1 and fijas[0].startswith(
+            paquete + "=="
+        ), f"{paquete} no está fijado con == en requirements.txt"
 
 
 def test_requirements_ml_fija_versiones_exactas():
     """requirements-ml.txt fija con == las librerías que cambian los números, y coinciden con las de requirements.txt
     cuando esta también las fija."""
+
     def pins(nombre):
         out = {}
         for linea in (ROOT / nombre).read_text(encoding="utf-8").splitlines():
@@ -399,6 +442,7 @@ def test_requirements_ml_fija_versiones_exactas():
                 k, v = linea.split("==")
                 out[k.strip().lower()] = v.strip()
         return out
+
     ml, base = pins("requirements-ml.txt"), pins("requirements.txt")
     assert {"pandas", "numpy", "scikit-learn", "scipy"} <= set(ml)
     for k in ("pandas", "numpy"):

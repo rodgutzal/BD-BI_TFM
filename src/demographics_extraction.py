@@ -125,10 +125,7 @@ def summarize_history(history: dict, zones: list) -> dict:
     """Años con al menos una observación por zona, y años comunes a TODAS.
     Una zona sin ninguna observación cuenta con conjunto vacío (=> no hay
     año común posible, y queda a la vista en vez de ocultarse)."""
-    years_by_zone = {
-        z: {r["year"] for r in history.get(z, []) if r["year"] is not None}
-        for z in zones
-    }
+    years_by_zone = {z: {r["year"] for r in history.get(z, []) if r["year"] is not None} for z in zones}
     common = sorted(set.intersection(*years_by_zone.values())) if years_by_zone else []
     return {"years_by_zone": years_by_zone, "common_years": common}
 
@@ -154,10 +151,15 @@ def run_diagnose(db: RouteDatabase, client: DemographicsClient, country_dcid: st
         logger.info(f"{zone} ({dcids[zone]}): {len(rows)} observaciones")
         for r in rows:
             logger.info(f"    {r['date']:<12} {r['population']:>9,}  [{r['source'] or 'fuente n/d'}]")
-            records.append({
-                "zone_name": zone, "observation_date": r["date"], "year": r["year"],
-                "population": r["population"], "source": r["source"],
-            })
+            records.append(
+                {
+                    "zone_name": zone,
+                    "observation_date": r["date"],
+                    "year": r["year"],
+                    "population": r["population"],
+                    "source": r["source"],
+                }
+            )
     db.save_population_history(records)
 
     summary = summarize_history(history, list(dcids))
@@ -165,16 +167,22 @@ def run_diagnose(db: RouteDatabase, client: DemographicsClient, country_dcid: st
     for zone, years in summary["years_by_zone"].items():
         logger.info(f"    {zone:<12} {sorted(years) if years else 'SIN DATOS'}")
     if summary["common_years"]:
-        logger.info(f"Años comunes a las {len(dcids)} zonas: {summary['common_years']}  -> se puede unificar sin estimar")
+        logger.info(
+            f"Años comunes a las {len(dcids)} zonas: {summary['common_years']}  -> se puede unificar sin estimar"
+        )
     else:
-        logger.info(f"NO hay ningún año común a las {len(dcids)} zonas -> hará falta estimar o cargar una fuente adicional")
+        logger.info(
+            f"NO hay ningún año común a las {len(dcids)} zonas -> hará falta estimar o cargar una fuente adicional"
+        )
 
     if country_dcid:
         national = client.fetch_population_history({"país": country_dcid}).get("país", [])
         if national:
             years = sorted({r["year"] for r in national if r["year"] is not None})
-            logger.info(f"Referencia nacional ({country_dcid}): {len(national)} observaciones, años {years[0]}-{years[-1]}"
-                        f" ({len(years)} años distintos)")
+            logger.info(
+                f"Referencia nacional ({country_dcid}): {len(national)} observaciones, años {years[0]}-{years[-1]}"
+                f" ({len(years)} años distintos)"
+            )
         else:
             logger.info(f"Referencia nacional ({country_dcid}): sin datos")
 
@@ -187,7 +195,8 @@ def latest_observation_per_zone(history: dict) -> dict:
     serie ya traía 2021)."""
     return {
         zone: max(rows, key=lambda r: (r["year"] is not None, r["year"] or -1, r["date"]))
-        for zone, rows in history.items() if rows
+        for zone, rows in history.items()
+        if rows
     }
 
 
@@ -230,11 +239,17 @@ def reconcile_to_common_year(zone_latest: dict, national_history: list, target_y
             logger.warning(f"{zone}: falta la tasa nacional para {anchor_year} o {target_year} — se omite")
             continue
 
-        records.append({
-            "zone_name": zone, "population": projected, "observation_date": str(target_year),
-            "source": row["source"], "basis_year": anchor_year, "basis_population": anchor_pop,
-            "method": method,
-        })
+        records.append(
+            {
+                "zone_name": zone,
+                "population": projected,
+                "observation_date": str(target_year),
+                "source": row["source"],
+                "basis_year": anchor_year,
+                "basis_population": anchor_pop,
+                "method": method,
+            }
+        )
         tag = "(observado, sin ajustar)" if method == "observed" else f"(ancla real {anchor_year}: {anchor_pop:,})"
         logger.info(f"    {zone:<12} {target_year}: {projected:>9,} hab.  {tag}")
     return records, target_year
@@ -255,7 +270,9 @@ def run_reconcile(db: RouteDatabase, client: DemographicsClient, country_dcid: s
     # (clave `date`) — se renombra al leer, en vez de duplicar la clave en el
     # esquema de la base.
     history = {
-        zone: g.rename(columns={"observation_date": "date"})[["date", "year", "population", "source"]].to_dict("records")
+        zone: g.rename(columns={"observation_date": "date"})[["date", "year", "population", "source"]].to_dict(
+            "records"
+        )
         for zone, g in hist_df.groupby("zone_name")
     }
     zone_latest = latest_observation_per_zone({z: history.get(z, []) for z in LOCATIONS})
@@ -296,25 +313,27 @@ Examples:
         type=float,
         default=None,
         help=f"Hours between refresh cycles for continuous mode. If not provided, runs once. "
-             f"Recommended: {DEFAULT_INTERVAL_HOURS} (90 días) o más — la población cambia muy poco.",
+        f"Recommended: {DEFAULT_INTERVAL_HOURS} (90 días) o más — la población cambia muy poco.",
     )
 
     parser.add_argument(
         "--reconcile",
         action="store_true",
         help="Lleva la población de cada zona a un año común (el más reciente de la serie nacional, o "
-             "--target-year) usando la tasa de crecimiento nacional sobre el dato propio más reciente de "
-             "cada zona. Requiere haber corrido --diagnose antes.",
+        "--target-year) usando la tasa de crecimiento nacional sobre el dato propio más reciente de "
+        "cada zona. Requiere haber corrido --diagnose antes.",
     )
     parser.add_argument(
-        "--target-year", type=int, default=None,
+        "--target-year",
+        type=int,
+        default=None,
         help="Año al que reconciliar (default: el más reciente de la serie nacional).",
     )
     parser.add_argument(
         "--diagnose",
         action="store_true",
         help="Muestra qué fechas de población existen en Data Commons para cada zona "
-             "(y guarda la serie en zone_population_history) sin tocar zone_demographics.",
+        "(y guarda la serie en zone_population_history) sin tocar zone_demographics.",
     )
     parser.add_argument(
         "--country",

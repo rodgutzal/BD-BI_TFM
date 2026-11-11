@@ -32,8 +32,9 @@ def target_counts(counts: CellCounts, target: Sequence[Selector], mask: Optional
         mask = counts.active_mask()
     filas, cols = np.nonzero(mask)
     valores = counts.grid(target)[filas, cols]
-    return pd.Series(valores, index=pd.Index([grid.cell_id(f, c) for f, c in zip(filas, cols)], name="cell_id"),
-                     name="objetivo")
+    return pd.Series(
+        valores, index=pd.Index([grid.cell_id(f, c) for f, c in zip(filas, cols)], name="cell_id"), name="objetivo"
+    )
 
 
 def _kernel_zonas(lat, lon, valores: pd.Series) -> np.ndarray:
@@ -42,16 +43,25 @@ def _kernel_zonas(lat, lon, valores: pd.Series) -> np.ndarray:
     nombres = [z for z in LOCATIONS if z in valores.index and pd.notna(valores[z])]
     if not nombres:
         return np.full(len(lat), np.nan)
-    pesos = np.stack([np.exp(-(grid.haversine_m(LOCATIONS[z].latitude, LOCATIONS[z].longitude, lat, lon) ** 2)
-                             / (2 * SIGMA_M ** 2)) for z in nombres])
+    pesos = np.stack(
+        [
+            np.exp(-(grid.haversine_m(LOCATIONS[z].latitude, LOCATIONS[z].longitude, lat, lon) ** 2) / (2 * SIGMA_M**2))
+            for z in nombres
+        ]
+    )
     v = np.array([float(valores[z]) for z in nombres])[:, None]
     suma = pesos.sum(axis=0)
     with np.errstate(invalid="ignore", divide="ignore"):
         return np.where(suma > 0, (pesos * v).sum(axis=0) / suma, np.nan)
 
 
-def build_features(counts: CellCounts, target: Sequence[Selector], zones: Optional[pd.DataFrame] = None,
-                   mask: Optional[np.ndarray] = None, categorias: Sequence[str] = CATEGORIAS) -> pd.DataFrame:
+def build_features(
+    counts: CellCounts,
+    target: Sequence[Selector],
+    zones: Optional[pd.DataFrame] = None,
+    mask: Optional[np.ndarray] = None,
+    categorias: Sequence[str] = CATEGORIAS,
+) -> pd.DataFrame:
     """Variables de cada celda activa (o de `mask`), sin ningún POI del objetivo. Ver el docstring del módulo.
 
     `zones`: DataFrame indexado por nombre de zona con columnas `demanda` (población) y `tiempo_viaje_prom`

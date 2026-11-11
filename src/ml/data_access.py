@@ -33,7 +33,7 @@ def load_pois_foursquare(db_path) -> pd.DataFrame:
     """POIs de Foursquare (fuente independiente de OSM): category, subcategory, name, latitude, longitude."""
     try:
         return _read(db_path, "SELECT category, subcategory, name, latitude, longitude FROM pois_foursquare")
-    except Exception:                       # la tabla es opcional (requiere FOURSQUARE_API_KEY)
+    except Exception:  # la tabla es opcional (requiere FOURSQUARE_API_KEY)
         return pd.DataFrame(columns=["category", "subcategory", "name", "latitude", "longitude"])
 
 
@@ -42,6 +42,7 @@ def load_context(db_path, directorio=None) -> pd.DataFrame:
     ahí; si no, de la tabla `osm_context` del paquete de entrada (src/ml/inputs_bundle.py). Con la base completa y sin
     directorio no hay contexto y el resultado es un DataFrame vacío."""
     from src.ml import inputs_bundle, osm_context
+
     if directorio:
         return osm_context.load_context(directorio)
     return inputs_bundle.load_context_table(db_path)
@@ -54,8 +55,11 @@ def load_zone_table(db_path) -> pd.DataFrame:
                          'bien conectada' en src.location_scoring.zone_accessibility
     Una zona sin dato queda con NaN (no con 0)."""
     demografia = _read(db_path, "SELECT zone_name, population FROM zone_demographics")
-    rutas = _read(db_path, "SELECT origin, destination, AVG(travel_time_min) AS tiempo FROM route_measurements "
-                           "GROUP BY origin, destination")
+    rutas = _read(
+        db_path,
+        "SELECT origin, destination, AVG(travel_time_min) AS tiempo FROM route_measurements "
+        "GROUP BY origin, destination",
+    )
     zonas = pd.DataFrame(index=pd.Index(list(LOCATIONS), name="zona"))
     zonas["demanda"] = demografia.set_index("zone_name")["population"].reindex(zonas.index).astype(float)
     tiempos = {}

@@ -101,14 +101,14 @@ Examples:
         type=float,
         default=None,
         help=f"Hours between refresh cycles for continuous mode. If not provided, runs once. "
-             f"Recommended: {DEFAULT_INTERVAL_HOURS} (weekly) since POI data changes rarely.",
+        f"Recommended: {DEFAULT_INTERVAL_HOURS} (weekly) since POI data changes rarely.",
     )
     parser.add_argument(
         "--margin-deg",
         type=float,
         default=0.015,
         help="Margin (degrees) added around the bounding box of all monitored locations "
-             "when querying Overpass (default: 0.015, ~1.6km).",
+        "when querying Overpass (default: 0.015, ~1.6km).",
     )
 
     args = parser.parse_args()

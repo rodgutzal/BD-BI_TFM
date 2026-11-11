@@ -74,9 +74,9 @@ def normalize(raw_timestamp: str) -> str:
 class Plan:
     total_rows: int = 0
     legacy_rows: int = 0
-    delete_twin: List[int] = field(default_factory=list)      # ya existe su gemela ISO
-    delete_dup: List[int] = field(default_factory=list)       # duplicada entre antiguas
-    rename: List[Tuple[int, str]] = field(default_factory=list)   # (id, timestamp ISO)
+    delete_twin: List[int] = field(default_factory=list)  # ya existe su gemela ISO
+    delete_dup: List[int] = field(default_factory=list)  # duplicada entre antiguas
+    rename: List[Tuple[int, str]] = field(default_factory=list)  # (id, timestamp ISO)
 
     @property
     def to_delete(self) -> List[int]:
@@ -92,9 +92,7 @@ class Plan:
 
 
 def load_rows(conn: sqlite3.Connection) -> List[Tuple[int, str, str, str]]:
-    return conn.execute(
-        "SELECT id, raw_timestamp, origin, destination FROM bronze_measurements ORDER BY id"
-    ).fetchall()
+    return conn.execute("SELECT id, raw_timestamp, origin, destination FROM bronze_measurements ORDER BY id").fetchall()
 
 
 def build_plan(rows: List[Tuple[int, str, str, str]]) -> Plan:
@@ -103,7 +101,7 @@ def build_plan(rows: List[Tuple[int, str, str, str]]) -> Plan:
     iso_keys = {(ts, o, d) for _id, ts, o, d in rows if not is_legacy(ts)}
     seen_legacy = set()
 
-    for _id, ts, o, d in rows:          # ya vienen ordenadas por id
+    for _id, ts, o, d in rows:  # ya vienen ordenadas por id
         if not is_legacy(ts):
             continue
         plan.legacy_rows += 1
@@ -145,6 +143,7 @@ def describe(plan: Plan, db_path: Path, rows) -> str:
 # ---------------------------------------------------------------------------
 # Aplicar
 # ---------------------------------------------------------------------------
+
 
 def make_backup(db_path: Path) -> Path:
     """Copia consistente (API de backup de SQLite, correcta aunque la base esté
@@ -190,7 +189,7 @@ def apply_changes(db_path: Path, backup: bool = True, lock_timeout: float = 3.0)
     `lock_timeout`: segundos que espera el bloqueo exclusivo antes de abortar."""
     respaldo = make_backup(db_path) if backup else None
 
-    conn = sqlite3.connect(db_path, timeout=lock_timeout, isolation_level=None)   # transacciones manuales
+    conn = sqlite3.connect(db_path, timeout=lock_timeout, isolation_level=None)  # transacciones manuales
     try:
         try:
             conn.execute("BEGIN EXCLUSIVE")
@@ -204,8 +203,10 @@ def apply_changes(db_path: Path, backup: bool = True, lock_timeout: float = 3.0)
             plan = build_plan(load_rows(conn))
             if plan.needs_changes:
                 conn.executemany("DELETE FROM bronze_measurements WHERE id = ?", [(i,) for i in plan.to_delete])
-                conn.executemany("UPDATE bronze_measurements SET raw_timestamp = ? WHERE id = ?",
-                                 [(nuevo, i) for i, nuevo in plan.rename])
+                conn.executemany(
+                    "UPDATE bronze_measurements SET raw_timestamp = ? WHERE id = ?",
+                    [(nuevo, i) for i, nuevo in plan.rename],
+                )
             verify(conn, plan.rows_after)
             conn.execute("COMMIT")
         except Exception:
@@ -246,7 +247,7 @@ def main(argv=None) -> int:
         return 0
     if not args.apply:
         print("\nENSAYO: no se modificó nada. Con el collector apagado, para aplicar:")
-        print(f"    python tools/normalize_bronze_timestamps.py --db \"{db_path}\" --apply")
+        print(f'    python tools/normalize_bronze_timestamps.py --db "{db_path}" --apply')
         return 0
 
     print("\nAplicando (respaldo + bloqueo exclusivo + verificación)...")
@@ -255,8 +256,10 @@ def main(argv=None) -> int:
     except Exception as e:
         print(f"\nERROR: {e}\nNo se aplicó ningún cambio (rollback).", file=sys.stderr)
         return 1
-    print(f"Listo: {len(aplicado.to_delete):,} filas borradas, {len(aplicado.rename):,} renombradas; "
-          f"Bronze queda con {aplicado.rows_after:,} filas.")
+    print(
+        f"Listo: {len(aplicado.to_delete):,} filas borradas, {len(aplicado.rename):,} renombradas; "
+        f"Bronze queda con {aplicado.rows_after:,} filas."
+    )
     print(f"Respaldo previo: {respaldo}")
     print("Cuando compruebes que todo está bien, puedes borrar el respaldo a mano.")
     return 0

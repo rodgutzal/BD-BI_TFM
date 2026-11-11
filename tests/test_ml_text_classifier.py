@@ -36,14 +36,31 @@ def modelo(datos):
 
 
 # ---- n-gramas y normalización ------------------------------------------------------------------------------------
-@pytest.mark.parametrize("texto", [
-    "pizzería", "niño", "  espacios   de más  ", "a", "ab", "abc", "tienda de ropa", "ÁÉÍÓÚ Ñandú", "", "   ",
-    "centro-comercial", "123 abc", "café,té;mate", "una frase bastante más larga que las demás del conjunto",
-])
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "pizzería",
+        "niño",
+        "  espacios   de más  ",
+        "a",
+        "ab",
+        "abc",
+        "tienda de ropa",
+        "ÁÉÍÓÚ Ñandú",
+        "",
+        "   ",
+        "centro-comercial",
+        "123 abc",
+        "café,té;mate",
+        "una frase bastante más larga que las demás del conjunto",
+    ],
+)
 def test_los_ngramas_coinciden_con_los_de_scikit_learn(texto):
     """Los n-gramas de caracteres son exactamente los del analizador `char_wb` de scikit-learn (incluidas las palabras
     más cortas que n, los espacios repetidos y la ñ)."""
-    esperado = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 5), lowercase=True, strip_accents="unicode").build_analyzer()(texto)
+    esperado = TfidfVectorizer(
+        analyzer="char_wb", ngram_range=(2, 5), lowercase=True, strip_accents="unicode"
+    ).build_analyzer()(texto)
     assert tc.char_wb_ngrams(texto, 2, 5) == esperado
 
 
@@ -79,7 +96,11 @@ def test_una_frase_clara_se_clasifica_y_devuelve_su_confianza(modelo):
 
 def test_texto_vacio_o_en_blanco_no_responde(modelo):
     """Sin texto no hay respuesta ni confianza."""
-    assert modelo.clasificar("") == (None, 0.0) and modelo.clasificar("   ") == (None, 0.0) and modelo.clasificar(None) == (None, 0.0)
+    assert (
+        modelo.clasificar("") == (None, 0.0)
+        and modelo.clasificar("   ") == (None, 0.0)
+        and modelo.clasificar(None) == (None, 0.0)
+    )
 
 
 def test_gana_ninguna_y_no_responde(modelo):
@@ -122,8 +143,10 @@ def test_un_formato_o_unas_dimensiones_incoherentes_se_rechazan(modelo):
 
 def test_el_modulo_de_inferencia_no_importa_scikit_learn():
     """El dashboard debe poder cargar el modelo sin scikit-learn."""
-    codigo = ("import sys; sys.path.insert(0, sys.argv[1]); import src.ml.text_classifier; "
-              "sys.exit(1 if any(m.split('.')[0] == 'sklearn' for m in sys.modules) else 0)")
+    codigo = (
+        "import sys; sys.path.insert(0, sys.argv[1]); import src.ml.text_classifier; "
+        "sys.exit(1 if any(m.split('.')[0] == 'sklearn' for m in sys.modules) else 0)"
+    )
     assert subprocess.run([sys.executable, "-c", codigo, str(ROOT)]).returncode == 0
 
 
@@ -152,7 +175,7 @@ def test_respuesta_aplica_la_abstencion():
     p = np.array([[0.7, 0.2, 0.1], [0.2, 0.7, 0.1], [0.4, 0.3, 0.3]])
     assert tt.respuesta(clases, p, 0.5) == ["hospital", None, None]
     assert tt.respuesta(clases, p, 0.3) == ["hospital", None, "hospital"]
-    assert tt.respuesta(clases, np.array([[0.5, 0.3, 0.2]]), 0.5) == ["hospital"]       # justo en el umbral: responde
+    assert tt.respuesta(clases, np.array([[0.5, 0.3, 0.2]]), 0.5) == ["hospital"]  # justo en el umbral: responde
 
 
 def test_elegir_umbral_toma_el_de_mayor_exactitud_y_en_empate_el_mas_alto():
@@ -160,7 +183,7 @@ def test_elegir_umbral_toma_el_de_mayor_exactitud_y_en_empate_el_mas_alto():
     clases = ["hospital", "ninguna"]
     p = np.array([[0.99, 0.01], [0.98, 0.02]])
     assert tt.elegir_umbral(clases, p, ["hospital", "hospital"]) == tt.UMBRALES[-1]
-    p2 = np.array([[0.6, 0.4], [0.6, 0.4], [0.9, 0.1]])                   # a 0,6 y 0,9: dos «hospital» falsos para ninguna
+    p2 = np.array([[0.6, 0.4], [0.6, 0.4], [0.9, 0.1]])  # a 0,6 y 0,9: dos «hospital» falsos para ninguna
     assert tt.elegir_umbral(clases, p2, ["ninguna", "ninguna", "hospital"]) > 0.6
 
 
@@ -175,12 +198,12 @@ def test_bootstrap_pareado_con_diferencia_constante_y_con_diferencia_nula():
 def test_la_regla_adopta_solo_si_mejora_y_no_sube_los_errores():
     """Las tres salidas posibles de la regla fijada: adoptar, fallar por exactitud y fallar por errores."""
     reales = ["hospital"] * 40
-    palabras = [None] * 40                                                   # no responde nunca
-    bueno = ["hospital"] * 40                                               # acierta siempre
+    palabras = [None] * 40  # no responde nunca
+    bueno = ["hospital"] * 40  # acierta siempre
     assert tt.decidir(palabras, bueno, reales, 300)["adoptar"] is True
     igual = tt.decidir(palabras, palabras, reales, 300)
     assert igual["adoptar"] is False and igual["cumple_exactitud"] is False
-    malo = ["school"] * 20 + ["hospital"] * 20                              # mejora la exactitud pero 50 % de errores
+    malo = ["school"] * 20 + ["hospital"] * 20  # mejora la exactitud pero 50 % de errores
     d = tt.decidir(palabras, malo, reales, 300)
     assert d["cumple_exactitud"] is True and d["cumple_errores"] is False and d["adoptar"] is False
 
@@ -198,7 +221,9 @@ def test_la_tolerancia_de_errores_es_de_dos_puntos():
 def test_por_tipo_agrupa_las_metricas():
     """Una fila por tipo con su número de frases y sus tasas."""
     t = tt.por_tipo(["hospital", None, "school"], ["hospital", "school", "school"], ["directa", "directa", "errata"])
-    assert t.loc["directa", "n"] == 2 and t.loc["directa", "exactitud"] == 0.5 and t.loc["directa", "sin_respuesta"] == 0.5
+    assert (
+        t.loc["directa", "n"] == 2 and t.loc["directa", "exactitud"] == 0.5 and t.loc["directa", "sin_respuesta"] == 0.5
+    )
     assert t.loc["errata", "exactitud"] == 1.0
 
 
@@ -217,9 +242,13 @@ def test_los_datos_versionados_son_validos_y_el_conjunto_de_evaluacion_es_el_pro
 def test_validar_datos_detecta_cada_problema():
     """Categoría desconocida, frases repetidas o vacías, y fuga de evaluación a entrenamiento."""
     tr = pd.DataFrame({"categoria": ["hospital", "school"], "frase": ["una farmacia", "un colegio"]})
-    ev = pd.DataFrame({"tipo": ["directa", "directa"], "categoria": ["hospital", "sport"], "frase": ["Una Farmacia ", "un gimnasio"]})
+    ev = pd.DataFrame(
+        {"tipo": ["directa", "directa"], "categoria": ["hospital", "sport"], "frase": ["Una Farmacia ", "un gimnasio"]}
+    )
     assert any("están a la vez" in p for p in etc.validar_datos(tr, ev))
-    assert any("desconocidas" in p for p in etc.validar_datos(tr, ev.assign(categoria=["hospital", "xx"], frase=["a", "b"])))
+    assert any(
+        "desconocidas" in p for p in etc.validar_datos(tr, ev.assign(categoria=["hospital", "xx"], frase=["a", "b"]))
+    )
     assert any("vacías o repetidas" in p for p in etc.validar_datos(tr, ev.assign(frase=["a", "a"])))
     assert any("vacías o repetidas" in p for p in etc.validar_datos(tr, ev.assign(frase=["a", " "])))
 
@@ -242,7 +271,9 @@ def test_la_decision_es_la_regla_aplicada_a_las_cifras(resultado):
     d = resultado["decision"]
     assert d["adoptar"] == (d["cumple_exactitud"] and d["cumple_errores"])
     assert d["cumple_exactitud"] == (d["exactitud"]["ic_inf"] > 0)
-    assert d["cumple_errores"] == (d["equivocadas_candidato"] <= d["equivocadas_palabras"] + tt.TOLERANCIA_ERRORES + 1e-12)
+    assert d["cumple_errores"] == (
+        d["equivocadas_candidato"] <= d["equivocadas_palabras"] + tt.TOLERANCIA_ERRORES + 1e-12
+    )
     assert resultado["resumen"]["palabras"]["equivocadas"] == pytest.approx(d["equivocadas_palabras"])
     assert resultado["resumen"]["hibrido"]["equivocadas"] == pytest.approx(d["equivocadas_candidato"])
 
@@ -265,7 +296,9 @@ def test_el_umbral_no_depende_de_la_evaluacion(datos, resultado):
 def test_ninguna_frase_de_evaluacion_entra_en_el_entrenamiento(datos, resultado):
     """El vocabulario del modelo sale solo del entrenamiento: añadir una frase con n-gramas inéditos a la evaluación no lo cambia."""
     tr, ev = datos
-    extra = pd.concat([ev, pd.DataFrame({"tipo": ["directa"], "categoria": ["business"], "frase": ["xqzvwkj"]})], ignore_index=True)
+    extra = pd.concat(
+        [ev, pd.DataFrame({"tipo": ["directa"], "categoria": ["business"], "frase": ["xqzvwkj"]})], ignore_index=True
+    )
     assert etc.evaluar(tr, extra, n_boot=50, con_mlp=False)["modelo"].vocabulario == resultado["modelo"].vocabulario
 
 
@@ -293,7 +326,7 @@ def test_main_imprime_la_decision_y_exporta_modelo_y_manifiesto(tmp_path, capsys
     m = json.loads((tmp_path / "text_classifier_manifest.json").read_text(encoding="utf-8"))
     assert m["modelo"]["sha256"] == etc.file_hash(tmp_path / "text_classifier.json")
     assert m["datos"]["entrenamiento"]["sha256"] == etc.file_hash(etc.ENTRENAMIENTO) and "optimista" in m["advertencia"]
-    assert m["adoptado"] == ("NO se adopta" not in salida)          # el manifiesto dice lo mismo que la decisión impresa
+    assert m["adoptado"] == ("NO se adopta" not in salida)  # el manifiesto dice lo mismo que la decisión impresa
     assert m["umbral"] in tt.UMBRALES
     assert tc.ModeloTexto.load(tmp_path / "text_classifier.json").clasificar("una farmacia")[0] == "hospital"
 
@@ -312,13 +345,18 @@ def test_sin_mlp_se_omiten_la_red_y_su_comparacion(datos):
     """Con con_mlp=False no hay sistema MLP, ni su umbral, ni la comparación logística-MLP; el resto se calcula igual."""
     tr, ev = datos
     r = etc.evaluar(tr, ev, n_boot=50, con_mlp=False)
-    assert set(r["sistemas"]) == {"palabras", "logistica", "hibrido"} and r["umbral"]["mlp"] is None and r["logistica_vs_mlp"] is None
+    assert (
+        set(r["sistemas"]) == {"palabras", "logistica", "hibrido"}
+        and r["umbral"]["mlp"] is None
+        and r["logistica_vs_mlp"] is None
+    )
 
 
 def test_con_mlp_se_comparan_la_red_y_la_logistica(resultado):
     """Con la red incluida hay umbral propio, sistema híbrido con la red y la comparación pareada."""
     assert {"mlp", "hibrido_mlp"} <= set(resultado["sistemas"]) and resultado["umbral"]["mlp"] in tt.UMBRALES
     assert set(resultado["logistica_vs_mlp"]) == {"diferencia", "ic_inf", "ic_sup"}
+
 
 def test_la_regla_exige_que_el_intervalo_quede_por_encima_de_cero_no_solo_la_media():
     """Una mejora pequeña (2 aciertos más de 40) tiene media positiva pero un IC que llega a 0: no cumple la exactitud."""

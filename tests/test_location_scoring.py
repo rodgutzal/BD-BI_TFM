@@ -37,14 +37,20 @@ def db(tmp_path):
 def _poi(i, category, zona, dlat=0.0):
     loc = LOCATIONS[zona]
     return {
-        "osm_type": "node", "osm_id": i, "category": category, "subcategory": "x",
-        "name": f"poi{i}", "latitude": loc.latitude + dlat, "longitude": loc.longitude,
+        "osm_type": "node",
+        "osm_id": i,
+        "category": category,
+        "subcategory": "x",
+        "name": f"poi{i}",
+        "latitude": loc.latitude + dlat,
+        "longitude": loc.longitude,
     }
 
 
 # ---------------------------------------------------------------------------
 # utilidades
 # ---------------------------------------------------------------------------
+
 
 def test_haversine_conocida():
     # 0.01 grados de latitud ~ 1112 m
@@ -76,6 +82,7 @@ def test_normalize_minmax_conserva_nan():
 # dimensiones
 # ---------------------------------------------------------------------------
 
+
 def test_demanda_sin_demografia_es_nan_no_cero(db):
     """Sin datos demográficos, la demanda de cada zona es NaN, no 0."""
     out = zone_demand(db)
@@ -94,11 +101,13 @@ def test_demanda_lee_poblacion_guardada(db):
 def test_competencia_cuenta_solo_dentro_del_radio(db):
     # 2 comercios en Sliema, 1 a ~2.2 km (fuera del radio de 1.500 m)
     """La competencia cuenta solo los comercios dentro del radio de la zona y la marca como observada."""
-    db.save_pois([
-        _poi(1, "business", "Sliema"),
-        _poi(2, "business", "Sliema", dlat=0.001),
-        _poi(3, "business", "Sliema", dlat=0.02),
-    ])
+    db.save_pois(
+        [
+            _poi(1, "business", "Sliema"),
+            _poi(2, "business", "Sliema", dlat=0.001),
+            _poi(3, "business", "Sliema", dlat=0.02),
+        ]
+    )
     out = zone_competition(db, "business")
     assert out.loc["Sliema", "competencia"] == 2
     assert out.loc["Sliema", "metodo_competencia"] == "observado"
@@ -127,19 +136,25 @@ def test_competencia_sin_pois_es_cero(db):
 
 def _medicion(ts, origin, destination, minutos):
     return {
-        "timestamp": ts.isoformat(), "origin": origin, "destination": destination,
-        "data_source": "tomtom", "travel_time_min": minutos, "distance_km": 3.0,
+        "timestamp": ts.isoformat(),
+        "origin": origin,
+        "destination": destination,
+        "data_source": "tomtom",
+        "travel_time_min": minutos,
+        "distance_km": 3.0,
     }
 
 
 def test_accesibilidad_promedia_rutas_que_tocan_la_zona(db):
     """La accesibilidad de una zona es el tiempo de viaje medio de las rutas que la tocan; una zona sin rutas queda en NaN."""
     ahora = datetime.now(timezone.utc)
-    db.save_records_to_sqlite([
-        _medicion(ahora - timedelta(minutes=5), "Msida", "Gzira", 10.0),
-        _medicion(ahora - timedelta(minutes=10), "Msida", "Gzira", 14.0),   # prom. ruta = 12
-        _medicion(ahora - timedelta(minutes=5), "Msida", "Sliema", 20.0),
-    ])
+    db.save_records_to_sqlite(
+        [
+            _medicion(ahora - timedelta(minutes=5), "Msida", "Gzira", 10.0),
+            _medicion(ahora - timedelta(minutes=10), "Msida", "Gzira", 14.0),  # prom. ruta = 12
+            _medicion(ahora - timedelta(minutes=5), "Msida", "Sliema", 20.0),
+        ]
+    )
     out = zone_accessibility(db)
     assert out.loc["Gzira", "tiempo_viaje_prom"] == pytest.approx(12.0)
     assert out.loc["Msida", "tiempo_viaje_prom"] == pytest.approx(16.0)  # (12 + 20) / 2, como origen
@@ -150,10 +165,10 @@ def test_accesibilidad_promedia_rutas_que_tocan_la_zona(db):
 # score_zones
 # ---------------------------------------------------------------------------
 
+
 def _features(**cols):
     zonas = ["A", "B", "C"]
-    base = {"demanda": [100.0, 200.0, 300.0], "competencia": [5.0, 5.0, 5.0],
-            "tiempo_viaje_prom": [10.0, 10.0, 10.0]}
+    base = {"demanda": [100.0, 200.0, 300.0], "competencia": [5.0, 5.0, 5.0], "tiempo_viaje_prom": [10.0, 10.0, 10.0]}
     base.update(cols)
     return pd.DataFrame(base, index=pd.Index(zonas, name="zone_name"))
 
@@ -215,6 +230,7 @@ def test_el_puntaje_queda_entre_0_y_1():
 # recommend_locations (extremo a extremo)
 # ---------------------------------------------------------------------------
 
+
 def test_recomienda_de_extremo_a_extremo(db):
     """La recomendación de extremo a extremo devuelve todas las zonas ordenadas por puntaje y con el desglose completo, no solo el puntaje final."""
     db.save_demographics([{"zone_name": z, "population": 1000 * (i + 1)} for i, z in enumerate(LOCATIONS)])
@@ -225,8 +241,16 @@ def test_recomienda_de_extremo_a_extremo(db):
     assert (out["categoria"] == "food_drink").all()
     assert out["score"].is_monotonic_decreasing
     # el desglose completo está presente, no solo el puntaje final
-    for col in ("demanda", "competencia", "competencia_cruda", "tiempo_viaje_prom",
-                "demanda_norm", "competencia_norm", "accesibilidad_norm", "dimensiones_con_dato"):
+    for col in (
+        "demanda",
+        "competencia",
+        "competencia_cruda",
+        "tiempo_viaje_prom",
+        "demanda_norm",
+        "competencia_norm",
+        "accesibilidad_norm",
+        "dimensiones_con_dato",
+    ):
         assert col in out.columns
 
 
