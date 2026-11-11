@@ -249,3 +249,63 @@ def test_la_pestana_de_modelos_marca_las_rutas_con_modelo_entrenado(entorno):
     assert tabla.loc["Msida → Gzira", "Model Status"] == "✅ Trained"
     assert tabla.loc["Msida → Sliema", "Model Status"] == "❌ Not Trained"
     assert tabla.loc["Msida → Gzira", "Samples"] == 60
+
+
+# ---------------------------------------------------------------------------
+# Un error en una pestaña no tumba las demás
+# ---------------------------------------------------------------------------
+
+PESTANAS = [("render_data_explorer", "Data Explorer"), ("render_statistical_tests", "Statistical Tests"),
+            ("render_correlation_matrix", "Correlations"), ("render_model_performance", "Model Performance"),
+            ("render_data_quality_report", "Data Quality"), ("render_sql_query", "SQL Query"),
+            ("render_full_export", "Exportar Todo")]
+
+
+def _falla(*_args, **_kw):
+    raise RuntimeError("tabla inexistente")
+
+
+@pytest.mark.parametrize("funcion, nombre", PESTANAS)
+def test_un_error_en_una_pestana_se_muestra_en_ella_y_no_tumba_la_pagina(entorno, monkeypatch, funcion, nombre):
+    """Antes una excepción en cualquier pestaña (se ejecutan las siete en cada rerun) dejaba la página entera con el
+    traceback. Ahora cada una se aísla: se dice cuál falló y por qué."""
+    monkeypatch.setattr(ad, funcion, _falla)
+    at = _abrir()
+    assert not at.exception, [e.value for e in at.exception]
+    errores = [e.value for e in at.error]
+    assert errores == [f"No se pudo mostrar «{nombre}»: RuntimeError: tabla inexistente"]
+
+
+def test_las_demas_pestanas_siguen_mostrandose_cuando_una_falla(entorno, monkeypatch):
+    """Con el explorador roto, la pestaña del editor SQL (que viene después) sigue dibujando su editor."""
+    monkeypatch.setattr(ad, "render_data_explorer", _falla)
+    at = _abrir()
+    assert not at.exception and len(at.error) == 1
+    assert len(at.text_area) >= 1 and "▶ Ejecutar" in [b.label for b in at.button]
+
+
+def test_sin_fallos_no_aparece_ningun_aviso_de_pestana(entorno):
+    at = _abrir()
+    assert not at.exception and not any("No se pudo mostrar" in e.value for e in at.error)
+
+
+def test_el_fallo_de_una_pestana_queda_en_el_registro(entorno, monkeypatch, caplog):
+    """El mensaje en pantalla es corto; el traceback completo va al registro de la aplicación."""
+    monkeypatch.setattr(ad, "render_correlation_matrix", _falla)
+    with caplog.at_level("ERROR", logger=ad.logger.name):
+        _abrir()
+    assert any("Correlations" in r.getMessage() and r.exc_info for r in caplog.records)
+
+
+def test_st_stop_dentro_de_una_pestana_no_se_trata_como_un_error(entorno, monkeypatch, caplog):
+    """Solo se captura Exception: st.stop() usa una excepción de control (BaseException) y debe seguir deteniendo el script.
+    Si se capturara, se registraría como un fallo de la pestaña que no lo es (en pantalla no se notaría: el propio
+    st.error volvería a disparar la parada), así que se comprueba el registro."""
+    def parar():
+        st.stop()
+    monkeypatch.setattr(ad, "render_data_explorer", parar)
+    with caplog.at_level("ERROR", logger=ad.logger.name):
+        at = _abrir()
+    assert not at.exception and not any("No se pudo mostrar" in e.value for e in at.error)
+    assert not [r for r in caplog.records if r.name == ad.logger.name]
+    assert not at.text_area                                              # el script se detuvo: las pestañas siguientes no se dibujaron
