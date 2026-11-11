@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**42 archivos · 668 funciones de test · 755 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**42 archivos · 671 funciones de test · 760 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -20,7 +20,7 @@
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 29 | 29 |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
-| [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 20 | 29+ |
+| [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 23 | 34+ |
 | [`tests/test_data_profile.py`](#teststest_data_profilepy) | 15 | 15 |
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
@@ -285,6 +285,9 @@
 - `test_executive_alertas_segun_los_umbrales` ×6
 - `test_executive_si_el_resumen_falla_muestra_el_error_y_no_sigue`
 - `test_executive_con_la_base_vacia_no_lanza_excepciones`
+- `test_executive_con_la_base_vacia_no_muestra_un_0_por_ciento_ni_una_alerta_falsa` — Sin mediciones la fiabilidad no es 0 %: es desconocida. Antes salía «0.0%» y la alerta «Low system reliability».
+- `test_executive_con_datos_sigue_mostrando_las_cifras_y_las_alertas` — El aviso de «sin mediciones» no aparece cuando sí las hay.
+- `test_hay_datos_solo_si_el_resumen_tiene_mediciones` ×3
 - `test_color_segun_el_retraso`
 - `test_el_mapa_dibuja_una_traza_por_ruta_mas_las_ubicaciones_y_colorea_por_retraso`
 - `test_el_mapa_ignora_rutas_con_ubicaciones_desconocidas`
