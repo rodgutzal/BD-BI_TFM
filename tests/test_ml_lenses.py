@@ -40,11 +40,13 @@ def pois_en(*celdas):
 # ---------------------------------------------------------------------------
 
 def test_hay_un_perfil_por_cada_categoria_de_overpass():
+    """Hay un perfil de negocio por cada categoría de Overpass."""
     assert set(bp.DEFAULT_PROFILES) == set(CATEGORY_TAGS)
 
 
 @pytest.mark.parametrize("clave", sorted(bp.DEFAULT_PROFILES))
 def test_cada_perfil_es_coherente(clave):
+    """Cada perfil (parametrizado) es coherente: tiene nombre y competencia directa, sus segmentos y proveedores existen y sus selectores usan categorías reales."""
     p = bp.DEFAULT_PROFILES[clave]
     assert p.key == clave and p.nombre and len(p.competencia_directa) > 0 and not p.personalizado
     assert set(p.segmentos) <= set(bp.SEGMENTOS_POI) and set(p.proveedores) <= set(bp.PROVEEDORES_POI)
@@ -53,22 +55,26 @@ def test_cada_perfil_es_coherente(clave):
 
 
 def test_los_selectores_de_segmentos_y_proveedores_usan_categorias_reales():
+    """Los selectores de segmentos y proveedores usan categorías que existen en Overpass o en el contexto de OSM."""
     for sels in list(bp.SEGMENTOS_POI.values()) + list(bp.PROVEEDORES_POI.values()):
         for s in sels:
             assert s.category in set(CATEGORY_TAGS) | set(CONTEXTO)         # POIs de Overpass o contexto de la fase 1b
 
 
 def test_residentes_usan_edificios_y_los_distribuidores_sanitarios_siguen_sin_proxy():
+    """El segmento de residentes usa los edificios como proxy y los distribuidores sanitarios siguen sin proxy."""
     assert [s.category for s in bp.SEGMENTOS_POI["residentes"]] == ["edificio"]
     assert bp.PROVEEDORES_POI["distribuidores_sanitarios"] == ()                # sin etiqueta en OSM: sin datos
 
 
 def test_perfil_inexistente_lanza_error():
+    """Pedir el perfil de una categoría que no existe lanza `ValueError`."""
     with pytest.raises(ValueError, match="Categoría sin perfil"):
         bp.get_default_profile("zapateria")
 
 
 def test_el_comercio_generico_no_cuenta_las_oficinas_como_competencia():
+    """En el comercio genérico, las oficinas no cuentan como competencia pero sí las tiendas."""
     p = bp.get_default_profile("business")
     assert not any(s.matches("business", "company") for s in p.competencia_directa)
     assert any(s.matches("business", "bakery") for s in p.competencia_directa)
@@ -79,6 +85,7 @@ def test_el_comercio_generico_no_cuenta_las_oficinas_como_competencia():
 # ---------------------------------------------------------------------------
 
 def test_ajustar_no_modifica_el_perfil_por_defecto():
+    """Ajustar un perfil devuelve uno nuevo marcado como personalizado y no modifica el perfil por defecto."""
     base = bp.get_default_profile("food_drink")
     nuevo, avisos = bp.apply_overrides(base, segmentos=("turistas",))
     assert nuevo.segmentos == ("turistas",) and nuevo.personalizado and avisos == []
@@ -86,6 +93,7 @@ def test_ajustar_no_modifica_el_perfil_por_defecto():
 
 
 def test_una_lente_no_puede_quedar_vacia_y_se_conserva_el_valor_por_defecto():
+    """Una lente no puede quedar vacía: se conserva el valor por defecto y se avisa de cada una."""
     base = bp.get_default_profile("food_drink")
     nuevo, avisos = bp.apply_overrides(base, competencia_directa=(), segmentos=(), proveedores=())
     assert nuevo.competencia_directa == base.competencia_directa
@@ -94,12 +102,14 @@ def test_una_lente_no_puede_quedar_vacia_y_se_conserva_el_valor_por_defecto():
 
 
 def test_una_lente_que_ya_estaba_vacia_por_defecto_puede_seguir_vacia():
+    """Una lente que ya estaba vacía por defecto puede seguir vacía sin avisos."""
     base = bp.get_default_profile("leisure")                  # sin proveedores por defecto
     nuevo, avisos = bp.apply_overrides(base, proveedores=())
     assert nuevo.proveedores == () and avisos == []
 
 
 def test_los_nombres_desconocidos_se_descartan_con_aviso():
+    """Los nombres de segmento o proveedor desconocidos se descartan con un aviso."""
     base = bp.get_default_profile("food_drink")
     nuevo, avisos = bp.apply_overrides(base, segmentos=("turistas", "marcianos"), proveedores=("mayoristas", "dragones"))
     assert nuevo.segmentos == ("turistas",) and nuevo.proveedores == ("mayoristas",)
@@ -107,6 +117,7 @@ def test_los_nombres_desconocidos_se_descartan_con_aviso():
 
 
 def test_quitar_mas_de_la_mitad_de_la_competencia_avisa_de_optimismo():
+    """Quitar más de la mitad de la competencia del perfil por defecto avisa de que el resultado será optimista; quitar menos no."""
     base = bp.get_default_profile("food_drink")                # elementos: food_drink(*) + 3 sustitutos = 4
     ligero, avisos = bp.apply_overrides(base, competencia_indirecta=())          # quita 3 de 4 = 75 %
     assert bp.desviacion_competencia(ligero, base) == pytest.approx(0.75)
@@ -116,12 +127,14 @@ def test_quitar_mas_de_la_mitad_de_la_competencia_avisa_de_optimismo():
 
 
 def test_anadir_competencia_no_cuenta_como_desviacion():
+    """Añadir competencia al perfil no cuenta como desviación del perfil por defecto."""
     base = bp.get_default_profile("food_drink")
     mas, avisos = bp.apply_overrides(base, competencia_indirecta=base.competencia_indirecta + (selector("business", "kiosk"),))
     assert bp.desviacion_competencia(mas, base) == 0.0 and avisos == []
 
 
 def test_el_perfil_por_defecto_tiene_desviacion_cero_y_cambiarlo_todo_da_uno():
+    """El perfil por defecto tiene desviación 0 y cambiar toda su competencia da 1."""
     base = bp.get_default_profile("food_drink")
     assert bp.desviacion_competencia(base) == 0.0
     otro, _ = bp.apply_overrides(base, competencia_directa=(selector("school"),), competencia_indirecta=(selector("mall"),))
@@ -129,6 +142,7 @@ def test_el_perfil_por_defecto_tiene_desviacion_cero_y_cambiarlo_todo_da_uno():
 
 
 def test_el_umbral_de_aviso_es_la_mitad():
+    """El umbral de desviación a partir del cual se avisa es 0,5."""
     assert bp.UMBRAL_DESVIACION == 0.5
 
 
@@ -145,6 +159,7 @@ def escena():
 
 
 def test_la_competencia_se_pondera_por_vecindad(escena):
+    """La competencia directa se pondera por vecindad: 1 en la celda, 0,5 en la vecina y 0,25 en el segundo anillo."""
     lentes = compute_lenses(escena, bp.get_default_profile("food_drink"))
     assert lentes.loc["r20c20", "competencia_directa"] == 1.0          # la propia celda
     assert lentes.loc["r20c21", "competencia_directa"] == 0.5          # celda vecina
@@ -152,6 +167,7 @@ def test_la_competencia_se_pondera_por_vecindad(escena):
 
 
 def test_solo_salen_las_celdas_activas_y_el_indice_es_cell_id(escena):
+    """Solo salen las celdas activas, con `cell_id` como índice; con una máscara completa salen las 2295."""
     lentes = compute_lenses(escena, bp.get_default_profile("food_drink"))
     assert lentes.index.name == "cell_id" and "r20c20" in lentes.index and "r00c00" not in lentes.index
     todas = np.ones(grid.SHAPE, dtype=bool)
@@ -159,6 +175,7 @@ def test_solo_salen_las_celdas_activas_y_el_indice_es_cell_id(escena):
 
 
 def test_segmento_sin_pois_es_nan_y_no_cero(escena):
+    """Un segmento sin proxy o sin POIs en los datos queda en NaN, no en 0, y uno con datos se calcula por vecindad."""
     lentes = compute_lenses(escena, bp.get_default_profile("food_drink"))
     assert lentes["mercado_residentes"].isna().all()                    # sin proxy: 'no lo sabemos'
     assert lentes["mercado_estudiantes"].isna().all()                   # hay perfil pero ningún colegio en los datos
@@ -167,12 +184,14 @@ def test_segmento_sin_pois_es_nan_y_no_cero(escena):
 
 
 def test_cero_y_sin_datos_son_cosas_distintas(escena):
+    """Cero (hay datos y no hay nada cerca) y NaN (no se sabe) son cosas distintas en las lentes."""
     lentes = compute_lenses(escena, bp.get_default_profile("food_drink"))
     lejos = lentes.loc["r35c40"]                       # activa por el mayorista; sin oficinas cerca
     assert lejos["mercado_oficinistas"] == 0.0 and np.isnan(lejos["mercado_residentes"])
 
 
 def test_proveedores_total_y_diversidad(escena):
+    """Los proveedores se suman por tipo, con el total y la diversidad (cuántos de los tipos del perfil están presentes)."""
     lentes = compute_lenses(escena, bp.get_default_profile("food_drink"))
     fila = lentes.loc["r20c20"]
     assert fila["proveedores_carnicerias"] == 0.5 and fila["proveedores_total"] == 0.5
@@ -181,6 +200,7 @@ def test_proveedores_total_y_diversidad(escena):
 
 
 def test_el_apoyo_cuenta_pois_sin_ponderar_en_la_celda_y_sus_8_vecinas(escena):
+    """El apoyo de competencia cuenta POIs sin ponderar en la celda y sus 8 vecinas."""
     lentes = compute_lenses(escena, bp.get_default_profile("food_drink"))
     assert lentes.loc["r20c20", "apoyo_competencia"] == 1            # el restaurante
     assert lentes.loc["r20c21", "apoyo_competencia"] == 1
@@ -200,6 +220,7 @@ def test_un_poi_cuenta_en_una_sola_lente_la_competencia_manda():
 
 
 def test_los_museos_no_son_a_la_vez_competencia_y_turistas_en_ocio():
+    """En ocio, un museo cuenta como competencia pero no como segmento de turistas."""
     cc = CellCounts.from_pois(pois_en((20, 20, "leisure", "museum")))
     lentes = compute_lenses(cc, bp.get_default_profile("leisure"))
     assert lentes.loc["r20c20", "competencia_directa"] == 1.0
@@ -207,6 +228,7 @@ def test_los_museos_no_son_a_la_vez_competencia_y_turistas_en_ocio():
 
 
 def test_lentes_con_datos_cuenta_cuantas_lentes_se_pueden_calcular():
+    """`lentes_con_datos` cuenta cuántas lentes se pueden calcular en cada celda."""
     cc = CellCounts.from_pois(pois_en((20, 20, "hospital", "pharmacy"), (20, 20, "business", "company")))
     lentes = compute_lenses(cc, bp.get_default_profile("hospital"))
     fila = lentes.loc["r20c20"]
@@ -215,6 +237,7 @@ def test_lentes_con_datos_cuenta_cuantas_lentes_se_pueden_calcular():
 
 
 def test_ajustar_el_perfil_cambia_la_lente_sin_tocar_los_datos(escena):
+    """Ajustar el perfil cambia el valor de la lente sin tocar los datos."""
     base = bp.get_default_profile("food_drink")
     sin_oficinistas, _ = bp.apply_overrides(base, segmentos=("turistas",))
     a = compute_lenses(escena, base).loc["r20c20", "mercado_total"]
@@ -223,11 +246,13 @@ def test_ajustar_el_perfil_cambia_la_lente_sin_tocar_los_datos(escena):
 
 
 def test_con_cero_pois_las_lentes_no_fallan():
+    """Con cero POIs, las lentes devuelven una tabla vacía sin fallar."""
     lentes = compute_lenses(CellCounts.from_pois(pd.DataFrame()), bp.get_default_profile("food_drink"))
     assert lentes.empty
 
 
 def test_cobertura_de_las_lentes(escena):
+    """La cobertura cuenta cuántos POIs alimentan cada lente y cada tipo del perfil."""
     cob = lens_coverage(escena, bp.get_default_profile("food_drink")).set_index(["lente", "nombre"])["pois"]
     assert cob[("proveedores", "mayoristas")] == 1 and cob[("proveedores", "carnicerias")] == 1
     assert cob[("mercado", "oficinistas")] == 1 and cob[("mercado", "residentes")] == 0
@@ -253,24 +278,28 @@ def test_las_variables_no_incluyen_el_objetivo_ni_en_la_celda_ni_en_la_vecindad(
 
 
 def test_las_otras_categorias_si_entran_en_la_celda_y_en_los_anillos():
+    """Las demás categorías cuentan en la celda y en los anillos de vecindad como variables del modelo."""
     cc = CellCounts.from_pois(pois_en((20, 20, "school", "school"), (20, 21, "school", "school"), (20, 22, "school", "school")))
     f = features.build_features(cc, OBJETIVO).loc["r20c20"]
     assert f["school_celda"] == 1 and f["school_anillo1"] == 1 and f["school_anillo2"] == 1
 
 
 def test_nombres_y_numero_de_variables():
+    """Las variables del modelo tienen los nombres esperados, 24 en total, y las de población y tiempo de viaje quedan en NaN sin datos de zona."""
     f = features.build_features(CellCounts.from_pois(pois_en((20, 20, "school", "school"))), OBJETIVO)
     assert f.shape[1] == 7 * 3 + 3 and {"dist_centro_m", "pob_suavizada", "tiempo_viaje_suavizado"} <= set(f.columns)
     assert f["pob_suavizada"].isna().all() and f["tiempo_viaje_suavizado"].isna().all()       # sin zones
 
 
 def test_el_objetivo_cuenta_solo_la_propia_celda():
+    """El objetivo cuenta solo los POIs de la propia celda."""
     cc = CellCounts.from_pois(pois_en((20, 20, "food_drink", "cafe"), (20, 20, "food_drink", "bar"), (20, 21, "food_drink", "cafe")))
     y = features.target_counts(cc, OBJETIVO)
     assert y["r20c20"] == 2 and y["r20c21"] == 1 and y.name == "objetivo"
 
 
 def test_distancia_al_centro_de_zona_mas_cercano():
+    """La distancia al centro de la zona más cercana es corta para una celda que contiene un centro de zona."""
     lat, lon = LOCATIONS["Msida"].latitude, LOCATIONS["Msida"].longitude
     fila, col = (int(x[0]) for x in grid.cell_index(lat, lon))
     f = features.build_features(CellCounts.from_pois(pois_en((fila, col, "school", "school"))), OBJETIVO)
@@ -278,6 +307,7 @@ def test_distancia_al_centro_de_zona_mas_cercano():
 
 
 def test_poblacion_y_accesibilidad_suavizadas_con_las_zonas():
+    """La población y el tiempo de viaje suavizados quedan dentro del rango de las zonas y más cerca de la zona cercana."""
     zonas = pd.DataFrame({"demanda": {z: 1000.0 * (i + 1) for i, z in enumerate(LOCATIONS)},
                           "tiempo_viaje_prom": {z: 10.0 + i for i, z in enumerate(LOCATIONS)}})
     lat, lon = LOCATIONS["Valletta"].latitude, LOCATIONS["Valletta"].longitude
@@ -290,6 +320,7 @@ def test_poblacion_y_accesibilidad_suavizadas_con_las_zonas():
 
 
 def test_una_zona_sin_dato_se_omite_y_los_pesos_se_renormalizan():
+    """Una zona sin dato se omite al suavizar y los pesos de las demás se renormalizan."""
     zonas = pd.DataFrame({"demanda": {z: 5000.0 for z in LOCATIONS}})
     zonas.loc["Msida", "demanda"] = np.nan
     f = features.build_features(CellCounts.from_pois(pois_en((25, 17, "school", "school"))), OBJETIVO, zonas)
@@ -309,6 +340,7 @@ def _crear_db(ruta, filas):
 
 
 def test_la_herramienta_lee_en_solo_lectura(tmp_path):
+    """La herramienta lee los POIs de la base en solo lectura: no la modifica ni crea archivos."""
     db = tmp_path / "t.db"
     lat, lon = grid.cell_center(20, 20)
     _crear_db(db, [("food_drink", "cafe", float(lat), float(lon))])
@@ -318,6 +350,7 @@ def test_la_herramienta_lee_en_solo_lectura(tmp_path):
 
 
 def test_describe_lens_excluye_nan_y_los_cuenta_aparte():
+    """`describe_lens` excluye los NaN, los cuenta aparte y calcula media, desviación, coeficiente de variación y porcentaje de ceros."""
     d = mlv.describe_lens(pd.Series([0.0, 0.0, 2.0, 4.0, np.nan]))
     assert d["n"] == 4 and d["sin_datos"] == 1 and d["pct_cero"] == 0.5 and d["media"] == 1.5
     assert d["cv"] == pytest.approx(d["desv"] / 1.5) and d["max"] == 4.0
@@ -325,11 +358,13 @@ def test_describe_lens_excluye_nan_y_los_cuenta_aparte():
 
 
 def test_la_serie_constante_no_da_cv_infinito():
+    """Una serie constante en cero da un coeficiente de variación NaN, no infinito."""
     assert np.isnan(mlv.describe_lens(pd.Series([0.0, 0.0, 0.0]))["cv"])
 
 
 def test_cuadrante_de_oportunidad():
     # mercado alto y competencia baja en 1 de cada 4 celdas cuando son independientes
+    """La proporción de celdas de oportunidad (mercado alto y competencia baja) es 0,25 si son independientes y 0 si están correlacionadas."""
     lentes = pd.DataFrame({"mercado_total": [1, 1, 9, 9], "competencia_directa": [1, 9, 1, 9]})
     assert mlv.opportunity_share(lentes) == 0.25
     correlacionadas = pd.DataFrame({"mercado_total": [1, 2, 8, 9], "competencia_directa": [1, 2, 8, 9]})
@@ -338,6 +373,7 @@ def test_cuadrante_de_oportunidad():
 
 
 def test_la_herramienta_imprime_un_informe_por_perfil(tmp_path, capsys):
+    """La herramienta imprime un informe por cada perfil con las celdas activas y la correlación de Spearman entre lentes."""
     db = tmp_path / "t.db"
     rng = np.random.default_rng(0)
     filas = []

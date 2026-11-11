@@ -28,6 +28,7 @@ def pois_en(*celdas):
 # ---------------------------------------------------------------------------
 
 def test_la_rejilla_es_fija_y_cubre_el_area():
+    """La rejilla tiene forma fija (45 por 51 celdas) y cubre los POIs conocidos y los centros de las 7 zonas."""
     assert grid.SHAPE == (45, 51)
     assert grid.N_ROWS * grid.N_COLS == 2295
     # cubre los POIs conocidos (lat 35,847-35,932; lon 14,446-14,572) y los centros de las 7 zonas
@@ -35,6 +36,7 @@ def test_la_rejilla_es_fija_y_cubre_el_area():
 
 
 def test_las_celdas_miden_unos_250_m_en_las_dos_direcciones():
+    """Las celdas miden unos 250 m en latitud y en longitud."""
     lat0, lon0 = grid.cell_center(20, 20)
     lat1, _ = grid.cell_center(21, 20)
     _, lon1 = grid.cell_center(20, 21)
@@ -43,6 +45,7 @@ def test_las_celdas_miden_unos_250_m_en_las_dos_direcciones():
 
 
 def test_un_punto_cae_en_la_celda_cuyo_centro_esta_cerca():
+    """Un punto cae en la celda correcta y su centro queda a menos de 0,71 veces el lado de la celda."""
     fila, col = grid.cell_index(35.8970, 14.4890)             # Msida
     assert (fila[0], col[0]) == (25, 17)
     lat, lon = grid.cell_center(fila[0], col[0])
@@ -50,11 +53,13 @@ def test_un_punto_cae_en_la_celda_cuyo_centro_esta_cerca():
 
 
 def test_puntos_fuera_de_la_rejilla_o_sin_coordenadas_dan_menos_uno():
+    """Un punto fuera de la rejilla o sin coordenadas recibe el índice -1."""
     fila, col = grid.cell_index([35.0, 36.5, np.nan, 35.9, None], [14.5, 14.5, 14.5, np.nan, 14.5])
     assert fila.tolist() == [-1, -1, -1, -1, -1] and col.tolist() == [-1, -1, -1, -1, -1]
 
 
 def test_los_bordes_de_la_rejilla():
+    """Los bordes de la rejilla: la esquina suroeste está dentro y justo fuera da -1."""
     assert grid.cell_index(grid.SOUTH, grid.WEST) == (np.array([0]), np.array([0]))          # esquina suroeste incluida
     fila, _ = grid.cell_index(grid.SOUTH - 1e-6, grid.WEST)
     assert fila[0] == -1
@@ -63,6 +68,7 @@ def test_los_bordes_de_la_rejilla():
 
 
 def test_identificadores_de_celda():
+    """Los identificadores de celda se escriben `rNNcNN`, se leen de vuelta y un formato incorrecto lanza `ValueError`."""
     assert grid.cell_id(23, 20) == "r23c20" and grid.cell_id(3, 7) == "r03c07"
     assert grid.parse_cell_id("r23c20") == (23, 20)
     for malo in ("x23c20", "r23", "celda"):
@@ -71,6 +77,7 @@ def test_identificadores_de_celda():
 
 
 def test_cells_frame_tiene_todas_las_celdas_y_cada_centro_cae_en_su_celda():
+    """La tabla de celdas tiene todas las celdas, con identificador único, y el centro de cada una cae en su propia celda."""
     celdas = grid.cells_frame()
     assert len(celdas) == 2295 and celdas["cell_id"].is_unique
     fila, col = grid.cell_index(celdas["lat"].to_numpy(), celdas["lon"].to_numpy())
@@ -78,16 +85,19 @@ def test_cells_frame_tiene_todas_las_celdas_y_cada_centro_cae_en_su_celda():
 
 
 def test_count_grid_cuenta_por_celda_e_ignora_lo_de_fuera():
+    """`count_grid` cuenta los puntos por celda e ignora los que están fuera de la rejilla."""
     contador = grid.count_grid([3, 3, 5, -1], [4, 4, 6, -1])
     assert contador.shape == grid.SHAPE and contador[3, 4] == 2 and contador[5, 6] == 1 and contador.sum() == 3
 
 
 @pytest.mark.parametrize("anillo, esperado", [(0, 1), (1, 8), (2, 16), (3, 24)])
 def test_los_anillos_tienen_las_celdas_esperadas(anillo, esperado):
+    """Cada anillo de vecindad (parametrizado) cubre el número de celdas esperado."""
     assert grid.ring_kernel(anillo).sum() == esperado
 
 
 def test_la_suma_por_anillos_pondera_la_vecindad():
+    """La suma por vecindad pondera 1 la celda, 0,5 el primer anillo y 0,25 el segundo, y nada más allá."""
     una = np.zeros(grid.SHAPE)
     una[20, 20] = 1.0
     ponderada = grid.neighborhood_sum(una)
@@ -97,6 +107,7 @@ def test_la_suma_por_anillos_pondera_la_vecindad():
 
 
 def test_los_bordes_no_dan_la_vuelta():
+    """La suma por vecindad no da la vuelta en los bordes de la rejilla."""
     una = np.zeros(grid.SHAPE)
     una[0, 0] = 1.0
     ponderada = grid.neighborhood_sum(una)
@@ -105,6 +116,7 @@ def test_los_bordes_no_dan_la_vuelta():
 
 
 def test_activas_son_las_celdas_con_algun_poi_en_ella_o_en_su_vecindad():
+    """Las celdas activas son las que tienen algún POI en ellas o en su vecindad."""
     una = np.zeros(grid.SHAPE)
     una[10, 10] = 1.0
     activas = grid.active_mask(una, anillo=1)
@@ -116,6 +128,7 @@ def test_activas_son_las_celdas_con_algun_poi_en_ella_o_en_su_vecindad():
 # ---------------------------------------------------------------------------
 
 def test_selector_toda_la_categoria_un_subconjunto_o_todo_menos_algo():
+    """Un selector puede abarcar toda una categoría, un subconjunto de subcategorías o todo salvo algunas."""
     assert Selector("food_drink").matches("food_drink", "cafe") and not Selector("food_drink").matches("school", "cafe")
     assert selector("business", "bakery").matches("business", "bakery") and not selector("business", "bakery").matches("business", "butcher")
     todo_menos = selector_except("business", "company", "government")
@@ -128,6 +141,7 @@ def test_selector_toda_la_categoria_un_subconjunto_o_todo_menos_algo():
 # ---------------------------------------------------------------------------
 
 def test_los_conteos_se_separan_por_categoria_y_subcategoria():
+    """Los conteos por celda se separan por categoría y subcategoría y se pueden agregar con un selector."""
     cc = CellCounts.from_pois(pois_en((10, 10, "food_drink", "cafe"), (10, 10, "food_drink", "cafe"),
                                       (10, 10, "food_drink", "bar"), (10, 11, "business", "bakery")))
     assert cc.pairs() == [("business", "bakery"), ("food_drink", "bar"), ("food_drink", "cafe")]
@@ -136,6 +150,7 @@ def test_los_conteos_se_separan_por_categoria_y_subcategoria():
 
 
 def test_subcategoria_vacia_o_nula_se_cuenta_como_cadena_vacia():
+    """Una subcategoría vacía o nula se cuenta como cadena vacía."""
     df = pois_en((5, 5, "business", None), (5, 5, "business", "bakery"))
     df.loc[0, "subcategory"] = np.nan
     cc = CellCounts.from_pois(df)
@@ -143,6 +158,7 @@ def test_subcategoria_vacia_o_nula_se_cuenta_como_cadena_vacia():
 
 
 def test_los_pois_fuera_de_la_rejilla_se_cuentan_aparte():
+    """Los POIs fuera de la rejilla o sin categoría no entran en la cuenta de celdas y los de fuera se cuentan aparte."""
     df = pd.concat([pois_en((5, 5, "school", "school")),
                     pd.DataFrame([{"category": "school", "subcategory": "school", "latitude": 40.0, "longitude": 14.5},
                                   {"category": None, "subcategory": "x", "latitude": 35.9, "longitude": 14.5}])],
@@ -152,18 +168,21 @@ def test_los_pois_fuera_de_la_rejilla_se_cuentan_aparte():
 
 
 def test_sin_pois_los_conteos_estan_vacios_pero_las_consultas_funcionan():
+    """Sin POIs los conteos quedan vacíos pero las consultas siguen funcionando."""
     cc = CellCounts.from_pois(pd.DataFrame())
     assert cc.pairs() == [] and cc.total_grid().sum() == 0 and cc.grid([Selector("x")]).shape == grid.SHAPE
     assert cc.count_in_area([Selector("x")]) == 0 and cc.to_frame().empty
 
 
 def test_exclude_quita_del_conteo_lo_que_cumple_el_objetivo():
+    """`exclude` quita del conteo lo que cumple el selector excluido."""
     cc = CellCounts.from_pois(pois_en((8, 8, "food_drink", "cafe"), (8, 8, "food_drink", "bar")))
     assert cc.grid([Selector("food_drink")], exclude=[selector("food_drink", "bar")])[8, 8] == 1
     assert cc.count_in_area([Selector("food_drink")], exclude=[Selector("food_drink")]) == 0
 
 
 def test_la_tabla_celda_por_subcategoria():
+    """La tabla celda por subcategoría tiene solo las celdas activas, con conteos enteros y una columna por subcategoría."""
     cc = CellCounts.from_pois(pois_en((10, 10, "food_drink", "cafe"), (10, 10, "food_drink", "cafe"), (30, 30, "school", "school")))
     activas = grid.active_mask(cc.total_grid(), anillo=0)
     tabla = cc.to_frame(activas)
