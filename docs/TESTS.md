@@ -237,42 +237,42 @@
 > `signal.signal` por un registro (para no tocar el manejador de Ctrl+C de pytest). La base es temporal y el
 > heartbeat se redirige (el real vive en logs/heartbeat y lo lee el HEALTHCHECK de Docker).
 
-- `test_rechaza_una_fuente_desconocida`
-- `test_la_fuente_elige_el_cliente`
-- `test_timescale_solo_se_activa_con_configuracion`
+- `test_rechaza_una_fuente_desconocida` — Una fuente de tráfico que no sea «ors» o «tomtom» lanza `ValueError`.
+- `test_la_fuente_elige_el_cliente` — La fuente elegida («tomtom» u «ors») decide qué cliente de tráfico se crea.
+- `test_timescale_solo_se_activa_con_configuracion` — Timescale solo se activa si hay configuración y no se pide desactivarlo expresamente.
 - `test_el_manejador_de_parada_solo_se_registra_si_se_pide` — Se escuchan Ctrl+C y SIGTERM (la de `docker stop`); antes solo SIGINT y Docker acababa matando con SIGKILL.
 - `test_una_senal_de_parada_baja_la_bandera_sin_salir_ni_cerrar_los_clientes` — Antes el manejador hacía sys.exit(0) y cerraba los clientes en cualquier punto del ciclo: se perdía el ciclo (si estaba pidiendo datos) o se guardaba a medias (CSV sí, SQLite no). Ahora solo pide parar.
-- `test_una_segunda_senal_sale_sin_esperar`
+- `test_una_segunda_senal_sale_sin_esperar` — La primera señal de parada solo pide parar; la segunda sale de inmediato con código 1.
 - `test_la_senal_durante_un_ciclo_deja_que_termine_y_lo_guarda` — Si llega la señal a mitad de un ciclo, el ciclo se completa y se guarda; después el bucle sale y cierra los clientes.
-- `test_close_no_falla_si_un_cliente_ya_estaba_cerrado_o_falla`
-- `test_run_continuous_cierra_los_clientes_aunque_el_ciclo_lance_una_excepcion`
-- `test_un_ciclo_guarda_todas_las_rutas_en_csv_y_sqlite`
-- `test_cada_ruta_lleva_el_clima_de_su_origen_y_destino_y_se_pide_una_vez_por_lugar`
+- `test_close_no_falla_si_un_cliente_ya_estaba_cerrado_o_falla` — `close()` no propaga el error si un cliente falla al cerrarse y cierra igualmente el resto.
+- `test_run_continuous_cierra_los_clientes_aunque_el_ciclo_lance_una_excepcion` — `run_continuous` cierra los clientes aunque un ciclo lance una excepción.
+- `test_un_ciclo_guarda_todas_las_rutas_en_csv_y_sqlite` — Un ciclo guarda una fila por ruta en el CSV y en SQLite, con un único instante y la fuente correcta, y escribe el heartbeat.
+- `test_cada_ruta_lleva_el_clima_de_su_origen_y_destino_y_se_pide_una_vez_por_lugar` — Cada ruta lleva el clima de su origen y destino, y el clima se pide una vez por lugar, no una vez por ruta.
 - `test_el_nivel_de_movilidad_cambia_justo_por_encima_de_20_minutos` — > 20 min es 'Alta demora'; 20 exactos todavía es normal (umbral estricto).
-- `test_si_falla_el_clima_de_un_lugar_la_ruta_se_guarda_sin_clima`
-- `test_si_falla_una_ruta_se_siguen_guardando_las_demas`
-- `test_si_fallan_todas_las_rutas_no_se_guarda_nada_ni_hay_latido`
-- `test_si_falla_el_guardado_devuelve_cero_y_no_hay_latido`
-- `test_con_timescale_activo_se_guarda_tambien_alli_con_su_configuracion`
-- `test_sin_timescale_no_se_intenta_guardar_alli`
-- `test_el_heartbeat_se_escribe_en_logs_del_proyecto_con_la_hora_del_ciclo`
-- `test_un_heartbeat_que_no_se_puede_escribir_no_rompe_el_ciclo`
-- `test_el_ciclo_alimenta_bronze_silver_y_gold_solo_con_sus_registros`
+- `test_si_falla_el_clima_de_un_lugar_la_ruta_se_guarda_sin_clima` — Si falla el clima de un lugar, las rutas de ese origen se guardan sin clima y las demás conservan el suyo.
+- `test_si_falla_una_ruta_se_siguen_guardando_las_demas` — Si falla una ruta, las demás se siguen guardando y el ciclo cuenta solo las que se guardaron.
+- `test_si_fallan_todas_las_rutas_no_se_guarda_nada_ni_hay_latido` — Si fallan todas las rutas no se guarda nada y no se escribe el heartbeat.
+- `test_si_falla_el_guardado_devuelve_cero_y_no_hay_latido` — Si falla el guardado en SQLite, el ciclo devuelve 0 y no escribe el heartbeat.
+- `test_con_timescale_activo_se_guarda_tambien_alli_con_su_configuracion` — Con Timescale activo, el ciclo guarda también allí todos los registros con su configuración.
+- `test_sin_timescale_no_se_intenta_guardar_alli` — Sin Timescale, el ciclo no intenta guardar allí.
+- `test_el_heartbeat_se_escribe_en_logs_del_proyecto_con_la_hora_del_ciclo` — El heartbeat se escribe en `logs/` del proyecto con la hora actual.
+- `test_un_heartbeat_que_no_se_puede_escribir_no_rompe_el_ciclo` — Un heartbeat que no se puede escribir no rompe el ciclo.
+- `test_el_ciclo_alimenta_bronze_silver_y_gold_solo_con_sus_registros` — Con el medallón activo, el ciclo alimenta Bronze, Silver y Gold con los registros del ciclo.
 - `test_cada_ciclo_procesa_solo_sus_propios_registros_en_silver` — El medallón es incremental: el 2º ciclo transforma únicamente las filas de Bronze de ese ciclo, no todo el histórico (sería lento y reprocesaría datos ya vistos).
-- `test_sin_medallon_no_se_crean_las_capas`
+- `test_sin_medallon_no_se_crean_las_capas` — Con el medallón desactivado no se crean las tablas de las capas.
 - `test_un_fallo_del_medallon_no_impide_guardar_ni_cambia_el_resultado` — Executive es una vista adicional: si Bronze revienta, CSV/SQLite ya están guardados y el ciclo cuenta.
-- `test_si_bronze_no_responde_success_se_omite_silver_y_gold`
-- `test_run_once_hace_un_solo_ciclo`
-- `test_run_continuous_espera_el_intervalo_segundo_a_segundo_y_se_detiene`
-- `test_run_continuous_termina_si_se_detiene_durante_el_ciclo`
-- `test_el_hibrido_registra_un_unico_manejador_y_guarda_los_intervalos`
-- `test_en_el_primer_tick_corren_las_dos_fuentes_y_despues_ninguna_hasta_su_intervalo`
-- `test_una_fuente_vencida_corre_y_la_otra_no`
-- `test_si_se_detiene_durante_un_ciclo_no_dispara_la_otra_fuente`
-- `test_el_hibrido_ante_una_senal_baja_la_bandera_sin_salir`
-- `test_el_hibrido_con_una_segunda_senal_sale_sin_esperar`
+- `test_si_bronze_no_responde_success_se_omite_silver_y_gold` — Si Bronze no responde «success», se omiten Silver y Gold pero el ciclo sigue contando sus registros.
+- `test_run_once_hace_un_solo_ciclo` — `run_once` hace un único ciclo.
+- `test_run_continuous_espera_el_intervalo_segundo_a_segundo_y_se_detiene` — `run_continuous` espera el intervalo de segundo en segundo, para al bajar la bandera y no hace más ciclos.
+- `test_run_continuous_termina_si_se_detiene_durante_el_ciclo` — Si se pide parar durante un ciclo, `run_continuous` termina sin esperar el intervalo.
+- `test_el_hibrido_registra_un_unico_manejador_y_guarda_los_intervalos` — El planificador híbrido registra SIGINT y SIGTERM con un único manejador y guarda los intervalos de ORS y TomTom.
+- `test_en_el_primer_tick_corren_las_dos_fuentes_y_despues_ninguna_hasta_su_intervalo` — En el primer tick corren las dos fuentes y después ninguna hasta que vence su intervalo.
+- `test_una_fuente_vencida_corre_y_la_otra_no` — Solo corre la fuente cuyo intervalo ya venció; su reloj se reinicia y el de la otra no cambia.
+- `test_si_se_detiene_durante_un_ciclo_no_dispara_la_otra_fuente` — Si se pide parar durante el ciclo de una fuente, no se dispara la otra.
+- `test_el_hibrido_ante_una_senal_baja_la_bandera_sin_salir` — Ante una señal de parada (parametrizada), el híbrido baja la bandera sin salir ni cerrar todavía.
+- `test_el_hibrido_con_una_segunda_senal_sale_sin_esperar` — En el híbrido, la segunda señal sale de inmediato con código 1.
 - `test_el_hibrido_termina_el_ciclo_en_curso_y_cierra_los_dos_collectors` — La señal llega durante el ciclo de ORS: ese ciclo termina, no se dispara el de TomTom y se cierran ambos.
-- `test_el_hibrido_cierra_los_collectors_aunque_el_ciclo_lance_una_excepcion`
+- `test_el_hibrido_cierra_los_collectors_aunque_el_ciclo_lance_una_excepcion` — El híbrido cierra los dos colectores aunque un ciclo lance una excepción.
 - `test_el_compose_da_tiempo_al_colector_para_terminar_su_ciclo` — `docker compose stop` manda SIGTERM y espera stop_grace_period antes del SIGKILL: el colector necesita más que los 10 s por defecto para terminar un ciclo largo (p95 ~15 s).
 - `test_un_error_en_un_ciclo_se_propaga_porque_collect_cycle_ya_captura_los_suyos` — Documenta el contrato: el hibrido NO captura excepciones de collect_cycle (DataCollector ya las maneja por dentro); si una se escapara, el bucle terminaría.
 
@@ -292,29 +292,29 @@
 > Se comprueba que abren sin excepciones con datos y con la base vacía, y que lo que muestran sale de los datos
 > (tarjetas, deltas, alertas, colores y estados de las rutas, capas de POIs). No se prueba el aspecto visual.
 
-- `test_executive_abre_con_datos_y_muestra_las_tarjetas`
-- `test_executive_tablas_de_mejores_y_peores_rutas`
-- `test_executive_sin_periodo_anterior_no_inventa_deltas`
-- `test_executive_con_periodo_anterior_calcula_el_delta_con_los_datos`
-- `test_delta` ×5
-- `test_executive_alertas_segun_los_umbrales` ×6
-- `test_executive_si_el_resumen_falla_muestra_el_error_y_no_sigue`
-- `test_executive_con_la_base_vacia_no_lanza_excepciones`
+- `test_executive_abre_con_datos_y_muestra_las_tarjetas` — Executive se abre con datos y muestra las cuatro tarjetas de resumen con los valores correctos.
+- `test_executive_tablas_de_mejores_y_peores_rutas` — Executive muestra las tablas de mejores y peores rutas con las columnas esperadas y cada ruta en la tabla que le toca.
+- `test_executive_sin_periodo_anterior_no_inventa_deltas` — Sin periodo anterior, Executive no muestra variación en las tarjetas.
+- `test_executive_con_periodo_anterior_calcula_el_delta_con_los_datos` — Con periodo anterior, Executive calcula la variación con los datos reales y pinta de rojo un aumento del tiempo de viaje.
+- `test_delta` ×5 — `_delta` da el texto de variación esperado para cada par de valores y formato (parametrizado).
+- `test_executive_alertas_segun_los_umbrales` ×6 — Executive muestra las alertas que corresponden a los umbrales de cada resumen (parametrizado) y no las demás.
+- `test_executive_si_el_resumen_falla_muestra_el_error_y_no_sigue` — Si el resumen falla, Executive muestra el error y no dibuja tarjetas.
+- `test_executive_con_la_base_vacia_no_lanza_excepciones` — Executive se abre sin excepciones con una base vacía.
 - `test_executive_con_la_base_vacia_no_muestra_un_0_por_ciento_ni_una_alerta_falsa` — Sin mediciones la fiabilidad no es 0 %: es desconocida. Antes salía «0.0%» y la alerta «Low system reliability».
 - `test_executive_con_datos_sigue_mostrando_las_cifras_y_las_alertas` — El aviso de «sin mediciones» no aparece cuando sí las hay.
-- `test_hay_datos_solo_si_el_resumen_tiene_mediciones` ×3
-- `test_color_segun_el_retraso`
-- `test_el_mapa_dibuja_una_traza_por_ruta_mas_las_ubicaciones_y_colorea_por_retraso`
-- `test_el_mapa_ignora_rutas_con_ubicaciones_desconocidas`
-- `test_maps_abre_con_datos_y_la_tabla_de_estado_cubre_todas_las_rutas`
+- `test_hay_datos_solo_si_el_resumen_tiene_mediciones` ×3 — `_hay_datos` es verdadero solo si el resumen tiene mediciones (parametrizado).
+- `test_color_segun_el_retraso` — El color de la ruta en el mapa depende del retraso (parametrizado).
+- `test_el_mapa_dibuja_una_traza_por_ruta_mas_las_ubicaciones_y_colorea_por_retraso` — El mapa dibuja una línea por ruta más la capa de ubicaciones, y colorea cada ruta según su retraso (gris si no tiene dato).
+- `test_el_mapa_ignora_rutas_con_ubicaciones_desconocidas` — El mapa ignora las rutas con ubicaciones que no existen.
+- `test_maps_abre_con_datos_y_la_tabla_de_estado_cubre_todas_las_rutas` — Maps se abre con datos y su tabla de estado cubre todas las rutas con el estado correcto: flujo libre, moderado o denso.
 - `test_los_limites_de_los_estados_de_la_tabla_son_1_y_4_minutos_de_retraso` — <=1 libre, <=4 moderado, >4 denso (los mismos umbrales que el color del mapa).
-- `test_maps_con_la_base_vacia_marca_todas_las_rutas_sin_dato`
-- `test_maps_sin_rutas_seleccionadas_avisa`
-- `test_maps_sin_pois_explica_como_cargarlos`
-- `test_maps_con_pois_de_overpass_dibuja_la_capa_y_cuenta_los_elementos`
-- `test_las_categorias_de_overpass_por_defecto_excluyen_las_masivas`
+- `test_maps_con_la_base_vacia_marca_todas_las_rutas_sin_dato` — Con una base vacía, Maps marca todas las rutas como «Sin dato».
+- `test_maps_sin_rutas_seleccionadas_avisa` — Si no se selecciona ninguna ruta, Maps avisa de que hay que elegir al menos una.
+- `test_maps_sin_pois_explica_como_cargarlos` — Sin POIs cargados, Maps explica cómo cargar los de Overpass y los de Foursquare.
+- `test_maps_con_pois_de_overpass_dibuja_la_capa_y_cuenta_los_elementos` — Con POIs de Overpass, Maps dibuja la capa e indica cuántos elementos muestra.
+- `test_las_categorias_de_overpass_por_defecto_excluyen_las_masivas` — Las categorías de Overpass seleccionadas por defecto excluyen las más numerosas.
 - `test_la_capa_de_pois_usa_la_fuente_indicada_y_no_mezcla_las_dos` — school/mall existen en los dos catálogos: elegir una fuente no debe dibujar los de la otra.
-- `test_la_capa_de_pois_no_hace_nada_sin_categorias_o_con_fuente_invalida`
+- `test_la_capa_de_pois_no_hace_nada_sin_categorias_o_con_fuente_invalida` — La capa de POIs no dibuja nada si no hay categorías o si la fuente no es válida.
 
 ## `tests/test_data_profile.py`
 
@@ -491,26 +491,26 @@
 
 > Pruebas del pipeline medallion (Bronze -> Silver -> Gold).
 
-- `test_bronze_inserta_las_filas_validas`
+- `test_bronze_inserta_las_filas_validas` — Bronze inserta todas las filas válidas y devuelve cuántas.
 - `test_bronze_es_idempotente_reingerir_no_duplica` — Regresión: Bronze no tenía restricción UNIQUE y reingerir las mismas filas (p. ej. al correr run_medallion_pipeline dos veces) las duplicaba.
-- `test_bronze_ingiere_solo_lo_nuevo`
-- `test_bronze_rechaza_datos_sin_columnas_requeridas`
-- `test_bronze_descarta_duplicados_dentro_del_lote`
-- `test_bronze_descarta_tiempos_fuera_de_rango_y_nulos`
+- `test_bronze_ingiere_solo_lo_nuevo` — Bronze ingiere solo las filas nuevas: las que ya existen no se vuelven a insertar.
+- `test_bronze_rechaza_datos_sin_columnas_requeridas` — Bronze rechaza un lote al que le falta una columna requerida.
+- `test_bronze_descarta_duplicados_dentro_del_lote` — Bronze descarta los duplicados dentro del mismo lote.
+- `test_bronze_descarta_tiempos_fuera_de_rango_y_nulos` — Bronze descarta las filas con tiempo de viaje fuera de rango o nulo.
 - `test_bronze_guarda_timestamps_iso_con_t` — Regresión: pandas.to_sql guardaba un espacio en vez de 'T' y el collector nunca encontraba las filas de Bronze para pasárselas a Silver.
-- `test_silver_transforma_y_agrega_variables_temporales`
+- `test_silver_transforma_y_agrega_variables_temporales` — Silver transforma las filas de Bronze y calcula el retraso, el nivel de congestión y las variables temporales como la hora y el fin de semana.
 - `test_silver_sin_tiempo_sin_trafico_deja_el_retraso_desconocido` — ORS no reporta tiempo sin tráfico: el retraso no se inventa.
-- `test_silver_no_duplica_al_transformar_dos_veces`
+- `test_silver_no_duplica_al_transformar_dos_veces` — Transformar dos veces el mismo lote en Silver no duplica filas.
 - `test_silver_perfil_de_ruta_calcula_la_desviacion_sin_stddev_de_sql` — Regresión: get_route_profile usaba STDDEV(), que SQLite no trae.
-- `test_silver_agregacion_horaria`
-- `test_gold_calcula_kpis_por_ruta`
+- `test_silver_agregacion_horaria` — Silver agrega los datos por hora y crea un registro por cada grupo.
+- `test_gold_calcula_kpis_por_ruta` — Gold calcula los KPI de cada ruta del día: promedio, número de muestras y fiabilidad entre 0 y 100.
 - `test_gold_recalcular_el_mismo_dia_no_falla_ni_duplica` — Regresión: el INSERT plano chocaba con UNIQUE(date, origin, destination) la segunda vez que se calculaban las KPIs de un mismo día.
-- `test_gold_dia_sin_datos`
-- `test_gold_ranking_ordena_por_fiabilidad`
-- `test_gold_metricas_de_periodo`
+- `test_gold_dia_sin_datos` — Gold devuelve «no_data» para un día sin datos.
+- `test_gold_ranking_ordena_por_fiabilidad` — El ranking de Gold ordena las rutas por fiabilidad y pone primero la más estable.
+- `test_gold_metricas_de_periodo` — Las métricas de periodo de Gold dan promedio y fiabilidad con datos, y valores vacíos con cero filas si el periodo no tiene.
 - `test_gold_resumen_ejecutivo_en_base_vacia_devuelve_ceros_no_error` — Regresión: AVG()/SUM() sin filas dan NULL y float(NaN) reventaba, así que en un clon limpio (sin histórico) Executive mostraba "Error loading summary data".
-- `test_gold_resumen_ejecutivo_con_datos`
-- `test_pipeline_completo_es_idempotente`
+- `test_gold_resumen_ejecutivo_con_datos` — El resumen ejecutivo de Gold cuenta rutas y mediciones y da el tiempo de viaje promedio del sistema.
+- `test_pipeline_completo_es_idempotente` — El pipeline completo (Bronze, Silver y Gold) es idempotente: ejecutarlo de nuevo no cambia los recuentos de cada capa.
 
 ## `tests/test_migrations.py`
 
@@ -518,24 +518,24 @@
 >
 > Sin Postgres real: `psycopg2` se sustituye por un módulo falso que guarda las filas que se habrían insertado.
 
-- `test_migra_el_csv_a_sqlite`
-- `test_dry_run_no_crea_la_base`
-- `test_descarta_filas_sin_campos_obligatorios`
-- `test_data_source_vacio_o_ausente_pasa_a_unknown`
-- `test_un_valor_numerico_ilegible_queda_nulo_sin_romper_la_migracion`
-- `test_csv_inexistente_vacio_o_sin_columnas_obligatorias_devuelve_cero`
-- `test_las_lineas_corruptas_del_csv_se_saltan`
+- `test_migra_el_csv_a_sqlite` — Migra las filas del CSV a SQLite conservando la fuente, el tiempo de viaje, el clima y los nulos.
+- `test_dry_run_no_crea_la_base` — Con `dry_run`, cuenta las filas pero no crea la base de datos.
+- `test_descarta_filas_sin_campos_obligatorios` — Se descartan las filas a las que les falta el timestamp o el origen.
+- `test_data_source_vacio_o_ausente_pasa_a_unknown` — Una fuente de datos vacía o ausente en el CSV se guarda como «unknown».
+- `test_un_valor_numerico_ilegible_queda_nulo_sin_romper_la_migracion` — Un valor numérico ilegible queda como nulo y la fila se migra igualmente.
+- `test_csv_inexistente_vacio_o_sin_columnas_obligatorias_devuelve_cero` — Un CSV inexistente, vacío o sin las columnas obligatorias devuelve 0 filas y no crea la base.
+- `test_las_lineas_corruptas_del_csv_se_saltan` — Las líneas corruptas del CSV se saltan y se migran las demás.
 - `test_migrar_dos_veces_no_duplica_filas` — El índice único de Bronze/route_measurements hace idempotente la migración.
-- `test_cli_dry_run_no_pide_confirmacion`
-- `test_cli_cancelada_no_migra`
-- `test_cli_confirmada_o_con_skip_migra_y_usa_las_rutas_del_proyecto`
-- `test_cli_devuelve_error_si_no_se_importa_nada_o_falla`
-- `test_backfill_inserta_las_filas_con_el_orden_de_columnas_de_traffic_trips`
+- `test_cli_dry_run_no_pide_confirmacion` — La línea de comandos con `--dry-run` no pide confirmación y migra en modo ensayo.
+- `test_cli_cancelada_no_migra` — Si el usuario cancela la confirmación, no se migra nada.
+- `test_cli_confirmada_o_con_skip_migra_y_usa_las_rutas_del_proyecto` — Con confirmación o `--skip-confirmation` se migra usando las rutas del CSV y de la base del proyecto.
+- `test_cli_devuelve_error_si_no_se_importa_nada_o_falla` — La línea de comandos devuelve código de error si no se importa ninguna fila o la migración falla.
+- `test_backfill_inserta_las_filas_con_el_orden_de_columnas_de_traffic_trips` — El backfill a Timescale inserta cada fila de `traffic_trips` con el orden de columnas correcto y hace commit.
 - `test_backfill_celdas_vacias_van_como_null_y_no_como_nan` — Regresión: una celda vacía llegaba como NaN (float) incluso a columnas de texto (origin_weather), que Postgres rechaza; con ello fallaba y se revertía todo el backfill. Ahora es None (NULL), y data_source vacío pasa a 'unknown' como en la migración a SQLite.
-- `test_backfill_con_error_hace_rollback_y_devuelve_cero`
-- `test_backfill_csv_inexistente_o_vacio_no_se_conecta`
-- `test_backfill_sin_psycopg2_instalado_devuelve_cero`
-- `test_backfill_main_devuelve_el_codigo_segun_las_filas`
+- `test_backfill_con_error_hace_rollback_y_devuelve_cero` — Si el backfill falla, hace rollback, cierra la conexión y devuelve 0.
+- `test_backfill_csv_inexistente_o_vacio_no_se_conecta` — Con un CSV inexistente o vacío, el backfill no abre ninguna conexión.
+- `test_backfill_sin_psycopg2_instalado_devuelve_cero` — Si `psycopg2` no está instalado, el backfill devuelve 0 en vez de fallar.
+- `test_backfill_main_devuelve_el_codigo_segun_las_filas` — `main` del backfill devuelve 0 si migró filas y 1 si no migró ninguna.
 
 ## `tests/test_ml_context.py`
 
@@ -842,20 +842,20 @@
 >
 > Todo ocurre sobre bases temporales: ninguna prueba toca data/mobility.db.
 
-- `test_is_legacy_y_normalize`
-- `test_plan_clasifica_cada_fila`
-- `test_misma_hora_en_otra_ruta_no_es_gemela`
-- `test_base_sin_filas_antiguas_no_necesita_cambios`
-- `test_el_ensayo_no_modifica_nada_ni_crea_archivos`
-- `test_main_con_base_inexistente_o_sin_tabla`
-- `test_aplicar_borra_duplicados_renombra_el_resto_y_deja_un_respaldo`
-- `test_aplicar_es_idempotente`
+- `test_is_legacy_y_normalize` — `is_legacy` reconoce el formato antiguo de timestamp, `normalize` lo pasa a ISO y normalizar dos veces da lo mismo.
+- `test_plan_clasifica_cada_fila` — El plan clasifica cada fila: gemelas de otra fila ISO, duplicadas entre antiguas, a renombrar y las que no se tocan.
+- `test_misma_hora_en_otra_ruta_no_es_gemela` — Una fila con la misma hora pero en otra ruta no es gemela y solo se renombra.
+- `test_base_sin_filas_antiguas_no_necesita_cambios` — Una base sin filas en formato antiguo no necesita cambios.
+- `test_el_ensayo_no_modifica_nada_ni_crea_archivos` — El ensayo (sin `--apply`) no modifica la base ni crea archivos, y lo dice en su salida.
+- `test_main_con_base_inexistente_o_sin_tabla` — Con una base inexistente devuelve código 2; con una base sin tabla indica que no hay nada que normalizar.
+- `test_aplicar_borra_duplicados_renombra_el_resto_y_deja_un_respaldo` — `--apply` borra las gemelas y duplicadas, renombra el resto al formato ISO y deja un respaldo de la base.
+- `test_aplicar_es_idempotente` — Aplicar dos veces da el mismo resultado, la segunda dice que no hay nada que hacer y no crea otro respaldo.
 - `test_antes_de_correr_el_pipeline_solo_renombra` — Caso de la base real hoy: filas antiguas sin gemela ISO todavía.
 - `test_despues_de_normalizar_reingerir_la_misma_medicion_no_duplica` — El objetivo del script: que correr el pipeline no reinserte las filas antiguas.
-- `test_el_indice_unico_sigue_vigente`
-- `test_no_toca_otras_tablas`
+- `test_el_indice_unico_sigue_vigente` — Tras normalizar, el índice único de Bronze sigue vigente y rechaza una fila igual a una ya normalizada.
+- `test_no_toca_otras_tablas` — La normalización no modifica otras tablas, como `route_measurements`.
 - `test_si_la_base_esta_en_uso_aborta_sin_cambiar_nada` — Otro proceso (el collector) con una escritura abierta: no se aplica nada.
-- `test_si_la_verificacion_falla_se_revierte_todo`
+- `test_si_la_verificacion_falla_se_revierte_todo` — Si la verificación final falla, se revierte todo y la base queda como estaba.
 - `test_el_respaldo_se_puede_omitir_solo_por_codigo` — La línea de comandos siempre respalda; `backup=False` existe solo para pruebas.
 
 ## `tests/test_operations_status.py`
@@ -867,17 +867,17 @@
 > NULL), así que cualquier ruta cuya última medición fuera de ORS aparecía como
 > "🟢 Free Flow" sin ningún dato detrás.
 
-- `test_ultima_medicion_de_cada_ruta_en_una_consulta`
-- `test_no_trae_la_polilinea`
-- `test_require_column_trae_la_ultima_fila_que_tiene_ese_dato`
-- `test_require_column_omite_las_rutas_que_nunca_tuvieron_ese_dato`
-- `test_require_column_rechaza_columnas_inexistentes`
-- `test_base_vacia`
-- `test_ruta_cuya_ultima_medicion_es_de_ors_usa_la_lectura_de_tomtom`
+- `test_ultima_medicion_de_cada_ruta_en_una_consulta` — `get_latest_per_route` devuelve la medición más reciente de cada ruta en una sola consulta.
+- `test_no_trae_la_polilinea` — `get_latest_per_route` no trae la polilínea ni columnas auxiliares.
+- `test_require_column_trae_la_ultima_fila_que_tiene_ese_dato` — Con `require_column`, trae la última fila que sí tiene ese dato, aunque haya otra más reciente sin él.
+- `test_require_column_omite_las_rutas_que_nunca_tuvieron_ese_dato` — Con `require_column`, se omiten las rutas que nunca tuvieron ese dato.
+- `test_require_column_rechaza_columnas_inexistentes` — `require_column` rechaza con `ValueError` una columna que no existe o con inyección SQL.
+- `test_base_vacia` — Con una base vacía, `get_latest_per_route` devuelve una tabla vacía.
+- `test_ruta_cuya_ultima_medicion_es_de_ors_usa_la_lectura_de_tomtom` — Si la última medición de una ruta es de ORS, el estado y el retraso salen de la última lectura de TomTom, no de un 0 inventado.
 - `test_ruta_sin_ninguna_lectura_de_trafico_nunca_se_pinta_de_verde` — El bug: la última fila es de ORS (delay NULL) -> antes '🟢 Free Flow'.
-- `test_lectura_de_trafico_desactualizada_se_avisa`
-- `test_umbrales_de_estado` ×6
-- `test_una_fila_por_ruta_con_las_columnas_esperadas`
+- `test_lectura_de_trafico_desactualizada_se_avisa` — Si la última lectura de tráfico es demasiado antigua, el estado indica «Lectura desactualizada».
+- `test_umbrales_de_estado` ×6 — El estado de la ruta (libre, moderado o denso) sigue los umbrales de retraso (parametrizado).
+- `test_una_fila_por_ruta_con_las_columnas_esperadas` — La tabla de estado tiene una fila por ruta y las columnas esperadas.
 
 ## `tests/test_ors_null_fields.py`
 

@@ -93,6 +93,7 @@ def _metricas(at):
 # ---------------------------------------------------------------------------
 
 def test_executive_abre_con_datos_y_muestra_las_tarjetas(base):
+    """Executive se abre con datos y muestra las cuatro tarjetas de resumen con los valores correctos."""
     _, ruta = base
     _poblar(ruta, dias_atras=[0, 1, 2])
     at = _abrir(APP_EXEC)
@@ -105,6 +106,7 @@ def test_executive_abre_con_datos_y_muestra_las_tarjetas(base):
 
 
 def test_executive_tablas_de_mejores_y_peores_rutas(base):
+    """Executive muestra las tablas de mejores y peores rutas con las columnas esperadas y cada ruta en la tabla que le toca."""
     _, ruta = base
     _poblar(ruta, [0, 1], rutas=(("Msida", "Gzira"),), minutos=8.0)
     _poblar(ruta, [0, 1], rutas=(("Msida", "Sliema"),), minutos=25.0)
@@ -118,6 +120,7 @@ def test_executive_tablas_de_mejores_y_peores_rutas(base):
 
 
 def test_executive_sin_periodo_anterior_no_inventa_deltas(base):
+    """Sin periodo anterior, Executive no muestra variación en las tarjetas."""
     _, ruta = base
     _poblar(ruta, [0, 1, 2])                                   # solo periodo actual
     m = _metricas(_abrir(APP_EXEC))
@@ -125,6 +128,7 @@ def test_executive_sin_periodo_anterior_no_inventa_deltas(base):
 
 
 def test_executive_con_periodo_anterior_calcula_el_delta_con_los_datos(base):
+    """Con periodo anterior, Executive calcula la variación con los datos reales y pinta de rojo un aumento del tiempo de viaje."""
     _, ruta = base
     _poblar(ruta, [0, 1], minutos=20.0)                        # periodo actual: más lento
     _poblar(ruta, [31, 32], minutos=10.0)                      # periodo anterior (días 30-59)
@@ -141,6 +145,7 @@ def test_executive_con_periodo_anterior_calcula_el_delta_con_los_datos(base):
     (12.0, 10.0, "{:+.1f} min", "+2.0 min"), (8.0, 10.0, "{:+.1f} min", "-2.0 min"),
     (None, 10.0, "{:+.1f}", None), (10.0, None, "{:+.1f}", None), (5.0, 5.0, "{:+.1f}", "+0.0")])
 def test_delta(actual, anterior, formato, esperado):
+    """`_delta` da el texto de variación esperado para cada par de valores y formato (parametrizado)."""
     assert ex._delta(actual, anterior, formato) == esperado
 
 
@@ -160,6 +165,7 @@ def _resumen(**cambios):
     ({"system_avg_travel_time": 40.0, "system_reliability": 10.0}, ["High average", "Low system"], ["All systems"]),
 ])
 def test_executive_alertas_segun_los_umbrales(base, monkeypatch, cambios, esperados, ausentes):
+    """Executive muestra las alertas que corresponden a los umbrales de cada resumen (parametrizado) y no las demás."""
     monkeypatch.setattr(ex, "_fetch_executive_summary", lambda gold, days: _resumen(**cambios))
     at = _abrir(APP_EXEC)
     assert not at.exception, [e.value for e in at.exception]
@@ -168,6 +174,7 @@ def test_executive_alertas_segun_los_umbrales(base, monkeypatch, cambios, espera
 
 
 def test_executive_si_el_resumen_falla_muestra_el_error_y_no_sigue(base, monkeypatch):
+    """Si el resumen falla, Executive muestra el error y no dibuja tarjetas."""
     monkeypatch.setattr(ex, "_fetch_executive_summary", lambda gold, days: {"error": "tabla inexistente"})
     at = _abrir(APP_EXEC)
     assert not at.exception and [e.value for e in at.error] == ["Error loading summary data"]
@@ -175,6 +182,7 @@ def test_executive_si_el_resumen_falla_muestra_el_error_y_no_sigue(base, monkeyp
 
 
 def test_executive_con_la_base_vacia_no_lanza_excepciones(base):
+    """Executive se abre sin excepciones con una base vacía."""
     at = _abrir(APP_EXEC)
     assert not at.exception, [e.value for e in at.exception]
 
@@ -205,6 +213,7 @@ def test_executive_con_datos_sigue_mostrando_las_cifras_y_las_alertas(base):
 @pytest.mark.parametrize("resumen, esperado", [({}, False), ({"total_measurements": 0}, False),
                                                ({"total_measurements": 1}, True)])
 def test_hay_datos_solo_si_el_resumen_tiene_mediciones(resumen, esperado):
+    """`_hay_datos` es verdadero solo si el resumen tiene mediciones (parametrizado)."""
     assert ex._hay_datos(resumen) is esperado
 
 
@@ -215,10 +224,12 @@ def test_hay_datos_solo_si_el_resumen_tiene_mediciones(resumen, esperado):
 @pytest.mark.parametrize("retraso, color", [(None, "#95a5a6"), (float("nan"), "#95a5a6"), (0.0, "#2ecc71"),
                                             (1.0, "#2ecc71"), (1.01, "#f1c40f"), (4.0, "#f1c40f"), (4.01, "#e74c3c")])
 def test_color_segun_el_retraso(retraso, color):
+    """El color de la ruta en el mapa depende del retraso (parametrizado)."""
     assert mp._delay_color(retraso) == color
 
 
 def test_el_mapa_dibuja_una_traza_por_ruta_mas_las_ubicaciones_y_colorea_por_retraso(base):
+    """El mapa dibuja una línea por ruta más la capa de ubicaciones, y colorea cada ruta según su retraso (gris si no tiene dato)."""
     db, _ = base
     ahora = datetime.now(timezone.utc)
     db.save_records_to_sqlite([_registro(ahora - timedelta(minutes=5), "Msida", "Gzira", 10.0, 0.5),
@@ -232,12 +243,14 @@ def test_el_mapa_dibuja_una_traza_por_ruta_mas_las_ubicaciones_y_colorea_por_ret
 
 
 def test_el_mapa_ignora_rutas_con_ubicaciones_desconocidas(base):
+    """El mapa ignora las rutas con ubicaciones que no existen."""
     db, _ = base
     fig = mp.render_route_map(db, [("Msida", "Gzira"), ("Atlantis", "Gzira")])
     assert len([t for t in fig.data if t.mode == "lines"]) == 1
 
 
 def test_maps_abre_con_datos_y_la_tabla_de_estado_cubre_todas_las_rutas(base):
+    """Maps se abre con datos y su tabla de estado cubre todas las rutas con el estado correcto: flujo libre, moderado o denso."""
     db, _ = base
     ahora = datetime.now(timezone.utc)
     db.save_records_to_sqlite([
@@ -270,12 +283,14 @@ def test_los_limites_de_los_estados_de_la_tabla_son_1_y_4_minutos_de_retraso(bas
 
 
 def test_maps_con_la_base_vacia_marca_todas_las_rutas_sin_dato(base):
+    """Con una base vacía, Maps marca todas las rutas como «Sin dato»."""
     at = _abrir(APP_MAPS)
     assert not at.exception, [e.value for e in at.exception]
     assert (at.dataframe[0].value["Estado"] == "⚪ Sin dato").all()
 
 
 def test_maps_sin_rutas_seleccionadas_avisa(base):
+    """Si no se selecciona ninguna ruta, Maps avisa de que hay que elegir al menos una."""
     at = _abrir(APP_MAPS)
     at.multiselect[0].set_value([]).run()
     assert not at.exception, [e.value for e in at.exception]
@@ -288,6 +303,7 @@ def _poi_overpass(i, categoria="school"):
 
 
 def test_maps_sin_pois_explica_como_cargarlos(base):
+    """Sin POIs cargados, Maps explica cómo cargar los de Overpass y los de Foursquare."""
     at = _abrir(APP_MAPS)
     at.radio[0].set_value("Overpass (OSM)").run()
     assert any("poi_extraction" in i.value for i in at.info)
@@ -296,6 +312,7 @@ def test_maps_sin_pois_explica_como_cargarlos(base):
 
 
 def test_maps_con_pois_de_overpass_dibuja_la_capa_y_cuenta_los_elementos(base):
+    """Con POIs de Overpass, Maps dibuja la capa e indica cuántos elementos muestra."""
     db, _ = base
     db.save_pois([_poi_overpass(1), _poi_overpass(2), _poi_overpass(3, "hospital")])
     at = _abrir(APP_MAPS)
@@ -305,6 +322,7 @@ def test_maps_con_pois_de_overpass_dibuja_la_capa_y_cuenta_los_elementos(base):
 
 
 def test_las_categorias_de_overpass_por_defecto_excluyen_las_masivas(base):
+    """Las categorías de Overpass seleccionadas por defecto excluyen las más numerosas."""
     at = _abrir(APP_MAPS)
     at.radio[0].set_value("Overpass (OSM)").run()
     seleccion = at.multiselect[1].value
@@ -326,6 +344,7 @@ def test_la_capa_de_pois_usa_la_fuente_indicada_y_no_mezcla_las_dos(base):
 
 
 def test_la_capa_de_pois_no_hace_nada_sin_categorias_o_con_fuente_invalida(base):
+    """La capa de POIs no dibuja nada si no hay categorías o si la fuente no es válida."""
     db, _ = base
     import plotly.graph_objects as go
     fig = go.Figure()
