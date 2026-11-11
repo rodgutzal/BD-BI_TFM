@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**42 archivos · 664 funciones de test · 751 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**42 archivos · 668 funciones de test · 755 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -48,7 +48,7 @@
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 21 | 21+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 25 | 25+ |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
 | [`tests/test_travel_time_predictor.py`](#teststest_travel_time_predictorpy) | 25 | 28 |
@@ -953,6 +953,10 @@
 - `test_siempre_indica_el_perfil_usado` — Con el perfil por defecto lo dice; no aparece el aviso de perfil personalizado.
 - `test_las_capas_son_las_tres_lentes_y_la_brecha_solo_donde_existe` — food_drink ofrece la brecha como capa exploratoria; hospital no la tiene.
 - `test_la_lista_de_celdas_empieza_por_las_de_mercado_alto_y_competencia_baja` — La primera opción lleva la estrella del filtro de oportunidad, y la nota dice cuántas celdas son.
+- `test_el_porcentaje_de_candidatas_no_se_redondea_a_cero` — 5 de 1139 es 0,4 %: con cero decimales se leía «0%», que parece «ninguna celda». Se muestra con un decimal.
+- `test_el_mapa_rotula_la_celda_elegida` — El punto azul de la celda elegida lleva su identificador, para que se sepa cuál es sin abrir la ficha.
+- `test_el_mapa_sin_celda_elegida_no_dibuja_el_marcador` — Si no hay celda elegida no se añade ningún marcador (ni rótulo) extra.
+- `test_los_puntos_del_mapa_son_legibles` — Los puntos de celda no son diminutos ni casi transparentes (se confundían con las etiquetas del mapa base).
 - `test_la_ficha_muestra_las_tres_lentes_y_la_confianza` — La ficha de la celda elegida trae competencia, mercado, proveedores y la confianza (que no es una probabilidad).
 - `test_el_mapa_y_la_ficha_usan_el_perfil_elegido` — Una celda con competencia indirecta la pierde al quitar ese tipo de competencia: las lentes se recalculan con el perfil del usuario, no con el de por defecto.
 - `test_la_brecha_de_la_ficha_se_etiqueta_como_exploratoria_y_no_validada` — Donde hay brecha, la ficha la muestra con la advertencia de que no está validada y el intervalo no es de confianza.
