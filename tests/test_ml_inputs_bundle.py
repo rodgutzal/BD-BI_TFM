@@ -3,6 +3,7 @@ exportador tools/export_ml_inputs.py y que las herramientas de la fase 0 y 1 ace
 
 import hashlib
 import importlib.util
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -423,8 +424,10 @@ def test_requirements_fija_las_librerias_cientificas():
     lineas = [
         l.split("#")[0].strip().lower() for l in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
     ]
+    # nombre del paquete = lo que hay antes del operador, para que `scipy-stubs` no cuente como `scipy`
+    nombres = [(re.split(r"[=<>!~\[ ]", l, maxsplit=1)[0], l) for l in lineas if l]
     for paquete in ("scikit-learn", "scipy", "statsmodels", "matplotlib"):
-        fijas = [l for l in lineas if l.startswith(paquete)]
+        fijas = [l for nombre, l in nombres if nombre == paquete]
         assert len(fijas) == 1 and fijas[0].startswith(
             paquete + "=="
         ), f"{paquete} no está fijado con == en requirements.txt"
