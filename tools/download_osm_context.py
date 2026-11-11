@@ -38,14 +38,30 @@ ALOJAMIENTO = "hotel|hostel|guest_house|apartment|motel|resort|chalet|camp_site"
 # Cada tema: lista de cláusulas Overpass con {bbox}. `franjas`: en cuántas franjas de latitud se parte el área.
 TEMAS: Dict[str, dict] = {
     "edificios": {"franjas": FRANJAS_EDIFICIOS, "clausulas": ['way["building"]({bbox});']},
-    "alojamiento": {"franjas": 1, "clausulas": [f'node["tourism"~"^({ALOJAMIENTO})$"]({{bbox}});',
-                                                f'way["tourism"~"^({ALOJAMIENTO})$"]({{bbox}});']},
-    "transporte": {"franjas": 1, "clausulas": ['node["highway"="bus_stop"]({bbox});',
-                                               'node["public_transport"~"^(platform|stop_position|station)$"]({bbox});',
-                                               'nwr["amenity"="ferry_terminal"]({bbox});',
-                                               'node["railway"~"^(station|halt|tram_stop)$"]({bbox});']},
-    "industria": {"franjas": 1, "clausulas": ['way["landuse"="industrial"]({bbox});', 'nwr["shop"="wholesale"]({bbox});',
-                                              'nwr["industrial"]({bbox});']},
+    "alojamiento": {
+        "franjas": 1,
+        "clausulas": [
+            f'node["tourism"~"^({ALOJAMIENTO})$"]({{bbox}});',
+            f'way["tourism"~"^({ALOJAMIENTO})$"]({{bbox}});',
+        ],
+    },
+    "transporte": {
+        "franjas": 1,
+        "clausulas": [
+            'node["highway"="bus_stop"]({bbox});',
+            'node["public_transport"~"^(platform|stop_position|station)$"]({bbox});',
+            'nwr["amenity"="ferry_terminal"]({bbox});',
+            'node["railway"~"^(station|halt|tram_stop)$"]({bbox});',
+        ],
+    },
+    "industria": {
+        "franjas": 1,
+        "clausulas": [
+            'way["landuse"="industrial"]({bbox});',
+            'nwr["shop"="wholesale"]({bbox});',
+            'nwr["industrial"]({bbox});',
+        ],
+    },
     "suelo_residencial": {"franjas": 1, "clausulas": ['way["landuse"="residential"]({bbox});']},
 }
 
@@ -56,8 +72,10 @@ def bbox_franjas(n: int) -> List[Tuple[float, float, float, float]]:
     if n < 1:
         raise ValueError("n debe ser >= 1")
     alto = (grid.NORTH - grid.SOUTH) / n
-    return [(grid.SOUTH + i * alto, grid.WEST, grid.SOUTH + (i + 1) * alto if i < n - 1 else grid.NORTH, grid.EAST)
-            for i in range(n)]
+    return [
+        (grid.SOUTH + i * alto, grid.WEST, grid.SOUTH + (i + 1) * alto if i < n - 1 else grid.NORTH, grid.EAST)
+        for i in range(n)
+    ]
 
 
 def construir_consulta(clausulas: List[str], bbox: Tuple[float, float, float, float]) -> str:
@@ -84,7 +102,7 @@ def pedir(cliente, consulta: str) -> dict:
             r = cliente.session.post(endpoint, data={"data": consulta}, timeout=TIMEOUT_HTTP_S)
             r.raise_for_status()
             return r.json()
-        except Exception as e:                       # red, HTTP o JSON inválido: se prueba el siguiente espejo
+        except Exception as e:  # red, HTTP o JSON inválido: se prueba el siguiente espejo
             ultimo = e
     raise RuntimeError(f"Todos los espejos de Overpass fallaron. Último error: {ultimo}")
 
@@ -101,8 +119,9 @@ def descargar(cliente, out_dir: Path, temas: List[str], pausa_s: float = PAUSA_S
         try:
             datos = pedir(cliente, consulta)
             elementos = datos.get("elements", [])
-            (out_dir / f"{tema}_{i}.json").write_text(json.dumps({"tema": tema, "trozo": i, "elements": elementos}),
-                                                      encoding="utf-8")
+            (out_dir / f"{tema}_{i}.json").write_text(
+                json.dumps({"tema": tema, "trozo": i, "elements": elementos}), encoding="utf-8"
+            )
             resumen[tema]["elementos"] += len(elementos)
             resumen[tema]["trozos_ok"] += 1
             log(f"   {tema} [{i}]: {len(elementos):6} elementos ({time.perf_counter() - t0:.0f} s)")
@@ -123,7 +142,9 @@ def main(argv: Optional[list] = None) -> int:
     args = ap.parse_args(argv)
 
     plan = consultas(args.themes)
-    print(f"Área: lat {grid.SOUTH}-{grid.NORTH}, lon {grid.WEST}-{grid.EAST} | trozos a pedir: {len(plan)} | salida: {args.out}")
+    print(
+        f"Área: lat {grid.SOUTH}-{grid.NORTH}, lon {grid.WEST}-{grid.EAST} | trozos a pedir: {len(plan)} | salida: {args.out}"
+    )
     if args.dry_run:
         for tema, i, consulta in plan:
             print(f"\n--- {tema} [{i}] ---\n{consulta}")
@@ -133,7 +154,9 @@ def main(argv: Optional[list] = None) -> int:
     resumen = descargar(OverpassClient(timeout=TIMEOUT_HTTP_S, max_retries=1), Path(args.out), args.themes, args.pausa)
     print("\nResumen:")
     for tema, r in resumen.items():
-        print(f"   {tema:18} {r['elementos']:7} elementos | trozos ok {r['trozos_ok']} | fallidos {r['trozos_fallidos']}")
+        print(
+            f"   {tema:18} {r['elementos']:7} elementos | trozos ok {r['trozos_ok']} | fallidos {r['trozos_fallidos']}"
+        )
     return 0 if all(r["trozos_fallidos"] == 0 for r in resumen.values()) else 1
 
 

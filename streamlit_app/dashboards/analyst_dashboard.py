@@ -12,9 +12,9 @@ import streamlit as st
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from src.database import RouteDatabase
 from src.analytics import MobilityAnalytics
 from src.analytics.time_series_analysis import TimeSeriesAnalytics
+from src.database import RouteDatabase
 from streamlit_app.dashboards import predictive_modeling_dashboard
 
 # Ver nota en executive_dashboard.py: mismo TTL, misma razón. Especialmente
@@ -94,11 +94,7 @@ def render_data_explorer():
     col1, col2 = st.columns(2)
 
     with col1:
-        selected_route = st.selectbox(
-            "Select Route",
-            routes,
-            format_func=lambda x: f"{x[0]} → {x[1]}"
-        )
+        selected_route = st.selectbox("Select Route", routes, format_func=lambda x: f"{x[0]} → {x[1]}")
 
     with col2:
         days = st.slider("Days of History", 1, 90, 30)
@@ -108,19 +104,15 @@ def render_data_explorer():
         # limit=_ROUTE_ROW_LIMIT: query_measurements devuelve las filas MÁS
         # RECIENTES; con el tope anterior (10.000) una ruta con 90 días de
         # historia quedaba recortada sin avisar.
-        df = _fetch_measurements(db, origin=origin, destination=destination, days=days,
-                                 limit=_ROUTE_ROW_LIMIT)
+        df = _fetch_measurements(db, origin=origin, destination=destination, days=days, limit=_ROUTE_ROW_LIMIT)
 
         if not df.empty:
-            st.dataframe(df, width='stretch', height=400)
+            st.dataframe(df, width="stretch", height=400)
 
             # Download button
             csv = df.to_csv(index=False)
             st.download_button(
-                label="📥 Download CSV",
-                data=csv,
-                file_name=f"data_{origin}_{destination}.csv",
-                mime="text/csv"
+                label="📥 Download CSV", data=csv, file_name=f"data_{origin}_{destination}.csv", mime="text/csv"
             )
         else:
             st.warning("No data available")
@@ -134,54 +126,45 @@ def render_statistical_tests():
     routes = _routes(db)
 
     selected_route = st.selectbox(
-        "Select Route for Analysis",
-        routes,
-        format_func=lambda x: f"{x[0]} → {x[1]}",
-        key="stats_route"
+        "Select Route for Analysis", routes, format_func=lambda x: f"{x[0]} → {x[1]}", key="stats_route"
     )
 
     if selected_route:
         origin, destination = selected_route
-        df = _fetch_measurements(db, origin=origin, destination=destination, days=30,
-                                 limit=_ROUTE_ROW_LIMIT)
+        df = _fetch_measurements(db, origin=origin, destination=destination, days=30, limit=_ROUTE_ROW_LIMIT)
 
         if not df.empty and len(df) > 10:
             ts_analysis = TimeSeriesAnalytics(df)
 
-            tab1, tab2, tab3, tab4 = st.tabs([
-                "Stationarity Tests",
-                "Autocorrelation",
-                "Patterns",
-                "Anomalies"
-            ])
+            tab1, tab2, tab3, tab4 = st.tabs(["Stationarity Tests", "Autocorrelation", "Patterns", "Anomalies"])
 
             with tab1:
                 st.markdown("**Stationarity Tests** (ADF & KPSS)")
-                stationarity = ts_analysis.stationarity_tests('travel_time_min')
-                if 'adf' in stationarity:
-                    st.json(stationarity['adf'])
-                if 'kpss' in stationarity:
-                    st.json(stationarity['kpss'])
+                stationarity = ts_analysis.stationarity_tests("travel_time_min")
+                if "adf" in stationarity:
+                    st.json(stationarity["adf"])
+                if "kpss" in stationarity:
+                    st.json(stationarity["kpss"])
 
             with tab2:
                 st.markdown("**Autocorrelation Analysis**")
-                acf_data = ts_analysis.autocorrelation_analysis('travel_time_min')
-                if 'acf' in acf_data:
-                    st.json(acf_data['acf'])
+                acf_data = ts_analysis.autocorrelation_analysis("travel_time_min")
+                if "acf" in acf_data:
+                    st.json(acf_data["acf"])
 
             with tab3:
                 st.markdown("**Day-of-Week Patterns**")
-                patterns = ts_analysis.day_of_week_patterns('travel_time_min')
-                if 'by_day' in patterns:
-                    st.json(patterns['by_day'])
+                patterns = ts_analysis.day_of_week_patterns("travel_time_min")
+                if "by_day" in patterns:
+                    st.json(patterns["by_day"])
 
             with tab4:
                 st.markdown("**Anomaly Detection**")
-                anomalies = ts_analysis.change_point_detection('travel_time_min')
-                if 'change_points' in anomalies:
+                anomalies = ts_analysis.change_point_detection("travel_time_min")
+                if "change_points" in anomalies:
                     st.write(f"**Total anomalies detected:** {anomalies['total_changes']}")
-                    if anomalies['change_points']:
-                        st.json(anomalies['change_points'][:10])
+                    if anomalies["change_points"]:
+                        st.json(anomalies["change_points"][:10])
 
 
 def render_model_performance():
@@ -210,25 +193,28 @@ def render_model_performance():
     # conteo real) y luego get_all_routes_statistics() con una ventana de 10 años, un
     # recorrido completo de la tabla solo para contar filas.
     profile_routes = _fetch_data_profile(db)["routes"]
-    samples_by_route = {
-        (row["origin"], row["destination"]): int(row["rows"])
-        for _, row in profile_routes.iterrows()
-    }
+    samples_by_route = {(row["origin"], row["destination"]): int(row["rows"]) for _, row in profile_routes.iterrows()}
 
     routes = _routes(db)
     if routes:
         st.markdown("**Model Metrics by Route**")
         model_data = []
         for origin, destination in routes:
-            model_data.append({
-                'Route': f'{origin} → {destination}',
-                'Model Status': '✅ Trained' if any(m for m in model_files if f"{origin}_{destination}" in m.name) else '❌ Not Trained',
-                'Samples': samples_by_route.get((origin, destination), 0)
-            })
+            model_data.append(
+                {
+                    "Route": f"{origin} → {destination}",
+                    "Model Status": (
+                        "✅ Trained"
+                        if any(m for m in model_files if f"{origin}_{destination}" in m.name)
+                        else "❌ Not Trained"
+                    ),
+                    "Samples": samples_by_route.get((origin, destination), 0),
+                }
+            )
 
         if model_data:
             model_df = pd.DataFrame(model_data)
-            st.dataframe(model_df, width='stretch', hide_index=True)
+            st.dataframe(model_df, width="stretch", hide_index=True)
 
     st.divider()
     predictive_modeling_dashboard.render()
@@ -242,8 +228,7 @@ def render_correlation_matrix():
     numeric_cols = db.get_numeric_columns()
 
     if numeric_cols:
-        defaults = [c for c in ('travel_time_min', 'average_speed_kmh', 'origin_temperature')
-                    if c in numeric_cols]
+        defaults = [c for c in ("travel_time_min", "average_speed_kmh", "origin_temperature") if c in numeric_cols]
         selected_cols = st.multiselect(
             "Select columns for correlation",
             numeric_cols,
@@ -256,24 +241,22 @@ def render_correlation_matrix():
             df = _fetch_columns(db, tuple(selected_cols), days=30)
             corr_matrix = df.corr()
 
-            fig = go.Figure(data=go.Heatmap(
-                z=corr_matrix.values,
-                x=corr_matrix.columns,
-                y=corr_matrix.columns,
-                colorscale='RdBu',
-                zmid=0,
-                text=corr_matrix.values,
-                texttemplate='%{text:.2f}',
-                textfont={"size": 10}
-            ))
-
-            fig.update_layout(
-                title="Feature Correlation Matrix",
-                height=500,
-                template='plotly_dark'
+            fig = go.Figure(
+                data=go.Heatmap(
+                    z=corr_matrix.values,
+                    x=corr_matrix.columns,
+                    y=corr_matrix.columns,
+                    colorscale="RdBu",
+                    zmid=0,
+                    text=corr_matrix.values,
+                    texttemplate="%{text:.2f}",
+                    textfont={"size": 10},
+                )
             )
 
-            st.plotly_chart(fig, width='stretch')
+            fig.update_layout(title="Feature Correlation Matrix", height=500, template="plotly_dark")
+
+            st.plotly_chart(fig, width="stretch")
 
 
 def _completeness_by_route(db) -> pd.DataFrame:
@@ -285,11 +268,13 @@ def _completeness_by_route(db) -> pd.DataFrame:
     del informe, sobre TODAS las filas y solo las columnas de medición.
     """
     routes = _fetch_data_profile(db)["routes"]
-    return pd.DataFrame({
-        "Route": routes["origin"] + " → " + routes["destination"],
-        "Completeness": routes["completeness_pct"].map(lambda v: f"{v:.1f}%"),
-        "Records": routes["rows"],
-    })
+    return pd.DataFrame(
+        {
+            "Route": routes["origin"] + " → " + routes["destination"],
+            "Completeness": routes["completeness_pct"].map(lambda v: f"{v:.1f}%"),
+            "Records": routes["rows"],
+        }
+    )
 
 
 def render_data_quality_report():
@@ -321,7 +306,9 @@ def render_data_quality_report():
         first_ts, last_ts = profile["first_timestamp"], profile["last_timestamp"]
         if first_ts and last_ts:
             span_days = (pd.to_datetime(last_ts, utc=True) - pd.to_datetime(first_ts, utc=True)).days
-            st.metric("Date Range", f"{span_days} days", f"{str(first_ts)[:10]} → {str(last_ts)[:10]}", delta_color="off")
+            st.metric(
+                "Date Range", f"{span_days} days", f"{str(first_ts)[:10]} → {str(last_ts)[:10]}", delta_color="off"
+            )
         else:
             st.metric("Date Range", "sin datos")
 
@@ -333,7 +320,7 @@ def render_data_quality_report():
     st.markdown("**Completeness by Route**")
     comp_df = _completeness_by_route(db)
     if not comp_df.empty:
-        st.dataframe(comp_df, width='stretch', hide_index=True)
+        st.dataframe(comp_df, width="stretch", hide_index=True)
 
 
 def _read_only_query(db_path, query: str) -> pd.DataFrame:
@@ -380,8 +367,7 @@ def render_sql_query():
             "traffic_delay_min\nFROM route_measurements\nORDER BY timestamp DESC\nLIMIT 20;"
         ),
         "Conteo por fuente de datos": (
-            "SELECT data_source, COUNT(*) AS filas\nFROM route_measurements\n"
-            "GROUP BY data_source;"
+            "SELECT data_source, COUNT(*) AS filas\nFROM route_measurements\n" "GROUP BY data_source;"
         ),
         "Tiempo promedio por ruta (24h)": (
             "SELECT origin, destination, ROUND(AVG(travel_time_min), 2) AS avg_min, "
@@ -390,15 +376,11 @@ def render_sql_query():
             "GROUP BY origin, destination\nORDER BY avg_min DESC;"
         ),
         "KPIs de hoy (Gold layer)": (
-            "SELECT * FROM gold_route_kpis\nWHERE date = date('now')\n"
-            "ORDER BY reliability_score DESC;"
+            "SELECT * FROM gold_route_kpis\nWHERE date = date('now')\n" "ORDER BY reliability_score DESC;"
         ),
-        "Tablas disponibles": (
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
-        ),
+        "Tablas disponibles": ("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"),
         "POIs de Foursquare por categoría": (
-            "SELECT category, COUNT(*) AS n\nFROM pois_foursquare\n"
-            "GROUP BY category\nORDER BY n DESC;"
+            "SELECT category, COUNT(*) AS n\nFROM pois_foursquare\n" "GROUP BY category\nORDER BY n DESC;"
         ),
     }
 
@@ -417,7 +399,7 @@ def render_sql_query():
             result_df = _read_only_query(db_path, query)
 
             st.success(f"{len(result_df)} filas")
-            st.dataframe(result_df, width='stretch', hide_index=True)
+            st.dataframe(result_df, width="stretch", hide_index=True)
 
             if not result_df.empty:
                 st.download_button(
@@ -447,11 +429,7 @@ def render_full_export():
     with col1:
         limit_dates = st.checkbox("Limitar por rango de fechas", value=False)
     with col2:
-        export_days = st.slider(
-            "Días de historial a incluir",
-            1, 365, 90,
-            disabled=not limit_dates
-        )
+        export_days = st.slider("Días de historial a incluir", 1, 365, 90, disabled=not limit_dates)
 
     include_polyline = st.checkbox(
         "Incluir la columna `polyline` (geometría de la ruta)",
@@ -461,7 +439,7 @@ def render_full_export():
             "~14× más memoria (el contenedor del dashboard tiene un límite de 1 GiB). "
             "Se deja marcada por defecto para que el archivo siga siendo idéntico al de siempre; "
             "el notebook de la Asignatura 7 hace `select(-polyline)` y la espera. Desmárcala para "
-            "una exportación ligera (en ese caso usa `select(-any_of(\"polyline\"))` en R)."
+            'una exportación ligera (en ese caso usa `select(-any_of("polyline"))` en R).'
         ),
     )
 
@@ -483,11 +461,8 @@ def render_full_export():
             st.warning("No hay datos disponibles para el rango seleccionado.")
         else:
             routes_included = full_df[["origin", "destination"]].drop_duplicates()
-            st.success(
-                f"{len(full_df):,} filas de {len(routes_included)} rutas "
-                "listas para descargar."
-            )
-            st.dataframe(full_df.head(50), width='stretch', height=300)
+            st.success(f"{len(full_df):,} filas de {len(routes_included)} rutas " "listas para descargar.")
+            st.dataframe(full_df.head(50), width="stretch", height=300)
 
             csv_data = full_df.to_csv(index=False)
             st.download_button(
@@ -495,7 +470,7 @@ def render_full_export():
                 data=csv_data,
                 file_name=f"mobility_data_full_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv",
-                key="download_full_export"
+                key="download_full_export",
             )
 
 
@@ -521,15 +496,17 @@ def main():
     st.markdown("# 🔬 Analyst Dashboard")
     st.markdown("Data exploration, statistical analysis, and model performance")
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "Data Explorer",
-        "Statistical Tests",
-        "Correlations",
-        "Model Performance",
-        "Data Quality",
-        "SQL Query",
-        "Exportar Todo",
-    ])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+        [
+            "Data Explorer",
+            "Statistical Tests",
+            "Correlations",
+            "Model Performance",
+            "Data Quality",
+            "SQL Query",
+            "Exportar Todo",
+        ]
+    )
 
     with tab1:
         _render_aislado("Data Explorer", render_data_explorer)

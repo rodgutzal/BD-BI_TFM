@@ -35,9 +35,11 @@ from src.ml.cell_counts import CellCounts  # noqa: E402
 
 DEFAULT_DB = ROOT / "data" / "mobility.db"
 DEFAULT_OUT = ROOT / "data" / "ml"
-TARGETS = ("food_drink", "business")        # los únicos con datos suficientes para aprender una oferta esperada
-ADVERTENCIA = ("La brecha de oferta es EXPLORATORIA: en la validación espacial ningún candidato superó con claridad a la "
-               "densidad de POIs (ver docs/DISENO_ML_RECOMENDACION.md §3.G y §3.H). No entra en ningún puntaje.")
+TARGETS = ("food_drink", "business")  # los únicos con datos suficientes para aprender una oferta esperada
+ADVERTENCIA = (
+    "La brecha de oferta es EXPLORATORIA: en la validación espacial ningún candidato superó con claridad a la "
+    "densidad de POIs (ver docs/DISENO_ML_RECOMENDACION.md §3.G y §3.H). No entra en ningún puntaje."
+)
 
 
 def _herramienta(nombre: str):
@@ -50,21 +52,42 @@ def _herramienta(nombre: str):
 def calcular_brechas(counts, zonas, fsq, args, con_contexto: bool) -> dict:
     """Valida y calcula la brecha de cada objetivo. Devuelve {clave: (tabla indexada por cell_id, modelo, ganador, resumen)}."""
     from src.ml import validation
+
     vlm = _herramienta("validate_location_model")
     resultado = {}
     for clave in TARGETS:
         t0 = time.perf_counter()
-        r = vlm.run_target(clave, counts, zonas, fsq, args.repeats, args.folds, args.boot, args.seed, args.k,
-                           progress=lambda i, n, c=clave: print(f"\r   {c}: repetición {i}/{n}", end="", flush=True),
-                           con_contexto=con_contexto)
+        r = vlm.run_target(
+            clave,
+            counts,
+            zonas,
+            fsq,
+            args.repeats,
+            args.folds,
+            args.boot,
+            args.seed,
+            args.k,
+            progress=lambda i, n, c=clave: print(f"\r   {c}: repetición {i}/{n}", end="", flush=True),
+            con_contexto=con_contexto,
+        )
         print(f"\r   {clave}: {time.perf_counter() - t0:.0f} s{' ' * 20}")
         tabla = validation.gap_from_evaluation(r["evaluacion"], r["modelo_brecha"])
         tabla.index = r["X"].index
         d = r["decision"]
-        resultado[clave] = (tabla, r["modelo_brecha"], d["ganador"],
-                            {"modelo_brecha": r["modelo_brecha"], "ganador": d["ganador"], "mejor_baseline": d["mejor_baseline"],
-                             "comparaciones": {c: {k: (round(v, 4) if isinstance(v, float) else v) for k, v in f.items()}
-                                               for c, f in d["comparaciones"].items()}})
+        resultado[clave] = (
+            tabla,
+            r["modelo_brecha"],
+            d["ganador"],
+            {
+                "modelo_brecha": r["modelo_brecha"],
+                "ganador": d["ganador"],
+                "mejor_baseline": d["mejor_baseline"],
+                "comparaciones": {
+                    c: {k: (round(v, 4) if isinstance(v, float) else v) for k, v in f.items()}
+                    for c, f in d["comparaciones"].items()
+                },
+            },
+        )
     return resultado
 
 
@@ -94,8 +117,9 @@ def main(argv=None) -> int:
 
     brechas = {}
     if not args.sin_brecha:
-        brechas = calcular_brechas(counts, data_access.load_zone_table(args.db), data_access.load_pois_foursquare(args.db),
-                                   args, con_contexto)
+        brechas = calcular_brechas(
+            counts, data_access.load_zone_table(args.db), data_access.load_pois_foursquare(args.db), args, con_contexto
+        )
     partes = []
     for clave, perfil in DEFAULT_PROFILES.items():
         tabla, modelo, ganador, _ = brechas.get(clave, (None, "", None, None))
@@ -105,8 +129,15 @@ def main(argv=None) -> int:
     export = _herramienta("export_ml_inputs")
     manifiesto = {
         "procedencia": inputs_bundle.provenance(args.db, export.git_commit()),
-        "parametros": {"repeats": args.repeats, "folds": args.folds, "boot": args.boot, "k": args.k, "seed": args.seed,
-                       "con_brecha": not args.sin_brecha, "con_contexto": con_contexto},
+        "parametros": {
+            "repeats": args.repeats,
+            "folds": args.folds,
+            "boot": args.boot,
+            "k": args.k,
+            "seed": args.seed,
+            "con_brecha": not args.sin_brecha,
+            "con_contexto": con_contexto,
+        },
         "perfiles": list(DEFAULT_PROFILES),
         "brecha": {c: v[3] for c, v in brechas.items()},
         "advertencia": ADVERTENCIA if brechas else "Sin brecha: solo lentes explícitas.",
@@ -116,8 +147,10 @@ def main(argv=None) -> int:
     for nombre, info in completo["archivos"].items():
         print(f"   {nombre:20} {info['filas']:>7} filas  sha256 {info['sha256'][:16]}…")
     for clave, (_, modelo, ganador, _) in brechas.items():
-        print(f"   brecha {clave}: modelo {modelo}; "
-              + ("VALIDADA" if ganador else "exploratoria (ningún candidato supera con claridad a la línea base)"))
+        print(
+            f"   brecha {clave}: modelo {modelo}; "
+            + ("VALIDADA" if ganador else "exploratoria (ningún candidato supera con claridad a la línea base)")
+        )
     return 0
 
 

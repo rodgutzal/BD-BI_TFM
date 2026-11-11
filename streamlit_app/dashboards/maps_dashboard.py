@@ -104,10 +104,7 @@ def render_route_map(db, selected_routes):
     fig = go.Figure()
 
     stats_df = _fetch_all_routes_statistics(db, hours=1)
-    stats_by_route = {
-        (row["origin"], row["destination"]): row
-        for _, row in stats_df.iterrows()
-    }
+    stats_by_route = {(row["origin"], row["destination"]): row for _, row in stats_df.iterrows()}
 
     for origin, destination in selected_routes:
         if origin not in LOCATIONS or destination not in LOCATIONS:
@@ -122,32 +119,36 @@ def render_route_map(db, selected_routes):
         delay_txt = f"{delay:.1f} min" if delay is not None and not pd.isna(delay) else "sin dato"
         time_txt = f"{travel_time:.1f} min" if travel_time is not None and not pd.isna(travel_time) else "sin dato"
 
-        fig.add_trace(go.Scattermapbox(
-            mode="lines",
-            lon=[o.longitude, d.longitude],
-            lat=[o.latitude, d.latitude],
-            line=dict(width=4, color=color),
-            name=f"{origin} → {destination}",
-            showlegend=False,
-            hovertemplate=(
-                f"<b>{origin} → {destination}</b><br>"
-                f"Tiempo de viaje (1h): {time_txt}<br>"
-                f"Retraso (1h): {delay_txt}<extra></extra>"
-            ),
-        ))
+        fig.add_trace(
+            go.Scattermapbox(
+                mode="lines",
+                lon=[o.longitude, d.longitude],
+                lat=[o.latitude, d.latitude],
+                line=dict(width=4, color=color),
+                name=f"{origin} → {destination}",
+                showlegend=False,
+                hovertemplate=(
+                    f"<b>{origin} → {destination}</b><br>"
+                    f"Tiempo de viaje (1h): {time_txt}<br>"
+                    f"Retraso (1h): {delay_txt}<extra></extra>"
+                ),
+            )
+        )
 
     location_names = list(LOCATIONS.keys())
-    fig.add_trace(go.Scattermapbox(
-        mode="markers+text",
-        lon=[LOCATIONS[n].longitude for n in location_names],
-        lat=[LOCATIONS[n].latitude for n in location_names],
-        marker=dict(size=13, color="#2c3e50"),
-        text=location_names,
-        textposition="top right",
-        name="Ubicaciones",
-        showlegend=False,
-        hoverinfo="text",
-    ))
+    fig.add_trace(
+        go.Scattermapbox(
+            mode="markers+text",
+            lon=[LOCATIONS[n].longitude for n in location_names],
+            lat=[LOCATIONS[n].latitude for n in location_names],
+            marker=dict(size=13, color="#2c3e50"),
+            text=location_names,
+            textposition="top right",
+            name="Ubicaciones",
+            showlegend=False,
+            hoverinfo="text",
+        )
+    )
 
     center_lat = sum(loc.latitude for loc in LOCATIONS.values()) / len(LOCATIONS)
     center_lon = sum(loc.longitude for loc in LOCATIONS.values()) / len(LOCATIONS)
@@ -192,24 +193,23 @@ def render_poi_layer(fig, db, selected_categories, source):
 
     for category, group in pois_df.groupby("category"):
         style = styles.get(category, {"color": "#7f8c8d", "label": category})
-        fig.add_trace(go.Scattermapbox(
-            mode="markers",
-            lon=group["longitude"],
-            lat=group["latitude"],
-            marker=dict(size=8, color=style["color"], opacity=0.85),
-            name=style["label"],
-            text=group["name"],
-            hovertemplate=f"<b>%{{text}}</b><br>{style['label']}<extra></extra>",
-        ))
+        fig.add_trace(
+            go.Scattermapbox(
+                mode="markers",
+                lon=group["longitude"],
+                lat=group["latitude"],
+                marker=dict(size=8, color=style["color"], opacity=0.85),
+                name=style["label"],
+                text=group["name"],
+                hovertemplate=f"<b>%{{text}}</b><br>{style['label']}<extra></extra>",
+            )
+        )
 
 
 def render_route_status_table(db, selected_routes):
     """Tabla con el estado actual (última hora) de las rutas seleccionadas."""
     stats_df = _fetch_all_routes_statistics(db, hours=1)
-    stats_by_route = {
-        (row["origin"], row["destination"]): row
-        for _, row in stats_df.iterrows()
-    }
+    stats_by_route = {(row["origin"], row["destination"]): row for _, row in stats_df.iterrows()}
 
     rows = []
     for origin, destination in selected_routes:
@@ -226,12 +226,16 @@ def render_route_status_table(db, selected_routes):
         else:
             status = "🔴 Denso"
 
-        rows.append({
-            "Ruta": f"{origin} → {destination}",
-            "Estado": status,
-            "Tiempo de viaje (1h)": f"{travel_time:.1f} min" if travel_time is not None and not pd.isna(travel_time) else "Sin dato",
-            "Retraso (1h)": f"{delay:.1f} min" if delay is not None and not pd.isna(delay) else "Sin dato",
-        })
+        rows.append(
+            {
+                "Ruta": f"{origin} → {destination}",
+                "Estado": status,
+                "Tiempo de viaje (1h)": (
+                    f"{travel_time:.1f} min" if travel_time is not None and not pd.isna(travel_time) else "Sin dato"
+                ),
+                "Retraso (1h)": f"{delay:.1f} min" if delay is not None and not pd.isna(delay) else "Sin dato",
+            }
+        )
 
     if rows:
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
