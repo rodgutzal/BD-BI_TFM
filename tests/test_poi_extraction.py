@@ -77,6 +77,7 @@ def _pois_fsq(n):
 # ---------------------------------------------------------------------------
 
 def test_overpass_run_once_guarda_los_pois_y_escribe_el_heartbeat(db, logs):
+    """`run_once` de Overpass guarda los POIs en la base y escribe el heartbeat."""
     cliente = ClienteFalso(_pois_osm(4))
     assert ov.run_once(db, cliente, margin_deg=0.02) == 4
     assert len(db.get_pois()) == 4
@@ -84,12 +85,14 @@ def test_overpass_run_once_guarda_los_pois_y_escribe_el_heartbeat(db, logs):
 
 
 def test_overpass_run_once_pasa_el_margen_al_cliente(db, logs):
+    """`run_once` de Overpass pasa el margen indicado al cliente."""
     cliente = ClienteFalso(_pois_osm(1))
     ov.run_once(db, cliente, margin_deg=0.033)
     assert cliente.llamadas[0][1] == {"margin_deg": 0.033}
 
 
 def test_overpass_un_segundo_ciclo_actualiza_en_vez_de_duplicar(db, logs):
+    """Un segundo ciclo de Overpass actualiza los POIs existentes en vez de duplicarlos."""
     cliente = ClienteFalso(_pois_osm(3))
     ov.run_once(db, cliente, margin_deg=0.015)
     ov.run_once(db, cliente, margin_deg=0.015)
@@ -97,6 +100,7 @@ def test_overpass_un_segundo_ciclo_actualiza_en_vez_de_duplicar(db, logs):
 
 
 def test_overpass_si_la_descarga_falla_devuelve_0_y_no_toca_nada(db, logs, caplog):
+    """Si la descarga de Overpass falla, `run_once` devuelve 0, no guarda nada y no escribe el heartbeat."""
     cliente = ClienteFalso(error=RuntimeError("Overpass caído"))
     with caplog.at_level(logging.ERROR):
         assert ov.run_once(db, cliente, margin_deg=0.015) == 0
@@ -106,6 +110,7 @@ def test_overpass_si_la_descarga_falla_devuelve_0_y_no_toca_nada(db, logs, caplo
 
 
 def test_overpass_heartbeat_contiene_una_fecha_iso_utc(logs):
+    """El heartbeat de Overpass contiene una fecha ISO en UTC reciente."""
     ov._write_heartbeat()
     fecha = datetime.fromisoformat((logs / "poi_heartbeat").read_text())
     assert fecha.tzinfo is not None
@@ -113,6 +118,7 @@ def test_overpass_heartbeat_contiene_una_fecha_iso_utc(logs):
 
 
 def test_overpass_heartbeat_no_rompe_si_no_puede_escribir(tmp_path, monkeypatch, caplog):
+    """El heartbeat de Overpass no rompe el ciclo si no puede escribirse; deja un aviso en el log."""
     monkeypatch.setattr(ov, "LOG_DIR", tmp_path / "no_existe")
     with caplog.at_level(logging.WARNING):
         ov._write_heartbeat()  # no lanza
@@ -134,6 +140,7 @@ def main_overpass(monkeypatch):
 
 
 def test_overpass_main_sin_intervalo_hace_un_ciclo_y_cierra_el_cliente(main_overpass, monkeypatch):
+    """`main` de Overpass sin intervalo hace un único ciclo con el margen indicado y cierra el cliente."""
     monkeypatch.setattr(sys, "argv", ["poi_extraction", "--margin-deg", "0.05"])
     ov.main()
     assert main_overpass["ciclos"] == [("bd", main_overpass["cliente"], 0.05)]
@@ -141,6 +148,7 @@ def test_overpass_main_sin_intervalo_hace_un_ciclo_y_cierra_el_cliente(main_over
 
 
 def test_overpass_main_con_intervalo_repite_y_ctrl_c_sale_con_0(main_overpass, monkeypatch):
+    """`main` de Overpass con intervalo repite los ciclos esperando el intervalo en horas, y Ctrl+C sale con código 0."""
     def dormir(segundos):
         main_overpass["esperas"].append(segundos)
         if len(main_overpass["esperas"]) == 2:
@@ -157,6 +165,7 @@ def test_overpass_main_con_intervalo_repite_y_ctrl_c_sale_con_0(main_overpass, m
 
 
 def test_overpass_main_un_error_fatal_sale_con_1_y_cierra_el_cliente(main_overpass, monkeypatch):
+    """Un error fatal en `main` de Overpass sale con código 1 y cierra el cliente."""
     def romper(*args):
         raise RuntimeError("fallo")
 
@@ -173,27 +182,32 @@ def test_overpass_main_un_error_fatal_sale_con_1_y_cierra_el_cliente(main_overpa
 # ---------------------------------------------------------------------------
 
 def test_contador_nuevo_empieza_en_las_llamadas_dadas_y_guarda_el_mes(logs):
+    """El contador mensual nuevo empieza con las llamadas dadas y guarda el mes en curso."""
     assert fs._bump_call_counter(27) == 27
     guardado = json.loads(fs.CALL_COUNTER_PATH.read_text())
     assert guardado == {"month": datetime.now(timezone.utc).strftime("%Y-%m"), "calls": 27}
 
 
 def test_contador_acumula_dentro_del_mismo_mes(logs):
+    """El contador mensual acumula las llamadas dentro del mismo mes."""
     fs._bump_call_counter(27)
     assert fs._bump_call_counter(27) == 54
 
 
 def test_contador_se_reinicia_al_cambiar_de_mes(logs):
+    """El contador mensual se reinicia al cambiar de mes."""
     fs.CALL_COUNTER_PATH.write_text(json.dumps({"month": "2000-01", "calls": 499}))
     assert fs._bump_call_counter(27) == 27
 
 
 def test_contador_corrupto_se_reinicia_sin_fallar(logs):
+    """Un contador corrupto se reinicia sin fallar."""
     fs.CALL_COUNTER_PATH.write_text("{esto no es json")
     assert fs._bump_call_counter(5) == 5
 
 
 def test_contador_no_rompe_si_no_puede_guardar(logs, caplog):
+    """El contador devuelve la cuenta aunque no pueda guardarla y deja un aviso en el log."""
     fs.CALL_COUNTER_PATH.mkdir()  # una carpeta donde debería ir el archivo: escribir falla
     with caplog.at_level(logging.WARNING):
         assert fs._bump_call_counter(3) == 3  # devuelve la cuenta igualmente
@@ -205,6 +219,7 @@ def test_contador_no_rompe_si_no_puede_guardar(logs, caplog):
 # ---------------------------------------------------------------------------
 
 def test_foursquare_run_once_guarda_los_pois_cuenta_las_llamadas_y_escribe_el_heartbeat(db, logs):
+    """`run_once` de Foursquare guarda los POIs, suma las llamadas del ciclo al contador y escribe el heartbeat."""
     cliente = ClienteFalso(_pois_fsq(5))
     assert fs.run_once(db, cliente) == 5
     assert len(db.get_pois_foursquare()) == 5
@@ -214,6 +229,7 @@ def test_foursquare_run_once_guarda_los_pois_cuenta_las_llamadas_y_escribe_el_he
 
 
 def test_foursquare_run_once_pide_zonas_y_rutas_al_cliente(db, logs):
+    """`run_once` de Foursquare pide al cliente las zonas y las rutas."""
     cliente = ClienteFalso(_pois_fsq(1))
     fs.run_once(db, cliente)
     args, kwargs = cliente.llamadas[0]
@@ -222,6 +238,7 @@ def test_foursquare_run_once_pide_zonas_y_rutas_al_cliente(db, logs):
 
 
 def test_foursquare_avisa_al_superar_el_limite_mensual(db, logs, caplog):
+    """Foursquare avisa al superar el límite mensual del tier gratis."""
     mes = datetime.now(timezone.utc).strftime("%Y-%m")
     fs.CALL_COUNTER_PATH.write_text(json.dumps({"month": mes, "calls": fs.FREE_TIER_MONTHLY_LIMIT}))
     with caplog.at_level(logging.WARNING):
@@ -230,12 +247,14 @@ def test_foursquare_avisa_al_superar_el_limite_mensual(db, logs, caplog):
 
 
 def test_foursquare_no_avisa_si_queda_margen(db, logs, caplog):
+    """Foursquare no avisa si queda margen sobre el límite mensual."""
     with caplog.at_level(logging.WARNING):
         fs.run_once(db, ClienteFalso(_pois_fsq(1)))
     assert "Se superó" not in caplog.text
 
 
 def test_foursquare_heartbeat_no_rompe_si_no_puede_escribir(tmp_path, monkeypatch, caplog):
+    """El heartbeat de Foursquare no rompe el ciclo si no puede escribirse; deja un aviso en el log."""
     monkeypatch.setattr(fs, "LOG_DIR", tmp_path / "no_existe")
     with caplog.at_level(logging.WARNING):
         fs._write_heartbeat()
@@ -261,6 +280,7 @@ def main_foursquare(monkeypatch):
 
 
 def test_foursquare_main_sin_clave_sale_con_1_sin_crear_el_cliente(main_foursquare, monkeypatch, caplog):
+    """Sin `FOURSQUARE_API_KEY`, `main` de Foursquare sale con código 1 sin crear el cliente."""
     monkeypatch.delenv("FOURSQUARE_API_KEY", raising=False)
     monkeypatch.setattr(sys, "argv", ["poi_extraction_foursquare"])
     with caplog.at_level(logging.ERROR):
@@ -272,6 +292,7 @@ def test_foursquare_main_sin_clave_sale_con_1_sin_crear_el_cliente(main_foursqua
 
 
 def test_foursquare_main_con_clave_hace_un_ciclo_y_cierra_el_cliente(main_foursquare, monkeypatch):
+    """Con clave, `main` de Foursquare hace un único ciclo y cierra el cliente."""
     monkeypatch.setenv("FOURSQUARE_API_KEY", "clave-de-prueba")
     monkeypatch.setattr(sys, "argv", ["poi_extraction_foursquare"])
     fs.main()
@@ -281,6 +302,7 @@ def test_foursquare_main_con_clave_hace_un_ciclo_y_cierra_el_cliente(main_foursq
 
 
 def test_foursquare_main_con_intervalo_repite_y_ctrl_c_sale_con_0(main_foursquare, monkeypatch):
+    """`main` de Foursquare con intervalo repite los ciclos esperando el intervalo en horas, y Ctrl+C sale con código 0."""
     monkeypatch.setenv("FOURSQUARE_API_KEY", "k")
 
     def dormir(segundos):
@@ -298,6 +320,7 @@ def test_foursquare_main_con_intervalo_repite_y_ctrl_c_sale_con_0(main_foursquar
 
 
 def test_foursquare_main_un_error_fatal_sale_con_1_y_cierra_el_cliente(main_foursquare, monkeypatch):
+    """Un error fatal en `main` de Foursquare sale con código 1 y cierra el cliente."""
     monkeypatch.setenv("FOURSQUARE_API_KEY", "k")
 
     def romper(*args):
