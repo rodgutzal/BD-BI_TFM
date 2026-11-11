@@ -60,18 +60,44 @@ from src.locations import LOCATIONS, ROUTES  # noqa: E402
 
 DEFAULT_DB = ROOT / "data" / "mobility.db"
 DEFAULT_LOG = ROOT / "logs" / "foursquare_collector.log"
-RADIUS_M = 1500          # mismo radio que FoursquareClient
-FS_LIMIT = 50            # tope de resultados por punto de Foursquare
-MAX_DIST_STRONG = 100    # m
-MAX_DIST_PROBABLE = 60   # m
+RADIUS_M = 1500  # mismo radio que FoursquareClient
+FS_LIMIT = 50  # tope de resultados por punto de Foursquare
+MAX_DIST_STRONG = 100  # m
+MAX_DIST_PROBABLE = 60  # m
 SIM_STRONG = 0.75
 SIM_PROBABLE = 0.50
 
 # Palabras que no distinguen un negocio de otro ("Cafe Central" ~ "Central").
 STOP = {
-    "the", "and", "restaurant", "ristorante", "bar", "cafe", "caffe", "coffee", "pub",
-    "pizzeria", "grill", "bistro", "kitchen", "shop", "store", "food", "take", "away",
-    "takeaway", "malta", "ltd", "co", "of", "de", "la", "el", "il", "snack", "house",
+    "the",
+    "and",
+    "restaurant",
+    "ristorante",
+    "bar",
+    "cafe",
+    "caffe",
+    "coffee",
+    "pub",
+    "pizzeria",
+    "grill",
+    "bistro",
+    "kitchen",
+    "shop",
+    "store",
+    "food",
+    "take",
+    "away",
+    "takeaway",
+    "malta",
+    "ltd",
+    "co",
+    "of",
+    "de",
+    "la",
+    "el",
+    "il",
+    "snack",
+    "house",
 }
 
 
@@ -94,7 +120,7 @@ def name_sim(a, b) -> float:
         return 1.0
     ratio = SequenceMatcher(None, na, nb).ratio()
     ta, tb = tokens(a), tokens(b)
-    if ta and tb and (ta <= tb or tb <= ta):   # un nombre contiene al otro
+    if ta and tb and (ta <= tb or tb <= ta):  # un nombre contiene al otro
         ratio = max(ratio, 0.9)
     return ratio
 
@@ -102,8 +128,7 @@ def name_sim(a, b) -> float:
 def haversine_m(lat1, lon1, lat2, lon2):
     """Distancia en metros; admite arrays (broadcast)."""
     p = np.pi / 180
-    a = (np.sin((lat2 - lat1) * p / 2) ** 2
-         + np.cos(lat1 * p) * np.cos(lat2 * p) * np.sin((lon2 - lon1) * p / 2) ** 2)
+    a = np.sin((lat2 - lat1) * p / 2) ** 2 + np.cos(lat1 * p) * np.cos(lat2 * p) * np.sin((lon2 - lon1) * p / 2) ** 2
     return 2 * 6371000 * np.arcsin(np.sqrt(a))
 
 
@@ -156,8 +181,12 @@ def match_places(fs: pd.DataFrame, op: pd.DataFrame) -> pd.DataFrame:
     Devuelve una fila por par aceptado con columnas fs_idx, op_idx, sim, dist, nivel."""
     if fs.empty or op.empty:
         return pd.DataFrame(columns=["fs_idx", "op_idx", "sim", "dist", "nivel"])
-    dist = haversine_m(fs.latitude.values[:, None], fs.longitude.values[:, None],
-                       op.latitude.values[None, :], op.longitude.values[None, :])
+    dist = haversine_m(
+        fs.latitude.values[:, None],
+        fs.longitude.values[:, None],
+        op.latitude.values[None, :],
+        op.longitude.values[None, :],
+    )
     cands = []
     for i, j in zip(*np.where(dist <= MAX_DIST_STRONG)):
         sim = name_sim(fs.name.iloc[i], op.name.iloc[j])
@@ -171,7 +200,8 @@ def match_places(fs: pd.DataFrame, op: pd.DataFrame) -> pd.DataFrame:
     for sim, i, j, d, nivel in cands:
         if i in used_fs or j in used_op:
             continue
-        used_fs.add(i); used_op.add(j)
+        used_fs.add(i)
+        used_op.add(j)
         rows.append({"fs_idx": i, "op_idx": j, "sim": sim, "dist": d, "nivel": nivel})
     return pd.DataFrame(rows)
 
@@ -194,23 +224,32 @@ def report(fs, op, matches, circles, out=print):
             out(f"    {name}: devolvió {n}")
     else:
         out("Círculos completos: NINGUNO identificable — las mediciones A1 y B se omiten (ver aviso arriba).")
-    out(f"Lugares de Foursquare: {len(fs)} ({int(complete_fs.sum())} dentro de círculos completos) | "
-        f"de Overpass: {len(op)} ({int(complete_op.sum())} dentro de círculos completos)")
+    out(
+        f"Lugares de Foursquare: {len(fs)} ({int(complete_fs.sum())} dentro de círculos completos) | "
+        f"de Overpass: {len(op)} ({int(complete_op.sum())} dentro de círculos completos)"
+    )
     unnamed = (op.name.map(norm) == "").mean()
     out(f"Overpass sin nombre utilizable (no se pueden emparejar por nombre): {unnamed:.0%}\n")
 
     def block(title, sub):
         out(title)
-        out(f"    {'categoría Foursquare':<22}{'n':>5}   {'con contraparte en OSM (fuerte)':>32}   {'fuerte+probable':>16}")
+        out(
+            f"    {'categoría Foursquare':<22}{'n':>5}   {'con contraparte en OSM (fuerte)':>32}   {'fuerte+probable':>16}"
+        )
         for cat, g in sub.groupby("category"):
-            strong = (g._nivel == "fuerte").sum(); both = g._nivel.notna().sum()
+            strong = (g._nivel == "fuerte").sum()
+            both = g._nivel.notna().sum()
             out(f"    {cat:<22}{len(g):>5}   {pct(strong, len(g)):>32}   {pct(both, len(g)):>16}")
-        strong = (sub._nivel == "fuerte").sum(); both = sub._nivel.notna().sum()
+        strong = (sub._nivel == "fuerte").sum()
+        both = sub._nivel.notna().sum()
         out(f"    {'TOTAL':<22}{len(sub):>5}   {pct(strong, len(sub)):>32}   {pct(both, len(sub)):>16}\n")
 
     if circles:
         block("A1) OSM respecto a Foursquare — SOLO círculos completos (Foursquare sin recorte):", fs[complete_fs])
-    block("A2) OSM respecto a Foursquare — TODA la zona (Foursquare es una muestra topada => puede sobreestimar a OSM):", fs)
+    block(
+        "A2) OSM respecto a Foursquare — TODA la zona (Foursquare es una muestra topada => puede sobreestimar a OSM):",
+        fs,
+    )
 
     if circles:
         out("B) Foursquare respecto a OSM — SOLO círculos completos:")
@@ -224,25 +263,32 @@ def report(fs, op, matches, circles, out=print):
     if len(matches):
         out("  Pares 'probable' (Foursquare | Overpass | distancia):")
         for _, r in matches[matches.nivel == "probable"].head(6).iterrows():
-            out(f"    {fs.name.iloc[int(r.fs_idx)][:32]:<32} | {str(op.name.iloc[int(r.op_idx)])[:32]:<32} | {r.dist:4.0f} m")
+            out(
+                f"    {fs.name.iloc[int(r.fs_idx)][:32]:<32} | {str(op.name.iloc[int(r.op_idx)])[:32]:<32} | {r.dist:4.0f} m"
+            )
     sin = fs[(complete_fs if circles else True) & fs._nivel.isna()]
     donde = "en círculos completos" if circles else "en toda la zona"
     out(f"  Lugares de Foursquare SIN contraparte {donde} ({len(sin)}), muestra:")
     for _, r in sin.head(8).iterrows():
         out(f"    {r['name'][:40]:<40} [{r['category']}/{r['subcategory']}]")
-    out("\nLímites: pocos círculos completos y en la zona menos densa (hacia Marsaskala) — no extrapolar tal cual al "
+    out(
+        "\nLímites: pocos círculos completos y en la zona menos densa (hacia Marsaskala) — no extrapolar tal cual al "
         "centro urbano. El emparejamiento por nombre subestima la coincidencia real cuando el mismo negocio tiene "
-        "nombres distintos en cada fuente.")
+        "nombres distintos en cada fuente."
+    )
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--db", default=str(DEFAULT_DB))
-    ap.add_argument("--log", default=str(DEFAULT_LOG),
-                    help="log del recolector de Foursquare, para saber qué puntos no llegaron al tope")
+    ap.add_argument(
+        "--log",
+        default=str(DEFAULT_LOG),
+        help="log del recolector de Foursquare, para saber qué puntos no llegaron al tope",
+    )
     args = ap.parse_args()
 
-    conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)   # solo lectura
+    conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)  # solo lectura
     try:
         op = pd.read_sql("SELECT category, subcategory, name, latitude, longitude FROM pois", conn)
         fs = pd.read_sql("SELECT category, subcategory, name, latitude, longitude FROM pois_foursquare", conn)
@@ -258,10 +304,14 @@ def main():
     log_counts = parse_search_log(Path(args.log))
     circles, missing = complete_circles(points, log_counts)
     if not log_counts:
-        print(f"AVISO: no encontré datos de puntos en el log ({args.log}); no puedo saber qué círculos están completos.\n")
+        print(
+            f"AVISO: no encontré datos de puntos en el log ({args.log}); no puedo saber qué círculos están completos.\n"
+        )
     elif missing:
-        print(f"AVISO: {len(missing)} de {len(points)} puntos no aparecen en el log y se tratan como NO completos "
-              f"(ej.: {missing[0]}). Corre poi_extraction_foursquare para regenerarlos.\n")
+        print(
+            f"AVISO: {len(missing)} de {len(points)} puntos no aparecen en el log y se tratan como NO completos "
+            f"(ej.: {missing[0]}). Corre poi_extraction_foursquare para regenerarlos.\n"
+        )
     matches = match_places(fs, op)
     report(fs, op, matches, circles)
 

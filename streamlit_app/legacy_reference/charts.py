@@ -11,24 +11,28 @@ def create_travel_time_chart(df: pd.DataFrame) -> go.Figure:
 
     fig = go.Figure()
 
-    fig.add_trace(go.Scatter(
-        x=df["timestamp"],
-        y=df["travel_time_min"],
-        mode="lines+markers",
-        name="⏱️ Con Tráfico",
-        line=dict(color="#FF6B6B", width=3),
-        marker=dict(size=6),
-        hovertemplate="<b>Con tráfico</b><br>%{y:.1f} min<extra></extra>",
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=df["timestamp"],
+            y=df["travel_time_min"],
+            mode="lines+markers",
+            name="⏱️ Con Tráfico",
+            line=dict(color="#FF6B6B", width=3),
+            marker=dict(size=6),
+            hovertemplate="<b>Con tráfico</b><br>%{y:.1f} min<extra></extra>",
+        )
+    )
 
-    fig.add_trace(go.Scatter(
-        x=df["timestamp"],
-        y=df["no_traffic_time_min"],
-        mode="lines",
-        name="🚀 Sin Tráfico",
-        line=dict(color="#51CF66", width=2, dash="dash"),
-        hovertemplate="<b>Sin tráfico</b><br>%{y:.1f} min<extra></extra>",
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=df["timestamp"],
+            y=df["no_traffic_time_min"],
+            mode="lines",
+            name="🚀 Sin Tráfico",
+            line=dict(color="#51CF66", width=2, dash="dash"),
+            hovertemplate="<b>Sin tráfico</b><br>%{y:.1f} min<extra></extra>",
+        )
+    )
 
     avg_travel = df["travel_time_min"].mean()
     fig.add_hline(
@@ -70,13 +74,15 @@ def create_traffic_delay_chart(df: pd.DataFrame) -> go.Figure:
 
     fig = go.Figure()
 
-    fig.add_trace(go.Bar(
-        x=df["timestamp"],
-        y=df["traffic_delay_min"],
-        marker_color=colors,
-        hovertemplate="<b>Retraso</b><br>%{y:.1f} min<extra></extra>",
-        name="Retraso",
-    ))
+    fig.add_trace(
+        go.Bar(
+            x=df["timestamp"],
+            y=df["traffic_delay_min"],
+            marker_color=colors,
+            hovertemplate="<b>Retraso</b><br>%{y:.1f} min<extra></extra>",
+            name="Retraso",
+        )
+    )
 
     avg_delay = df["traffic_delay_min"].mean()
     fig.add_hline(
@@ -108,17 +114,19 @@ def create_speed_chart(df: pd.DataFrame) -> go.Figure:
 
     fig = go.Figure()
 
-    fig.add_trace(go.Scatter(
-        x=df["timestamp"],
-        y=df["average_speed_kmh"],
-        mode="lines+markers",
-        name="Velocidad",
-        line=dict(color="#4ECDC4", width=3),
-        marker=dict(size=6),
-        fill="tozeroy",
-        fillcolor="rgba(78, 205, 196, 0.2)",
-        hovertemplate="<b>Velocidad</b><br>%{y:.1f} km/h<extra></extra>",
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=df["timestamp"],
+            y=df["average_speed_kmh"],
+            mode="lines+markers",
+            name="Velocidad",
+            line=dict(color="#4ECDC4", width=3),
+            marker=dict(size=6),
+            fill="tozeroy",
+            fillcolor="rgba(78, 205, 196, 0.2)",
+            hovertemplate="<b>Velocidad</b><br>%{y:.1f} km/h<extra></extra>",
+        )
+    )
 
     avg_speed = df["average_speed_kmh"].mean()
     fig.add_hline(
@@ -166,17 +174,19 @@ def create_temperature_chart(df: pd.DataFrame) -> go.Figure:
 
     fig = go.Figure()
 
-    fig.add_trace(go.Scatter(
-        x=df["timestamp"],
-        y=df[temp_col],
-        mode="lines+markers",
-        name="Temperatura",
-        line=dict(color="#FF9F1C", width=3),
-        marker=dict(size=6, color=colors),
-        fill="tozeroy",
-        fillcolor="rgba(255, 159, 28, 0.2)",
-        hovertemplate="<b>Temperatura</b><br>%{y:.1f}°C<extra></extra>",
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=df["timestamp"],
+            y=df[temp_col],
+            mode="lines+markers",
+            name="Temperatura",
+            line=dict(color="#FF9F1C", width=3),
+            marker=dict(size=6, color=colors),
+            fill="tozeroy",
+            fillcolor="rgba(255, 159, 28, 0.2)",
+            hovertemplate="<b>Temperatura</b><br>%{y:.1f}°C<extra></extra>",
+        )
+    )
 
     fig.update_layout(
         title="🌡️ Temperatura",
@@ -204,17 +214,19 @@ def create_humidity_chart(df: pd.DataFrame) -> go.Figure:
 
     fig = go.Figure()
 
-    fig.add_trace(go.Scatter(
-        x=df["timestamp"],
-        y=df[humid_col],
-        mode="lines+markers",
-        name="Humedad",
-        line=dict(color="#6C5CE7", width=3),
-        marker=dict(size=6),
-        fill="tozeroy",
-        fillcolor="rgba(108, 92, 231, 0.2)",
-        hovertemplate="<b>Humedad</b><br>%{y:.0f}%<extra></extra>",
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=df["timestamp"],
+            y=df[humid_col],
+            mode="lines+markers",
+            name="Humedad",
+            line=dict(color="#6C5CE7", width=3),
+            marker=dict(size=6),
+            fill="tozeroy",
+            fillcolor="rgba(108, 92, 231, 0.2)",
+            hovertemplate="<b>Humedad</b><br>%{y:.0f}%<extra></extra>",
+        )
+    )
 
     fig.update_layout(
         title="💧 Humedad",

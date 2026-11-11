@@ -19,7 +19,8 @@ import streamlit as st
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from src.ml import panorama, panorama_view as pv
+from src.ml import panorama
+from src.ml import panorama_view as pv
 from src.ml.business_profiles import DEFAULT_PROFILES
 
 DATA_ML = ROOT_DIR / "data" / "ml"
@@ -39,6 +40,7 @@ def _cargar_conteos(ruta: str, firma: str):
 def load_data(ruta: Path):
     """(panorama guardado, conteos, manifiesto) o (None, None, motivo) si la tabla falta o no coincide con su manifiesto."""
     import json
+
     problemas = panorama.verify_outputs(ruta)
     if problemas:
         return None, None, "; ".join(problemas)
@@ -55,13 +57,22 @@ def render_profile_controls(categoria: str, base, counts):
             "Partes de un perfil por defecto (borrador del autor, a revisar). Lo que cambies aquí recalcula las "
             "lentes del mapa; **no** reentrena el modelo de brecha, que sigue usando las categorías estándar."
         )
-        segmentos = st.multiselect("Le vendes a…", pv.segment_names(), default=list(base.segmentos), key=f"pano_seg_{categoria}")
+        segmentos = st.multiselect(
+            "Le vendes a…", pv.segment_names(), default=list(base.segmentos), key=f"pano_seg_{categoria}"
+        )
         c1, c2 = st.columns(2)
-        directa = c1.multiselect("Competencia directa", list(opciones), default=def_directa, key=f"pano_dir_{categoria}")
-        indirecta = c2.multiselect("Competencia indirecta (sustitutos)", list(opciones), default=def_indirecta,
-                                   key=f"pano_ind_{categoria}")
-        proveedores = st.multiselect("Proveedores que te importan", pv.supplier_names(), default=list(base.proveedores),
-                                     key=f"pano_prov_{categoria}")
+        directa = c1.multiselect(
+            "Competencia directa", list(opciones), default=def_directa, key=f"pano_dir_{categoria}"
+        )
+        indirecta = c2.multiselect(
+            "Competencia indirecta (sustitutos)", list(opciones), default=def_indirecta, key=f"pano_ind_{categoria}"
+        )
+        proveedores = st.multiselect(
+            "Proveedores que te importan",
+            pv.supplier_names(),
+            default=list(base.proveedores),
+            key=f"pano_prov_{categoria}",
+        )
     return pv.custom_profile(base, opciones, directa, indirecta, segmentos, proveedores)
 
 
@@ -89,23 +100,61 @@ def build_map(vista, capa: str, seleccionada: Optional[str]):
     ]
     fig = go.Figure()
     if len(sin):
-        fig.add_trace(go.Scattermapbox(lat=sin["lat"], lon=sin["lon"], mode="markers", marker=dict(size=7, color="#bbbbbb"),
-                                       hovertext=[f"{i}<br>sin datos" for i in sin.index], hoverinfo="text", name="sin datos"))
+        fig.add_trace(
+            go.Scattermapbox(
+                lat=sin["lat"],
+                lon=sin["lon"],
+                mode="markers",
+                marker=dict(size=7, color="#bbbbbb"),
+                hovertext=[f"{i}<br>sin datos" for i in sin.index],
+                hoverinfo="text",
+                name="sin datos",
+            )
+        )
     esc = "RdBu_r" if capa == pv.CAPA_BRECHA else "YlOrRd"
-    fig.add_trace(go.Scattermapbox(
-        lat=con["lat"], lon=con["lon"], mode="markers",
-        marker=dict(size=9, color=valores[con.index], colorscale=esc, showscale=True, colorbar=dict(title=titulo),
-                    opacity=0.9, **({"cmid": 0} if capa == pv.CAPA_BRECHA else {})),
-        hovertext=textos, hoverinfo="text", name=titulo))
+    fig.add_trace(
+        go.Scattermapbox(
+            lat=con["lat"],
+            lon=con["lon"],
+            mode="markers",
+            marker=dict(
+                size=9,
+                color=valores[con.index],
+                colorscale=esc,
+                showscale=True,
+                colorbar=dict(title=titulo),
+                opacity=0.9,
+                **({"cmid": 0} if capa == pv.CAPA_BRECHA else {}),
+            ),
+            hovertext=textos,
+            hoverinfo="text",
+            name=titulo,
+        )
+    )
     if seleccionada is not None and seleccionada in vista.index:
         f = vista.loc[seleccionada]
-        fig.add_trace(go.Scattermapbox(lat=[f["lat"]], lon=[f["lon"]], mode="markers+text", name="celda elegida",
-                                       marker=dict(size=16, color="#1f77b4"), hoverinfo="skip",
-                                       text=[f"Celda elegida: {seleccionada}"], textposition="top right",
-                                       textfont=dict(size=14, color="#0b3d6b")))
+        fig.add_trace(
+            go.Scattermapbox(
+                lat=[f["lat"]],
+                lon=[f["lon"]],
+                mode="markers+text",
+                name="celda elegida",
+                marker=dict(size=16, color="#1f77b4"),
+                hoverinfo="skip",
+                text=[f"Celda elegida: {seleccionada}"],
+                textposition="top right",
+                textfont=dict(size=14, color="#0b3d6b"),
+            )
+        )
     fig.update_layout(
-        mapbox=dict(style="open-street-map", center=dict(lat=float(vista["lat"].mean()), lon=float(vista["lon"].mean())), zoom=10.5),
-        height=520, margin=dict(l=0, r=0, t=0, b=0), showlegend=False,
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=float(vista["lat"].mean()), lon=float(vista["lon"].mean())),
+            zoom=10.5,
+        ),
+        height=520,
+        margin=dict(l=0, r=0, t=0, b=0),
+        showlegend=False,
     )
     return fig
 
@@ -115,18 +164,28 @@ def _valor(x, formato="{:.2f}"):
 
 
 def render_cell_card(fila, perfil, brecha_disponible: bool, perfil_personalizado: bool):
-    st.markdown(f"##### Ficha de la celda {fila.name} · zona más cercana: {fila['zona_cercana']} ({fila['dist_zona_m']:.0f} m)")
+    st.markdown(
+        f"##### Ficha de la celda {fila.name} · zona más cercana: {fila['zona_cercana']} ({fila['dist_zona_m']:.0f} m)"
+    )
     c1, c2, c3 = st.columns(3)
     c1.markdown("**Competencia**")
     c1.write(f"Directa: {_valor(fila['competencia_directa'])} · indirecta: {_valor(fila['competencia_indirecta'])}")
-    c1.caption(f"Percentil entre las celdas: {_valor(fila['pct_competencia_directa'], '{:.0%}')} (más alto = más competencia)")
+    c1.caption(
+        f"Percentil entre las celdas: {_valor(fila['pct_competencia_directa'], '{:.0%}')} (más alto = más competencia)"
+    )
     c2.markdown("**Mercado consumidor**")
     c2.write(f"Índice 0-1: {_valor(fila['mercado_total'])}")
     for col in [c for c in fila.index if c.startswith("mercado_") and c != "mercado_total"]:
         c2.caption(f"{col.removeprefix('mercado_').replace('_', ' ')}: {_valor(fila[col], '{:.1f}')}")
     c3.markdown("**Proveedores**")
-    c3.write(f"Total: {_valor(fila['proveedores_total'], '{:.1f}')} · diversidad: {_valor(fila['proveedores_diversidad'])}")
-    for col in [c for c in fila.index if c.startswith("proveedores_") and c not in ("proveedores_total", "proveedores_diversidad")]:
+    c3.write(
+        f"Total: {_valor(fila['proveedores_total'], '{:.1f}')} · diversidad: {_valor(fila['proveedores_diversidad'])}"
+    )
+    for col in [
+        c
+        for c in fila.index
+        if c.startswith("proveedores_") and c not in ("proveedores_total", "proveedores_diversidad")
+    ]:
         if fila[col] == fila[col]:
             c3.caption(f"{col.removeprefix('proveedores_').replace('_', ' ')}: {fila[col]:.1f}")
     st.caption(
@@ -182,8 +241,11 @@ def render_panorama_section(categoria: str, data_dir: Optional[Path] = None):
     opciones_celdas = list(candidatas.index) + [i for i in vista.index if i not in set(candidatas.index)]
     etiquetas = {i: pv.cell_label(i, vista.loc[i]) for i in opciones_celdas}
     elegida = st.selectbox(
-        "Celda para ver su ficha (primero, las de mercado alto y competencia baja)", opciones_celdas,
-        format_func=lambda i: ("★ " if i in candidatas.index else "") + etiquetas[i], key=f"pano_celda_{categoria}")
+        "Celda para ver su ficha (primero, las de mercado alto y competencia baja)",
+        opciones_celdas,
+        format_func=lambda i: ("★ " if i in candidatas.index else "") + etiquetas[i],
+        key=f"pano_celda_{categoria}",
+    )
 
     st.plotly_chart(build_map(vista, capa, elegida), width="stretch")
 

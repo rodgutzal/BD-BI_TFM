@@ -31,7 +31,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.locations import LOCATIONS  # noqa: E402
-from src.ml import business_profiles, data_access, features, grid, inputs_bundle, models, osm_context, validation  # noqa: E402
+from src.ml import (  # noqa: E402
+    business_profiles,
+    data_access,
+    features,
+    grid,
+    inputs_bundle,
+    models,
+    osm_context,
+    validation,
+)
 from src.ml.cell_counts import CellCounts  # noqa: E402
 
 DEFAULT_DB = ROOT / "data" / "mobility.db"
@@ -56,8 +65,19 @@ def fsq_cell_counts(fsq: pd.DataFrame, categorias, index) -> np.ndarray:
     return matriz[f, c]
 
 
-def run_target(clave: str, counts: CellCounts, zonas: pd.DataFrame, fsq: pd.DataFrame, repeats: int, n_folds: int,
-               n_boot: int, seed: int, k_top: int, progress=None, con_contexto: bool = False) -> dict:
+def run_target(
+    clave: str,
+    counts: CellCounts,
+    zonas: pd.DataFrame,
+    fsq: pd.DataFrame,
+    repeats: int,
+    n_folds: int,
+    n_boot: int,
+    seed: int,
+    k_top: int,
+    progress=None,
+    con_contexto: bool = False,
+) -> dict:
     """Valida un objetivo y devuelve todo lo que luego se imprime (y se puede probar).
 
     `con_contexto`: `counts` incluye el contexto de la fase 1b. Entonces las variables añaden edificios, alojamiento,
@@ -69,7 +89,9 @@ def run_target(clave: str, counts: CellCounts, zonas: pd.DataFrame, fsq: pd.Data
     nombres = models.TODOS + models.OPCIONALES if con_contexto else models.TODOS
     baselines = models.BASELINES + (("solo_edificios",) if con_contexto else ())
     X, y = prepare(counts, objetivo, zonas, categorias)
-    ev = validation.evaluate(X, y, nombres=nombres, repeats=repeats, n_folds=n_folds, seed=seed, k_top=k_top, progress=progress)
+    ev = validation.evaluate(
+        X, y, nombres=nombres, repeats=repeats, n_folds=n_folds, seed=seed, k_top=k_top, progress=progress
+    )
     decision = validation.decide(ev, baselines=baselines, n_boot=n_boot, seed=seed)
     aporte = validation.compare_models(ev, "boosting", "boosting_poi", n_boot, seed) if con_contexto else None
     # La brecha usa el candidato ganador; si ninguno gana, el mejor de los candidatos solo como referencia informativa.
@@ -79,9 +101,19 @@ def run_target(clave: str, counts: CellCounts, zonas: pd.DataFrame, fsq: pd.Data
     brecha = esperado - ev.y
     fsq_n = fsq_cell_counts(fsq, FSQ_MAP[clave], X.index)
     return {
-        "clave": clave, "perfil": perfil, "X": X, "y": ev.y, "evaluacion": ev, "resumen": resumen, "decision": decision,
-        "aporte_contexto": aporte, "con_contexto": con_contexto,
-        "modelo_brecha": referencia, "esperado": esperado, "brecha": brecha, "fsq": fsq_n,
+        "clave": clave,
+        "perfil": perfil,
+        "X": X,
+        "y": ev.y,
+        "evaluacion": ev,
+        "resumen": resumen,
+        "decision": decision,
+        "aporte_contexto": aporte,
+        "con_contexto": con_contexto,
+        "modelo_brecha": referencia,
+        "esperado": esperado,
+        "brecha": brecha,
+        "fsq": fsq_n,
         "auc": {m: validation.auc_presence(ev.oof[m].mean(axis=0), fsq_n > 0) for m in ev.nombres} if len(fsq) else {},
         "artefacto": validation.gap_artifact_share(brecha, ev.y, fsq_n, k_top) if len(fsq) else None,
     }
@@ -94,69 +126,106 @@ def zona_mas_cercana(fila, col) -> str:
 
 def imprimir(r: dict, repeats: int, k_top: int) -> None:
     y, X = r["y"], r["X"]
-    print(f"\n{'=' * 78}\n{r['perfil'].nombre} ({r['clave']}): {int(y.sum())} locales en {len(y)} celdas activas "
-          f"({int((y > 0).sum())} con al menos uno; máx. {int(y.max())} en una celda)\n{'=' * 78}")
-    print(f"Validación espacial: {repeats} repeticiones, bloques de {validation.BLOCK_CELLS}x{validation.BLOCK_CELLS} celdas (~1 km).")
+    print(
+        f"\n{'=' * 78}\n{r['perfil'].nombre} ({r['clave']}): {int(y.sum())} locales en {len(y)} celdas activas "
+        f"({int((y > 0).sum())} con al menos uno; máx. {int(y.max())} en una celda)\n{'=' * 78}"
+    )
+    print(
+        f"Validación espacial: {repeats} repeticiones, bloques de {validation.BLOCK_CELLS}x{validation.BLOCK_CELLS} celdas (~1 km)."
+    )
     print(f"   {'modelo':16} {'desviación':>11} {'± sd':>7} {'Spearman':>9} {'precisión@' + str(k_top):>13}")
     for modelo, f in r["resumen"].iterrows():
-        marca = "  <- candidato" if modelo in models.CANDIDATOS else ("  (referencia sin contexto)" if modelo == "boosting_poi" else "")
-        print(f"   {modelo:16} {f['desviacion']:>11.3f} {f['desviacion_sd']:>7.3f} {f['spearman']:>9.3f} {f['precision_k']:>13.2f}{marca}")
+        marca = (
+            "  <- candidato"
+            if modelo in models.CANDIDATOS
+            else ("  (referencia sin contexto)" if modelo == "boosting_poi" else "")
+        )
+        print(
+            f"   {modelo:16} {f['desviacion']:>11.3f} {f['desviacion_sd']:>7.3f} {f['spearman']:>9.3f} {f['precision_k']:>13.2f}{marca}"
+        )
     d = r["decision"]
-    print(f"\nMejor línea base: {d['mejor_baseline']}. Diferencia de desviación por celda (candidato − línea base; "
-          "negativa = mejor), IC 95 % por bootstrap de bloques:")
+    print(
+        f"\nMejor línea base: {d['mejor_baseline']}. Diferencia de desviación por celda (candidato − línea base; "
+        "negativa = mejor), IC 95 % por bootstrap de bloques:"
+    )
     for c, f in d["comparaciones"].items():
         print(f"   {c:10} {f['diferencia']:+.3f}  [{f['ic_inf']:+.3f}, {f['ic_sup']:+.3f}]  -> {f['veredicto']}")
     if d["ganador"]:
-        print(f"\nDECISIÓN: se puede publicar «{d['ganador']}» (mejora a la mejor línea base con el intervalo por debajo de 0).")
+        print(
+            f"\nDECISIÓN: se puede publicar «{d['ganador']}» (mejora a la mejor línea base con el intervalo por debajo de 0)."
+        )
     else:
-        print("\nDECISIÓN: NINGÚN candidato mejora a la mejor línea base con claridad -> NO se publica puntaje de ML; se queda el MCDA.")
+        print(
+            "\nDECISIÓN: NINGÚN candidato mejora a la mejor línea base con claridad -> NO se publica puntaje de ML; se queda el MCDA."
+        )
     if r["aporte_contexto"]:
         a = r["aporte_contexto"]
-        print(f"\n¿Aporta el contexto (edificios, alojamiento, transporte, industria)? boosting con contexto − boosting solo con POIs: "
-              f"{a['diferencia']:+.3f}  [{a['ic_inf']:+.3f}, {a['ic_sup']:+.3f}]  -> {a['veredicto']}")
+        print(
+            f"\n¿Aporta el contexto (edificios, alojamiento, transporte, industria)? boosting con contexto − boosting solo con POIs: "
+            f"{a['diferencia']:+.3f}  [{a['ic_inf']:+.3f}, {a['ic_sup']:+.3f}]  -> {a['veredicto']}"
+        )
     if r["auc"]:
-        print("\nContraste con Foursquare (fuente independiente). AUC de la oferta esperada fuera de muestra para las celdas "
-              "con locales en Foursquare:")
+        print(
+            "\nContraste con Foursquare (fuente independiente). AUC de la oferta esperada fuera de muestra para las celdas "
+            "con locales en Foursquare:"
+        )
         print("   " + "  ".join(f"{m}={a:.3f}" for m, a in sorted(r["auc"].items(), key=lambda kv: -kv[1])))
         a = r["artefacto"]
-        print(f"   Entre las {k_top} celdas con mayor brecha ({r['modelo_brecha']}), {a['top_k']:.0%} tienen más locales en Foursquare que en OSM "
-              f"(referencia entre todas las celdas con locales: {a['referencia']:.0%}) -> "
-              + ("posible falta de mapeo en OSM" if a['top_k'] > a['referencia'] + 0.1 else "no parece falta de mapeo"))
+        print(
+            f"   Entre las {k_top} celdas con mayor brecha ({r['modelo_brecha']}), {a['top_k']:.0%} tienen más locales en Foursquare que en OSM "
+            f"(referencia entre todas las celdas con locales: {a['referencia']:.0%}) -> "
+            + ("posible falta de mapeo en OSM" if a["top_k"] > a["referencia"] + 0.1 else "no parece falta de mapeo")
+        )
     else:
         print("\n(sin datos de Foursquare: no se hace el contraste independiente)")
     f, c = validation.positions(X.index)
     relativa = validation.brecha_relativa(r["esperado"], y)
-    for titulo, serie in (("absoluta (esperado − observado)", r["brecha"]), ("RELATIVA (en desviaciones típicas)", relativa)):
+    for titulo, serie in (
+        ("absoluta (esperado − observado)", r["brecha"]),
+        ("RELATIVA (en desviaciones típicas)", relativa),
+    ):
         print(f"\nCordura: 5 celdas con mayor brecha {titulo} ({r['modelo_brecha']}, fuera de muestra):")
-        print(f"   {'celda':8} {'zona cercana':13} {'a (m)':>6} {'observado':>10} {'esperado':>9} {'abs.':>7} {'rel.':>6}")
+        print(
+            f"   {'celda':8} {'zona cercana':13} {'a (m)':>6} {'observado':>10} {'esperado':>9} {'abs.':>7} {'rel.':>6}"
+        )
         for i in np.argsort(-serie, kind="stable")[:5]:
-            print(f"   {X.index[i]:8} {zona_mas_cercana(f[i], c[i]):13} {X['dist_centro_m'].iloc[i]:>6.0f} {y[i]:>10.0f} "
-                  f"{r['esperado'][i]:>9.1f} {r['brecha'][i]:>+7.1f} {relativa[i]:>+6.1f}")
+            print(
+                f"   {X.index[i]:8} {zona_mas_cercana(f[i], c[i]):13} {X['dist_centro_m'].iloc[i]:>6.0f} {y[i]:>10.0f} "
+                f"{r['esperado'][i]:>9.1f} {r['brecha'][i]:>+7.1f} {relativa[i]:>+6.1f}"
+            )
     top_dist = float(np.median(X["dist_centro_m"].to_numpy()[np.argsort(-r["brecha"], kind="stable")[:k_top]]))
-    print(f"   distancia mediana al centro de zona: celdas de mayor brecha {top_dist:.0f} m | todas las celdas "
-          f"{float(np.median(X['dist_centro_m'])):.0f} m")
+    print(
+        f"   distancia mediana al centro de zona: celdas de mayor brecha {top_dist:.0f} m | todas las celdas "
+        f"{float(np.median(X['dist_centro_m'])):.0f} m"
+    )
     print("   (sin edificios ni población por celda —fase 1b— no se puede comprobar que esas celdas tengan gente)")
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--db", default=str(DEFAULT_DB), help=f"ruta de la base o del paquete de entrada de "
-                    f"tools/export_ml_inputs.py (default: {DEFAULT_DB})")
+    ap.add_argument(
+        "--db",
+        default=str(DEFAULT_DB),
+        help=f"ruta de la base o del paquete de entrada de " f"tools/export_ml_inputs.py (default: {DEFAULT_DB})",
+    )
     ap.add_argument("--target", choices=TARGETS + ("all",), default="all")
     ap.add_argument("--repeats", type=int, default=10, help="repeticiones de la validación espacial")
     ap.add_argument("--folds", type=int, default=5)
     ap.add_argument("--boot", type=int, default=2000, help="remuestreos del bootstrap de bloques")
     ap.add_argument("--k", type=int, default=50, help="k de la precisión@k y del análisis de la brecha")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--contexto", default=None,
-                    help="directorio con el contexto de OSM descargado con tools/download_osm_context.py (fase 1b); "
-                         "sin él se usa el que lleve el paquete de entrada, si lo lleva")
+    ap.add_argument(
+        "--contexto",
+        default=None,
+        help="directorio con el contexto de OSM descargado con tools/download_osm_context.py (fase 1b); "
+        "sin él se usa el que lleve el paquete de entrada, si lo lleva",
+    )
     args = ap.parse_args(argv)
 
     pois = data_access.load_pois(args.db)
     zonas = data_access.load_zone_table(args.db)
     fsq = data_access.load_pois_foursquare(args.db)
-    if inputs_bundle.is_bundle(args.db):         # paquete de entrada (fase 1c): se comprueba antes de usarlo
+    if inputs_bundle.is_bundle(args.db):  # paquete de entrada (fase 1c): se comprueba antes de usarlo
         problemas = inputs_bundle.verify_bundle(args.db)
         if problemas:
             print("El paquete de entrada no coincide con su manifiesto:\n  " + "\n  ".join(problemas))
@@ -165,16 +234,30 @@ def main(argv=None) -> int:
     contexto = data_access.load_context(args.db, args.contexto)
     todos = pd.concat([pois, contexto], ignore_index=True) if contexto is not None and not contexto.empty else pois
     counts = CellCounts.from_pois(todos)
-    print(f"POIs de Overpass: {len(pois)} | Foursquare: {len(fsq)} | zonas con población: {int(zonas['demanda'].notna().sum())}/{len(zonas)}")
+    print(
+        f"POIs de Overpass: {len(pois)} | Foursquare: {len(fsq)} | zonas con población: {int(zonas['demanda'].notna().sum())}/{len(zonas)}"
+    )
     con_contexto = contexto is not None and not contexto.empty
     if args.contexto or con_contexto:
         resumen_ctx = contexto.groupby("category").size().to_dict() if con_contexto else {}
-        print(f"Contexto de OSM (fase 1b): {resumen_ctx if con_contexto else 'directorio sin datos válidos: se valida sin contexto'}")
+        print(
+            f"Contexto de OSM (fase 1b): {resumen_ctx if con_contexto else 'directorio sin datos válidos: se valida sin contexto'}"
+        )
     for clave in (TARGETS if args.target == "all" else (args.target,)):
         t0 = time.perf_counter()
-        r = run_target(clave, counts, zonas, fsq, args.repeats, args.folds, args.boot, args.seed, args.k,
-                       progress=lambda i, n: print(f"\r   {clave}: repetición {i}/{n}", end="", flush=True),
-                       con_contexto=con_contexto)
+        r = run_target(
+            clave,
+            counts,
+            zonas,
+            fsq,
+            args.repeats,
+            args.folds,
+            args.boot,
+            args.seed,
+            args.k,
+            progress=lambda i, n: print(f"\r   {clave}: repetición {i}/{n}", end="", flush=True),
+            con_contexto=con_contexto,
+        )
         print(f"\r   {clave}: {time.perf_counter() - t0:.0f} s{' ' * 20}")
         imprimir(r, args.repeats, args.k)
     return 0

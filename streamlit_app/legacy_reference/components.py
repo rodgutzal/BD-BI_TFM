@@ -76,17 +76,13 @@ def render_sidebar_filters() -> Tuple[str, datetime, datetime]:
                     "Start Date",
                     value=(now - timedelta(days=7)).date(),
                 )
-                start_date = datetime.combine(start_date, datetime.min.time()).replace(
-                    tzinfo=timezone.utc
-                )
+                start_date = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
             with col2:
                 end_date = st.date_input(
                     "End Date",
                     value=now.date(),
                 )
-                end_date = datetime.combine(end_date, datetime.max.time()).replace(
-                    tzinfo=timezone.utc
-                )
+                end_date = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
 
         st.divider()
 
@@ -102,10 +98,7 @@ def render_sidebar_filters() -> Tuple[str, datetime, datetime]:
 
         if auto_refresh:
             st_autorefresh = __import__("streamlit_autorefresh")
-            st_autorefresh.st_autorefresh(
-                interval=refresh_interval * 1000,
-                key="dashboard_refresh"
-            )
+            st_autorefresh.st_autorefresh(interval=refresh_interval * 1000, key="dashboard_refresh")
 
         st.divider()
 
@@ -267,11 +260,7 @@ def render_alerts(df: pd.DataFrame, stats: dict):
         minutes_ago = (datetime.now(timezone.utc) - last_update_time).total_seconds() / 60
 
         if minutes_ago > 5:
-            alerts.append((
-                "⚠️ Stale Data",
-                f"No update in {int(minutes_ago)} minutes",
-                "warning"
-            ))
+            alerts.append(("⚠️ Stale Data", f"No update in {int(minutes_ago)} minutes", "warning"))
 
     if alerts:
         st.divider()
@@ -291,10 +280,17 @@ def render_historical_table(df: pd.DataFrame):
         return
 
     display_columns = [
-        "timestamp", "origin", "destination", "travel_time_min",
-        "no_traffic_time_min", "traffic_delay_min", "distance_km",
-        "average_speed_kmh", "origin_temperature", "origin_humidity",
-        "origin_weather"
+        "timestamp",
+        "origin",
+        "destination",
+        "travel_time_min",
+        "no_traffic_time_min",
+        "traffic_delay_min",
+        "distance_km",
+        "average_speed_kmh",
+        "origin_temperature",
+        "origin_humidity",
+        "origin_weather",
     ]
 
     available_columns = [col for col in display_columns if col in df.columns]
@@ -302,15 +298,10 @@ def render_historical_table(df: pd.DataFrame):
     df_display = df[available_columns].copy()
 
     if "timestamp" in df_display.columns:
-        df_display["timestamp"] = pd.to_datetime(
-            df_display["timestamp"], utc=True
-        ).dt.strftime("%Y-%m-%d %H:%M:%S")
+        df_display["timestamp"] = pd.to_datetime(df_display["timestamp"], utc=True).dt.strftime("%Y-%m-%d %H:%M:%S")
 
     st.dataframe(
-        df_display.sort_values(
-            "timestamp",
-            ascending=False
-        ).head(100),
+        df_display.sort_values("timestamp", ascending=False).head(100),
         use_container_width=True,
         hide_index=True,
     )

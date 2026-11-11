@@ -1,11 +1,11 @@
 """Main app with multi-level dashboard selection."""
 
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-from pathlib import Path
-import sys
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
@@ -13,7 +13,11 @@ sys.path.insert(0, str(ROOT_DIR))
 # Import dashboard modules
 from src.database import RouteDatabase
 from streamlit_app.dashboards import (
-    executive_dashboard, operations_dashboard, analyst_dashboard, maps_dashboard, recommendation_dashboard,
+    analyst_dashboard,
+    executive_dashboard,
+    maps_dashboard,
+    operations_dashboard,
+    recommendation_dashboard,
 )
 
 # El collector corre cada 15 min (ORS) y 27 min (TomTom). Pasada una hora sin
@@ -70,11 +74,7 @@ def render_system_status() -> None:
 
 def main():
     """Main application with dashboard selector."""
-    st.set_page_config(
-        page_title="Urban Mobility Analytics",
-        page_icon="🚗",
-        layout="wide"
-    )
+    st.set_page_config(page_title="Urban Mobility Analytics", page_icon="🚗", layout="wide")
 
     # Dashboard selector
     st.sidebar.markdown("## 📊 Selección de dashboard")
@@ -83,7 +83,7 @@ def main():
         "Elige tu dashboard:",
         ["Executive", "Operations", "Analyst", "Maps", "Recomendación"],
         index=0,
-        label_visibility="collapsed"
+        label_visibility="collapsed",
     )
 
     # User info
