@@ -139,12 +139,12 @@ jobs:
     # BLOQUEANTES desde que el código se formateó (PR #59). La configuración
     # (línea de 120, perfil black) está en pyproject.toml. Las versiones van
     # fijadas porque cada versión mayor de black puede cambiar el formato.
-    # En local: `black src/ tests/` e `isort src/ tests/` (en Windows, con
+    # En local: `black src/ tests/ streamlit_app/ tools/` e `isort` sobre lo mismo (en Windows, con
     # PYTHONUTF8=1 para que isort lea los archivos con acentos).
     - name: Check code formatting
       run: |
-        black src/ tests/ --check
+        black src/ tests/ streamlit_app/ tools/ --check
 
     - name: Check import sorting
       run: |
-        isort src/ tests/ --check-only
+        isort src/ tests/ streamlit_app/ tools/ --check-only
