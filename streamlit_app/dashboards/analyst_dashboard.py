@@ -1,5 +1,6 @@
 """Analyst dashboard for data team and researchers."""
 
+import logging
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -22,6 +23,8 @@ from streamlit_app.dashboards import predictive_modeling_dashboard
 # visible), así que sin caché, cualquier interacción en cualquier pestaña
 # re-dispara las consultas de las 7 a la vez.
 _CACHE_TTL = 60
+
+logger = logging.getLogger(__name__)
 
 # Tope de filas para consultas de UNA sola ruta. 90 días x ~150 mediciones/día
 # por ruta ≈ 13.500 filas: el tope anterior (10.000) las recortaba.
@@ -496,6 +499,21 @@ def render_full_export():
             )
 
 
+def _render_aislado(nombre: str, render) -> None:
+    """Ejecuta el contenido de una pestaña; si falla, el error se muestra DENTRO de esa pestaña y las demás siguen.
+
+    st.tabs() ejecuta las siete pestañas en cada rerun, así que sin esto una excepción en una (una consulta, un modelo,
+    una tabla ausente) tumbaba la página entera y ninguna pestaña se veía. Solo se captura `Exception`: `st.stop()` y
+    `st.rerun()` usan excepciones de control (BaseException) y deben seguir propagándose.
+    """
+    try:
+        render()
+    except Exception as e:
+        logger.exception("Falló la pestaña «%s» del Analyst", nombre)
+        st.error(f"No se pudo mostrar «{nombre}»: {type(e).__name__}: {e}")
+        st.caption("Las demás pestañas no se ven afectadas. El detalle completo está en el registro de la aplicación.")
+
+
 def main():
     """Analyst dashboard main function."""
     st.set_page_config(page_title="Analyst Dashboard", layout="wide")
@@ -514,25 +532,25 @@ def main():
     ])
 
     with tab1:
-        render_data_explorer()
+        _render_aislado("Data Explorer", render_data_explorer)
 
     with tab2:
-        render_statistical_tests()
+        _render_aislado("Statistical Tests", render_statistical_tests)
 
     with tab3:
-        render_correlation_matrix()
+        _render_aislado("Correlations", render_correlation_matrix)
 
     with tab4:
-        render_model_performance()
+        _render_aislado("Model Performance", render_model_performance)
 
     with tab5:
-        render_data_quality_report()
+        _render_aislado("Data Quality", render_data_quality_report)
 
     with tab6:
-        render_sql_query()
+        _render_aislado("SQL Query", render_sql_query)
 
     with tab7:
-        render_full_export()
+        _render_aislado("Exportar Todo", render_full_export)
 
     st.divider()
     st.markdown("""
