@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**42 archivos · 686 funciones de test · 775 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**43 archivos · 709 funciones de test · 798 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -44,6 +44,7 @@
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
 | [`tests/test_ors_null_fields.py`](#teststest_ors_null_fieldspy) | 2 | 2 |
+| [`tests/test_poi_extraction.py`](#teststest_poi_extractionpy) | 23 | 23 |
 | [`tests/test_predictive_modeling_dashboard.py`](#teststest_predictive_modeling_dashboardpy) | 7 | 7 |
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
@@ -894,6 +895,39 @@
 
 - `test_ors_row_traffic_delay_is_none_not_nan` — Confirma la forma exacta del bug: con una sola fila ORS, .get() devuelve None (no NaN), que rompe comparaciones directas sin guardar.
 - `test_safe_helper_handles_none_and_nan` — El helper _safe() (duplicado en operations_dashboard.py y legacy_reference/components.py) debe neutralizar tanto None como NaN.
+
+## `tests/test_poi_extraction.py`
+
+> Pruebas de los dos recolectores de POIs (`src/poi_extraction.py`, Overpass, y
+> `src/poi_extraction_foursquare.py`, Foursquare).
+>
+> No hacen llamadas de red: el cliente es un doble y la base de datos es un SQLite
+> temporal. Los archivos que los módulos escriben en `logs/` (heartbeat, contador de
+> llamadas) se redirigen a `tmp_path`.
+
+- `test_overpass_run_once_guarda_los_pois_y_escribe_el_heartbeat`
+- `test_overpass_run_once_pasa_el_margen_al_cliente`
+- `test_overpass_un_segundo_ciclo_actualiza_en_vez_de_duplicar`
+- `test_overpass_si_la_descarga_falla_devuelve_0_y_no_toca_nada`
+- `test_overpass_heartbeat_contiene_una_fecha_iso_utc`
+- `test_overpass_heartbeat_no_rompe_si_no_puede_escribir`
+- `test_overpass_main_sin_intervalo_hace_un_ciclo_y_cierra_el_cliente`
+- `test_overpass_main_con_intervalo_repite_y_ctrl_c_sale_con_0`
+- `test_overpass_main_un_error_fatal_sale_con_1_y_cierra_el_cliente`
+- `test_contador_nuevo_empieza_en_las_llamadas_dadas_y_guarda_el_mes`
+- `test_contador_acumula_dentro_del_mismo_mes`
+- `test_contador_se_reinicia_al_cambiar_de_mes`
+- `test_contador_corrupto_se_reinicia_sin_fallar`
+- `test_contador_no_rompe_si_no_puede_guardar`
+- `test_foursquare_run_once_guarda_los_pois_cuenta_las_llamadas_y_escribe_el_heartbeat`
+- `test_foursquare_run_once_pide_zonas_y_rutas_al_cliente`
+- `test_foursquare_avisa_al_superar_el_limite_mensual`
+- `test_foursquare_no_avisa_si_queda_margen`
+- `test_foursquare_heartbeat_no_rompe_si_no_puede_escribir`
+- `test_foursquare_main_sin_clave_sale_con_1_sin_crear_el_cliente`
+- `test_foursquare_main_con_clave_hace_un_ciclo_y_cierra_el_cliente`
+- `test_foursquare_main_con_intervalo_repite_y_ctrl_c_sale_con_0`
+- `test_foursquare_main_un_error_fatal_sale_con_1_y_cierra_el_cliente`
 
 ## `tests/test_predictive_modeling_dashboard.py`
 

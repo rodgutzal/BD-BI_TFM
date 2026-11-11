@@ -572,6 +572,7 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 | `test_normalize_bronze_timestamps.py` | `tools/normalize_bronze_timestamps.py`: ensayo sin cambios, aplicar con respaldo, base ocupada, *rollback* y que después el pipeline no duplique |
 | `test_operations_status.py` | `get_latest_per_route` y el estado por ruta de Operations (una ruta sin lectura de tráfico nunca sale en verde) |
 | `test_ors_null_fields.py` | Regresión: campos que vienen `NULL` con `DATA_SOURCE=ors` (el ayudante `_safe`) |
+| `test_poi_extraction.py` | Los dos recolectores de POIs (`poi_extraction` Overpass y `poi_extraction_foursquare`) sin red: `run_once` guarda (upsert, sin duplicar), escribe el heartbeat solo en un ciclo bueno y devuelve 0 si la descarga falla; el contador mensual de llamadas de Foursquare (acumula, se reinicia al cambiar de mes o si está corrupto, no rompe si no puede guardar) y su aviso al pasar el límite; `main`: un ciclo, intervalo con Ctrl+C (código 0), error fatal (código 1), cierre del cliente y salida sin `FOURSQUARE_API_KEY` |
 | `test_predictive_modeling_dashboard.py` | Preparación de datos del modelado: clima ausente (no es "lluvia") y exclusión de filas incompletas |
 | `test_predictive_modeling_ondemand.py` | Modelado bajo demanda con `AppTest`: al abrir no se entrena nada, un botón entrena solo su sección, el de "los cuatro" entrena todo |
 | `test_query_measurements_polyline.py` | `include_polyline` en `query_measurements`: sin la columna pesada por defecto y con ella intacta cuando se pide |
