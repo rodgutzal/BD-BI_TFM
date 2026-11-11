@@ -6,12 +6,12 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**42 archivos · 672 funciones de test · 761 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**42 archivos · 677 funciones de test · 766 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
 | [`tests/test_analyst_quality.py`](#teststest_analyst_qualitypy) | 6 | 6 |
-| [`tests/test_analyst_tabs.py`](#teststest_analyst_tabspy) | 17 | 25 |
+| [`tests/test_analyst_tabs.py`](#teststest_analyst_tabspy) | 22 | 30+ |
 | [`tests/test_analytics.py`](#teststest_analyticspy) | 3 | 3 |
 | [`tests/test_api.py`](#teststest_apipy) | 14 | 20 |
 | [`tests/test_api_clients.py`](#teststest_api_clientspy) | 22 | 22+ |
@@ -98,6 +98,11 @@
 - `test_las_correlaciones_se_dibujan_con_las_columnas_por_defecto`
 - `test_analyst_con_la_base_vacia_no_lanza_excepciones`
 - `test_la_pestana_de_modelos_marca_las_rutas_con_modelo_entrenado`
+- `test_un_error_en_una_pestana_se_muestra_en_ella_y_no_tumba_la_pagina` — Antes una excepción en cualquier pestaña (se ejecutan las siete en cada rerun) dejaba la página entera con el traceback. Ahora cada una se aísla: se dice cuál falló y por qué.
+- `test_las_demas_pestanas_siguen_mostrandose_cuando_una_falla` — Con el explorador roto, la pestaña del editor SQL (que viene después) sigue dibujando su editor.
+- `test_sin_fallos_no_aparece_ningun_aviso_de_pestana`
+- `test_el_fallo_de_una_pestana_queda_en_el_registro` — El mensaje en pantalla es corto; el traceback completo va al registro de la aplicación.
+- `test_st_stop_dentro_de_una_pestana_no_se_trata_como_un_error` — Solo se captura Exception: st.stop() usa una excepción de control (BaseException) y debe seguir deteniendo el script. Si se capturara, se registraría como un fallo de la pestaña que no lo es (en pantalla no se notaría: el propio st.error volvería a disparar la parada), así que se comprueba el registro.
 
 ## `tests/test_analytics.py`
 
