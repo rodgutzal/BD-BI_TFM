@@ -583,6 +583,7 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 | `test_predictive_modeling_ondemand.py` | Modelado bajo demanda con `AppTest`: al abrir no se entrena nada, un botón entrena solo su sección, el de "los cuatro" entrena todo |
 | `test_query_measurements_polyline.py` | `include_polyline` en `query_measurements`: sin la columna pesada por defecto y con ella intacta cuando se pide |
 | `test_recommendation_dashboard.py` | Tabla de Recomendación: cada factor crudo y normalizado; el puntaje es la suma ponderada de lo que se muestra |
+| `test_license.py` | La licencia: `LICENSE` es el texto estándar de MIT con el titular, `setup.py` declara `license="MIT"` (sin el clasificador obsoleto), y el README enlaza la licencia, avisa de que **no cubre los datos de terceros** y solo menciona archivos de datos que existen |
 | `test_tests_documentation.py` | Esta regla: `docs/TESTS.md` al día y todos los archivos de test en esta tabla |
 | `test_time_series.py` | `TimeSeriesAnalytics`: descomposición estacional, estacionariedad, autocorrelación, patrones, puntos de cambio |
 <!-- tests:fin -->
@@ -958,6 +959,23 @@ recommend_locations(db, "quiero abrir una pizzería")
 Expuesto al usuario final en el dashboard **Recomendación** (`streamlit_app/dashboards/recommendation_dashboard.py`), con los pesos ajustables desde la propia interfaz.
 
 Debajo del resultado por zona, el dashboard muestra el **panorama por celda de 250 m** (`streamlit_app/dashboards/panorama_section.py`): las tres lentes —competencia, mercado consumidor y proveedores— por separado sobre un mapa, con la ficha de cada celda y controles para ajustar a quién vende el negocio, qué es competencia y qué proveedores le importan. No hay puntaje combinado. La brecha de oferta aprendida se ofrece como capa **exploratoria, no validada**. Los datos vienen de la tabla precalculada en `data/ml/` (ver `docs/DISENO_ML_RECOMENDACION.md`, secciones 3.I a 3.K).
+
+---
+
+## Licencia
+
+El **código** de este repositorio se distribuye bajo la licencia **MIT** (ver [`LICENSE`](LICENSE)): puede usarse, copiarse, modificarse y redistribuirse, también en proyectos cerrados, conservando el aviso de copyright. Se ofrece sin garantías.
+
+**La licencia cubre el código y lo que el proyecto escribió, no los datos de terceros ni los servicios externos.** Los datos que recoge y consulta el proyecto tienen sus propios términos de uso, que hay que respetar antes de redistribuirlos o publicarlos:
+
+- **OpenStreetMap / Overpass** (POIs, edificios, transporte, alojamiento): datos bajo la licencia **ODbL**, que exige atribuir «© colaboradores de OpenStreetMap» y puede imponer condiciones a las bases de datos derivadas que se publiquen.
+- **TomTom, OpenRouteService (HeiGIT), OpenWeather, Foursquare y Google Data Commons**: cada proveedor tiene sus condiciones de uso y de almacenamiento y redistribución de resultados.
+
+**Datos de terceros que SÍ están en este repositorio** (la base `data/mobility.db` y los CSV recientes no se versionan, ver `.gitignore`):
+- `data/raw/legacy_tomtom_route_weather_data.csv` (~22 MB, 2.665 filas de rutas de TomTom con clima de OpenWeather y la geometría de la ruta) y `data/raw/legacy_ors_traffic_weather_data.csv` / `traffic_weather_data.csv` (ORS y OpenWeather): histórico heredado.
+- `data/ml/` (conteos por celda y panorama): derivados de OpenStreetMap y de las mediciones de rutas.
+
+La licencia MIT **no relicencia** esos datos. Mientras el repositorio sea público, conviene revisar si las condiciones de cada proveedor permiten publicarlos. Los textos de `data/text/` (frases de entrenamiento y evaluación del clasificador) los escribió el autor y quedan bajo MIT. Si publicas resultados o datos derivados (por ejemplo, en el TFM), cita las fuentes.
 
 ---
 
