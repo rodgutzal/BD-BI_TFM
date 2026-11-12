@@ -23,6 +23,9 @@ setup(
     name="urban-mobility-analytics",
     version="1.0.0",
     author="Equipo BD-BI TFM (MBDIB)",
+    # Expresión SPDX; el texto completo está en LICENSE. Sin clasificador "License :: ...": los clasificadores de licencia
+    # están obsoletos en setuptools moderno a favor de esta expresión.
+    license="MIT",
     description="Real-time traffic and weather monitoring dashboard for Malta routes",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -36,7 +39,6 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
-        # Sin clasificador de licencia a propósito: el repo no tiene archivo LICENSE.
         "Operating System :: OS Independent",
         "Intended Audience :: Developers",
         "Topic :: Scientific/Engineering :: GIS",
