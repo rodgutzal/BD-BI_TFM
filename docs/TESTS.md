@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**47 archivos · 781 funciones de test · 871 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**48 archivos · 785 funciones de test · 875 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -31,6 +31,7 @@
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
 | [`tests/test_foursquare_client.py`](#teststest_foursquare_clientpy) | 12 | 28 |
 | [`tests/test_hybrid_scheduler.py`](#teststest_hybrid_schedulerpy) | 3 | 3 |
+| [`tests/test_license.py`](#teststest_licensepy) | 4 | 4 |
 | [`tests/test_location_scoring.py`](#teststest_location_scoringpy) | 22 | 22 |
 | [`tests/test_locations.py`](#teststest_locationspy) | 5 | 5 |
 | [`tests/test_medallion.py`](#teststest_medallionpy) | 20 | 20 |
@@ -514,6 +515,15 @@
 - `test_ors_and_tomtom_fire_on_independent_schedules` — Con 15/27 min en 120 min simulados: ORS 9 veces, TomTom 5 veces.
 - `test_both_sources_fire_immediately_on_first_tick` — En el minuto 0 (last_run=None), ambas fuentes deben disparar de inmediato.
 - `test_signal_handler_requests_stop_and_close_closes_both_collectors` — La señal (Ctrl+C o SIGTERM) solo pide parar, sin salir: el ciclo en curso termina. Al salir del bucle, close() cierra los clientes (traffic_client y weather) de AMBOS collectors.
+
+## `tests/test_license.py`
+
+> Tests de la licencia del repositorio: el archivo LICENSE, su declaración en setup.py y su mención en el README.
+
+- `test_el_archivo_license_es_el_texto_estandar_de_mit_con_el_titular` — LICENSE existe, es MIT y lleva el año y el titular elegidos (rodgutzal).
+- `test_setup_declara_la_licencia_mit_y_no_un_clasificador_obsoleto` — setup.py declara license="MIT" (expresión SPDX). No usa el clasificador "License :: ...", obsoleto en setuptools moderno, ni conserva el comentario que decía que el repo no tenía licencia.
+- `test_el_readme_enlaza_la_licencia_y_avisa_de_que_no_cubre_los_datos_de_terceros` — El README dice que el código es MIT, enlaza LICENSE y advierte de que la licencia no cubre datos de terceros.
+- `test_los_datos_de_terceros_que_el_readme_dice_que_estan_en_el_repositorio_existen` — El README enumera datos de terceros versionados; si se retiran del repositorio, el aviso debe actualizarse.
 
 ## `tests/test_location_scoring.py`
 
