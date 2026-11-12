@@ -149,3 +149,5 @@ def test_operations_st_stop_dentro_de_una_seccion_no_se_trata_como_un_error(base
     assert not at.exception and not any("No se pudo mostrar" in e.value for e in at.error)
     assert not [r for r in caplog.records if r.name == op.logger.name]
     assert not any("Refresh the page" in i.value for i in at.info)  # el script se detuvo antes del aviso final
+    # y se detuvo en esa sección: la anterior (alertas) se dibujó y ninguna de las siguientes
+    assert [s.value for s in at.subheader] == SUBTITULOS[:1]
