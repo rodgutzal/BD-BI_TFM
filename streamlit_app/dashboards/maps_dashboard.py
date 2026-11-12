@@ -248,10 +248,25 @@ def render_route_status_table(db, selected_routes):
 
 
 def render_map_section(db, selected_routes, poi_labels, poi_source_key):
-    """El mapa de rutas con la capa de infraestructura elegida y su leyenda de colores."""
+    """El mapa de rutas con la capa de infraestructura elegida y su leyenda de colores.
+
+    La capa de POIs es opcional: si falla, el mapa de rutas se dibuja igualmente, sin ella, y se avisa. Se aplica a una
+    copia de la figura para que una capa a medias no quede mezclada con el mapa."""
     fig = render_route_map(db, selected_routes)
-    render_poi_layer(fig, db, poi_labels, poi_source_key)
+    capa = go.Figure(fig)
+    capa_fallida = None
+    try:
+        render_poi_layer(capa, db, poi_labels, poi_source_key)
+        fig = capa
+    except Exception as e:
+        logger.exception("Falló la capa de infraestructura del mapa de Maps")
+        capa_fallida = e
     st.plotly_chart(fig, width="stretch")
+    if capa_fallida is not None:
+        st.warning(
+            "No se pudo dibujar la capa de infraestructura; el mapa de rutas se muestra sin ella. "
+            f"({type(capa_fallida).__name__}: {capa_fallida})"
+        )
 
     st.caption(
         "🟢 Flujo libre (≤1 min de retraso) · 🟡 Moderado (1-4 min) · "

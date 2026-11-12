@@ -589,6 +589,59 @@ def test_maps_una_seccion_que_falla_a_mitad_no_deja_lo_que_ya_habia_dibujado(bas
     assert [e.value for e in at.error] == ["No se pudo mostrar «Mapa de rutas»: RuntimeError: se cayó a mitad"]
 
 
+def test_maps_si_falla_la_capa_de_infraestructura_el_mapa_de_rutas_se_dibuja_sin_ella(base, monkeypatch, caplog):
+    """La capa de POIs es opcional: si falla, el mapa de rutas y su leyenda se dibujan igualmente, con un aviso (no un
+    error de sección), y el fallo queda en el registro."""
+
+    def capa_rota(fig, *_args, **_kw):
+        fig.add_scattermapbox(lat=[35.9], lon=[14.5], name="capa a medias")  # a medias: no debe quedar en el mapa
+        raise RuntimeError("tabla pois inexistente")
+
+    monkeypatch.setattr(mp, "render_poi_layer", capa_rota)
+    with caplog.at_level("ERROR", logger=mp.logger.name):
+        at = _abrir(APP_MAPS)
+    assert not at.exception, [e.value for e in at.exception]
+    assert not at.error  # no es un fallo de sección: el mapa se dibujó
+    assert any("No se pudo dibujar la capa de infraestructura" in w.value for w in at.warning)
+    assert any("Flujo libre" in c.value for c in at.caption)  # la leyenda del mapa se dibujó
+    assert any("capa de infraestructura" in r.getMessage() and r.exc_info for r in caplog.records)
+
+
+def _figura_entregada_a_plotly(monkeypatch):
+    """Captura la figura que `render_map_section` entrega a `st.plotly_chart` (la pantalla se llama directamente)."""
+    entregadas = []
+    monkeypatch.setattr(mp.st, "plotly_chart", lambda fig, **_kw: entregadas.append(fig))
+    return entregadas
+
+
+def test_maps_la_capa_de_infraestructura_que_funciona_llega_a_la_figura(base, monkeypatch):
+    """Cuando la capa de POIs funciona, sus marcadores van en la figura que se dibuja, junto a las rutas."""
+    db, _ = base
+    db.save_pois([_poi_overpass(1), _poi_overpass(2)])
+    entregadas = _figura_entregada_a_plotly(monkeypatch)
+    mp.render_map_section(db, ROUTES[:2], ["school"], "overpass")
+    assert len(entregadas) == 1
+    nombres = [t.name for t in entregadas[0].data]
+    assert mp.POI_CATEGORY_STYLE["school"]["label"] in nombres
+    assert len([t for t in entregadas[0].data if t.mode == "lines"]) == 2  # y las dos rutas siguen
+
+
+def test_maps_una_capa_que_falla_a_mitad_no_deja_marcadores_sueltos_en_el_mapa(base, monkeypatch):
+    """Si la capa de POIs añade algo y luego falla, la figura que se dibuja no lleva esa capa a medias."""
+    db, _ = base
+
+    def capa_rota(fig, *_args, **_kw):
+        fig.add_scattermapbox(lat=[35.9], lon=[14.5], name="capa a medias")
+        raise RuntimeError("se cayó a mitad")
+
+    monkeypatch.setattr(mp, "render_poi_layer", capa_rota)
+    entregadas = _figura_entregada_a_plotly(monkeypatch)
+    mp.render_map_section(db, ROUTES[:2], ["school"], "overpass")
+    assert len(entregadas) == 1
+    assert "capa a medias" not in [t.name for t in entregadas[0].data]
+    assert len([t for t in entregadas[0].data if t.mode == "lines"]) == 2  # el mapa de rutas sí se dibuja
+
+
 def test_maps_sin_fallos_no_aparece_ningun_aviso_de_seccion(base):
     """Si ninguna sección falla, no aparece ningún aviso «No se pudo mostrar»."""
     at = _abrir(APP_MAPS)
@@ -610,6 +663,9 @@ def test_maps_st_stop_dentro_de_una_seccion_no_se_trata_como_un_error(base, monk
 
     def parar(*_args, **_kw):
         st.stop()
+
+    control = _abrir(APP_MAPS)  # sin parar, la tabla de estado y su subtítulo SÍ se dibujan
+    assert control.dataframe and "📊 Estado actual por ruta" in [s.value for s in control.subheader]
 
     monkeypatch.setattr(mp, "render_map_section", parar)
     with caplog.at_level("ERROR", logger=mp.logger.name):
