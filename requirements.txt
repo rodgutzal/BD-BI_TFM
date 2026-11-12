@@ -9,10 +9,10 @@ plotly==6.7.0
 numpy==2.4.6
 
 # --- Machine Learning / analítica avanzada (src/models, src/analytics) ---
-scikit-learn>=1.5.1
-scipy==1.17.1         # la última con wheels para Python 3.11 (Docker y CI); 1.18 exige 3.12+. requirements-ml.txt usa 1.18.0 (3.13)
+scikit-learn==1.9.0   # con wheels para Python 3.11 a 3.13; la misma versión con la que se midió el ML (requirements-ml.txt)
+scipy==1.17.1        # la última con wheels para Python 3.11 (Docker y CI); 1.18 exige 3.12+. requirements-ml.txt usa 1.18.0 (3.13)
 statsmodels==0.15.0
-matplotlib>=3.8  # usado por sklearn.tree.plot_tree en predictive_modeling_dashboard.py
+matplotlib==3.11.1  # con wheels para Python 3.11 a 3.13; usado por sklearn.tree.plot_tree en predictive_modeling_dashboard.py
 
 # --- TimescaleDB (capa de producción) ---
 psycopg2-binary>=2.9
