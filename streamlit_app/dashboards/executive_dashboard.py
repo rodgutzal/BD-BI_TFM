@@ -1,5 +1,6 @@
 """Executive dashboard for C-level insights."""
 
+import logging
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,6 +16,9 @@ sys.path.insert(0, str(ROOT_DIR))
 from src.analytics import MobilityAnalytics
 from src.data_warehouse.gold_layer import GoldLayer
 from src.database import RouteDatabase
+from streamlit_app.dashboards.aislado import render_aislado
+
+logger = logging.getLogger(__name__)
 
 # TTL corto pero no-cero: el collector escribe cada 15-27 min (modo híbrido),
 # así que no hace falta re-consultar en cada clic/interacción para "sentirse"
@@ -242,44 +246,8 @@ def render_distribution_chart():
     st.plotly_chart(fig, width="stretch")
 
 
-def main():
-    """Executive dashboard main function."""
-    st.set_page_config(page_title="Executive Dashboard", layout="wide")
-
-    st.markdown("# 📊 Executive Dashboard")
-    st.markdown("System-wide performance metrics and strategic insights")
-
-    # Get summary
-    gold = get_gold_layer()
-    summary = _fetch_executive_summary(gold, days=30)
-
-    if "error" in summary:
-        st.error("Error loading summary data")
-        return
-
-    # KPI Cards
-    st.subheader("Key Performance Indicators")
-    render_kpi_cards(summary, _fetch_period_comparison(gold, days=30))
-
-    st.divider()
-
-    # Route Performance
-    st.subheader("Route Performance Analysis")
-    render_route_performance(summary.get("best_routes", []), summary.get("worst_routes", []))
-
-    st.divider()
-
-    # Trend Analysis
-    col1, col2 = st.columns(2)
-    with col1:
-        render_trend_chart(days=30)
-    with col2:
-        render_distribution_chart()
-
-    st.divider()
-
-    # Alerts
-    st.subheader("⚠️ System Alerts")
+def render_alerts(summary: dict) -> None:
+    """Alertas del sistema según los umbrales de tiempo de viaje y fiabilidad."""
     alerts = []
 
     if not _hay_datos(summary):
@@ -296,6 +264,56 @@ def main():
             st.warning(alert)
     else:
         st.success("✅ All systems operating normally")
+
+
+def _aislar(nombre: str, render) -> None:
+    """Ejecuta una sección del Executive; si falla, el error queda en su sitio y las demás secciones siguen."""
+    render_aislado(nombre, render, logger, ambito="Executive")
+
+
+def main():
+    """Executive dashboard main function."""
+    st.set_page_config(page_title="Executive Dashboard", layout="wide")
+
+    st.markdown("# 📊 Executive Dashboard")
+    st.markdown("System-wide performance metrics and strategic insights")
+
+    # Get summary
+    gold = get_gold_layer()
+    summary = _fetch_executive_summary(gold, days=30)
+
+    if "error" in summary:
+        st.error("Error loading summary data")
+        return
+
+    # Cada sección va aislada: si una falla (una consulta, un gráfico), las demás se siguen viendo.
+    # KPI Cards
+    st.subheader("Key Performance Indicators")
+    _aislar("Key Performance Indicators", lambda: render_kpi_cards(summary, _fetch_period_comparison(gold, days=30)))
+
+    st.divider()
+
+    # Route Performance
+    st.subheader("Route Performance Analysis")
+    _aislar(
+        "Route Performance Analysis",
+        lambda: render_route_performance(summary.get("best_routes", []), summary.get("worst_routes", [])),
+    )
+
+    st.divider()
+
+    # Trend Analysis
+    col1, col2 = st.columns(2)
+    with col1:
+        _aislar("System Performance Trend", lambda: render_trend_chart(days=30))
+    with col2:
+        _aislar("Travel Time Distribution", render_distribution_chart)
+
+    st.divider()
+
+    # Alerts
+    st.subheader("⚠️ System Alerts")
+    _aislar("System Alerts", lambda: render_alerts(summary))
 
 
 if __name__ == "__main__":

@@ -447,3 +447,80 @@ def test_la_capa_de_pois_no_hace_nada_sin_categorias_o_con_fuente_invalida(base)
     mp.render_poi_layer(fig, db, [], "overpass")
     mp.render_poi_layer(fig, db, ["school"], "otra")
     assert len(fig.data) == 0
+
+
+# ---------------------------------------------------------------------------
+# Executive: un error en una sección no tumba las demás
+# ---------------------------------------------------------------------------
+
+SECCIONES_EXEC = [
+    ("render_kpi_cards", "Key Performance Indicators"),
+    ("render_route_performance", "Route Performance Analysis"),
+    ("render_trend_chart", "System Performance Trend"),
+    ("render_distribution_chart", "Travel Time Distribution"),
+    ("render_alerts", "System Alerts"),
+]
+
+
+def _falla(*_args, **_kw):
+    raise RuntimeError("tabla inexistente")
+
+
+@pytest.mark.parametrize("funcion, nombre", SECCIONES_EXEC)
+def test_executive_un_error_en_una_seccion_se_muestra_en_ella_y_no_tumba_la_pagina(base, monkeypatch, funcion, nombre):
+    """Cada sección (parametrizado) se aísla: se dice cuál falló y por qué, y la página sigue hasta la última sección."""
+    _, ruta = base
+    _poblar(ruta, dias_atras=[0, 1, 2])
+    monkeypatch.setattr(ex, funcion, _falla)
+    at = _abrir(APP_EXEC)
+    assert not at.exception, [e.value for e in at.exception]
+    errores = [e.value for e in at.error]
+    assert errores == [f"No se pudo mostrar «{nombre}»: RuntimeError: tabla inexistente"]
+    assert "⚠️ System Alerts" in [s.value for s in at.subheader]  # se llegó hasta el final de la pantalla
+
+
+def test_executive_las_demas_secciones_siguen_mostrandose_cuando_una_falla(base, monkeypatch):
+    """Con el gráfico de tendencia roto, las tarjetas y las alertas (que vienen antes y después) se siguen viendo."""
+    _, ruta = base
+    _poblar(ruta, dias_atras=[0, 1, 2])
+    monkeypatch.setattr(ex, "render_trend_chart", _falla)
+    at = _abrir(APP_EXEC)
+    assert not at.exception and len(at.error) == 1
+    assert set(_metricas(at)) == {"System Avg Travel Time", "System Reliability", "Active Routes", "Total Measurements"}
+    assert any("All systems operating normally" in s.value for s in at.success)
+    assert any(c.value.startswith("Las demás secciones no se ven afectadas") for c in at.caption)
+
+
+def test_executive_sin_fallos_no_aparece_ningun_aviso_de_seccion(base):
+    """Si ninguna sección falla, no aparece ningún aviso «No se pudo mostrar»."""
+    _, ruta = base
+    _poblar(ruta, dias_atras=[0, 1, 2])
+    at = _abrir(APP_EXEC)
+    assert not at.exception and not any("No se pudo mostrar" in e.value for e in at.error)
+
+
+def test_executive_el_fallo_de_una_seccion_queda_en_el_registro(base, monkeypatch, caplog):
+    """El mensaje en pantalla es corto; el traceback completo va al registro de la aplicación."""
+    _, ruta = base
+    _poblar(ruta, dias_atras=[0, 1, 2])
+    monkeypatch.setattr(ex, "render_distribution_chart", _falla)
+    with caplog.at_level("ERROR", logger=ex.logger.name):
+        _abrir(APP_EXEC)
+    assert any("Travel Time Distribution" in r.getMessage() and r.exc_info for r in caplog.records)
+
+
+def test_executive_st_stop_dentro_de_una_seccion_no_se_trata_como_un_error(base, monkeypatch, caplog):
+    """Solo se captura Exception: `st.stop()` usa una excepción de control y debe seguir deteniendo el script. Si se
+    capturara, se registraría como un fallo de la sección que no lo es, así que se comprueba el registro."""
+    _, ruta = base
+    _poblar(ruta, dias_atras=[0, 1, 2])
+
+    def parar():
+        st.stop()
+
+    monkeypatch.setattr(ex, "render_trend_chart", lambda days=30: parar())
+    with caplog.at_level("ERROR", logger=ex.logger.name):
+        at = _abrir(APP_EXEC)
+    assert not at.exception and not any("No se pudo mostrar" in e.value for e in at.error)
+    assert not [r for r in caplog.records if r.name == ex.logger.name]
+    assert not at.success  # el script se detuvo: las alertas, que vienen después, no se dibujaron
