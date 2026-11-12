@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**44 archivos · 719 funciones de test · 808 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**45 archivos · 726 funciones de test · 815 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -43,6 +43,7 @@
 | [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 34 | 47 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
+| [`tests/test_operations_dashboard.py`](#teststest_operations_dashboardpy) | 7 | 7+ |
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
 | [`tests/test_ors_null_fields.py`](#teststest_ors_null_fieldspy) | 2 | 2 |
 | [`tests/test_poi_extraction.py`](#teststest_poi_extractionpy) | 23 | 23 |
@@ -876,6 +877,18 @@
 - `test_si_la_base_esta_en_uso_aborta_sin_cambiar_nada` — Otro proceso (el collector) con una escritura abierta: no se aplica nada.
 - `test_si_la_verificacion_falla_se_revierte_todo` — Si la verificación final falla, se revierte todo y la base queda como estaba.
 - `test_el_respaldo_se_puede_omitir_solo_por_codigo` — La línea de comandos siempre respalda; `backup=False` existe solo para pruebas.
+
+## `tests/test_operations_dashboard.py`
+
+> Pantalla Operations (AppTest): se abre con datos y un error en una sección no tumba las demás.
+
+- `test_operations_abre_con_datos_y_muestra_sus_cuatro_secciones` — Operations se abre sin excepciones con datos, y muestra las cuatro secciones y el aviso final.
+- `test_operations_la_tabla_de_alertas_marca_la_ruta_lenta` — Con una ruta de más de 30 min de media en la última hora, las alertas la listan.
+- `test_operations_un_error_en_una_seccion_se_muestra_en_ella_y_no_tumba_la_pagina` — Cada sección (parametrizado) se aísla: se dice cuál falló y por qué, y la página sigue hasta el aviso final.
+- `test_operations_las_demas_secciones_siguen_mostrandose_cuando_una_falla` — Con las alertas rotas, la tabla de estado y el resumen de 24 h (que vienen después) se siguen viendo.
+- `test_operations_una_seccion_que_falla_a_mitad_no_deja_lo_que_ya_habia_dibujado` — Si una sección dibuja un título y luego falla, ese título a medias se retira: solo queda el aviso.
+- `test_operations_el_fallo_de_una_seccion_queda_en_el_registro` — El mensaje en pantalla es corto; el traceback completo va al registro de la aplicación.
+- `test_operations_st_stop_dentro_de_una_seccion_no_se_trata_como_un_error` — Solo se captura Exception: `st.stop()` usa una excepción de control y debe seguir deteniendo el script. Si se capturara, se registraría como un fallo de la sección que no lo es, así que se comprueba el registro.
 
 ## `tests/test_operations_status.py`
 
