@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**45 archivos · 726 funciones de test · 815 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**45 archivos · 735 funciones de test · 824 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -20,7 +20,7 @@
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
-| [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 29 | 40+ |
+| [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 38 | 49+ |
 | [`tests/test_data_profile.py`](#teststest_data_profilepy) | 15 | 15 |
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
@@ -323,6 +323,15 @@
 - `test_executive_sin_fallos_no_aparece_ningun_aviso_de_seccion` — Si ninguna sección falla, no aparece ningún aviso «No se pudo mostrar».
 - `test_executive_el_fallo_de_una_seccion_queda_en_el_registro` — El mensaje en pantalla es corto; el traceback completo va al registro de la aplicación.
 - `test_executive_st_stop_dentro_de_una_seccion_no_se_trata_como_un_error` — Solo se captura Exception: `st.stop()` usa una excepción de control y debe seguir deteniendo el script. Si se capturara, se registraría como un fallo de la sección que no lo es, así que se comprueba el registro.
+- `test_maps_un_error_en_una_seccion_se_muestra_en_ella_y_no_tumba_la_pagina` — Cada sección (parametrizado) se aísla: se dice cuál falló y por qué, y la página sigue hasta la última sección.
+- `test_maps_las_demas_secciones_siguen_mostrandose_cuando_una_falla` — Con el mapa roto, los selectores y la tabla de estado (que viene después) se siguen viendo.
+- `test_maps_una_seccion_que_falla_a_mitad_no_deja_lo_que_ya_habia_dibujado` — Si el mapa dibuja una nota y luego falla, esa nota a medias se retira: solo queda el aviso.
+- `test_maps_si_falla_la_capa_de_infraestructura_el_mapa_de_rutas_se_dibuja_sin_ella` — La capa de POIs es opcional: si falla, el mapa de rutas y su leyenda se dibujan igualmente, con un aviso (no un error de sección), y el fallo queda en el registro.
+- `test_maps_la_capa_de_infraestructura_que_funciona_llega_a_la_figura` — Cuando la capa de POIs funciona, sus marcadores van en la figura que se dibuja, junto a las rutas.
+- `test_maps_una_capa_que_falla_a_mitad_no_deja_marcadores_sueltos_en_el_mapa` — Si la capa de POIs añade algo y luego falla, la figura que se dibuja no lleva esa capa a medias.
+- `test_maps_sin_fallos_no_aparece_ningun_aviso_de_seccion` — Si ninguna sección falla, no aparece ningún aviso «No se pudo mostrar».
+- `test_maps_el_fallo_de_una_seccion_queda_en_el_registro` — El mensaje en pantalla es corto; el traceback completo va al registro de la aplicación.
+- `test_maps_st_stop_dentro_de_una_seccion_no_se_trata_como_un_error` — Solo se captura Exception: `st.stop()` usa una excepción de control y debe seguir deteniendo el script. Si se capturara, se registraría como un fallo de la sección que no lo es; y la parada se nota en que las secciones siguientes (el resumen y la tabla de estado) no se dibujan.
 
 ## `tests/test_data_profile.py`
 
