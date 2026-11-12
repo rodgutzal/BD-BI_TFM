@@ -6,17 +6,18 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**46 archivos · 749 funciones de test · 838 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**47 archivos · 781 funciones de test · 871 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
 | [`tests/test_analyst_quality.py`](#teststest_analyst_qualitypy) | 6 | 6 |
 | [`tests/test_analyst_tabs.py`](#teststest_analyst_tabspy) | 22 | 30+ |
 | [`tests/test_analytics.py`](#teststest_analyticspy) | 3 | 3 |
+| [`tests/test_analyze_weather_effect.py`](#teststest_analyze_weather_effectpy) | 4 | 4 |
 | [`tests/test_api.py`](#teststest_apipy) | 14 | 20 |
 | [`tests/test_api_clients.py`](#teststest_api_clientspy) | 22 | 22+ |
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
-| [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 21 | 30 |
+| [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
@@ -116,6 +117,15 @@
 - `test_consistency_score` — Verifica el cálculo de consistency score.
 - `test_database_summary` — Verifica que se puede obtener un resumen de la BD.
 
+## `tests/test_analyze_weather_effect.py`
+
+> Tests de tools/analyze_weather_effect.py: análisis del efecto asociado al tiempo sobre los datos de la base.
+
+- `test_la_herramienta_lee_en_solo_lectura_y_solo_las_columnas_necesarias`
+- `test_ignora_las_filas_sin_temperatura_o_sin_tiempo_de_viaje`
+- `test_el_informe_muestra_la_confusion_por_la_ruta_y_el_aviso_del_psm`
+- `test_con_muy_pocas_mediciones_devuelve_error`
+
 ## `tests/test_api.py`
 
 > Pruebas de la API REST (src/api.py).
@@ -198,7 +208,8 @@
 - `test_recupera_un_efecto_positivo_conocido` — Sobre datos con un efecto positivo conocido de la temperatura, el análisis lo recupera: correlación alta, diferencia entre grupos significativa y conclusión de evidencia muy fuerte.
 - `test_sin_efecto_no_sale_significativo` — Sin efecto real, ni la correlación ni el análisis estratificado salen significativos y la conclusión es de evidencia débil.
 - `test_un_efecto_negativo_lleva_signo_negativo` — Un efecto negativo da coeficiente de correlación y tamaño del efecto con signo negativo.
-- `test_sin_variables_de_ajuste_no_hay_propensity_score` — Sin variables de ajuste no se calcula el propensity score (`None`), pero el análisis estratificado sí.
+- `test_sin_marca_de_tiempo_ni_covariables_no_hay_ajuste` — Sin timestamp, ruta ni covariables no hay con qué ajustar: ni propensity score ni estratificación (`None`), pero el análisis sin ajustar sí. Antes bastaba con que faltaran `hour`/`day_of_week`/`average_speed_kmh`.
+- `test_con_marca_de_tiempo_se_ajusta_aunque_no_existan_las_columnas_hour_y_day_of_week` — Regresión: el 'PSM' solo corría si existían las columnas hour/day_of_week/average_speed_kmh, que en los datos reales casi nunca existen. Ahora hora, día y semana se derivan del timestamp.
 - `test_usa_otra_columna_de_clima_si_se_pide` — Se puede analizar otra columna de clima distinta de la temperatura, por ejemplo la humedad.
 - `test_ignora_las_filas_con_nulos_y_exige_30_filas` — Las filas con nulos se descartan del tamaño de muestra y con menos de 30 filas útiles devuelve «Insufficient data».
 - `test_columnas_ausentes_devuelven_error` — Si falta una columna necesaria o se pide una que no existe, devuelve un error «Missing columns».
@@ -215,6 +226,33 @@
 - `test_sin_confusores_la_lista_esta_vacia_y_hay_recomendaciones` — Sin confusores la lista queda vacía, pero se devuelven consejos y recomendación de método; con datos insuficientes también queda vacía.
 - `test_interpretacion_del_p_valor` ×4 — El texto de interpretación del efecto cambia según el p-valor (parametrizado) y siempre incluye el efecto con su signo.
 - `test_interpretacion_de_cohen` ×7 — La etiqueta de magnitud de la d de Cohen (parametrizado) corresponde a cada valor de d.
+- `test_la_estratificacion_recupera_un_efecto_conocido` — Con efecto 0,5 min/°C de anomalía, la diferencia entre 'más calor de lo habitual' y 'menos' es ~0,5 × 3,4 °C (esperado ~1,7; medido 1,59): se recupera y el intervalo excluye el 0.
+- `test_la_estratificacion_sin_efecto_no_inventa_uno_aunque_la_hora_confunda` — El calor y el tráfico dependen de la hora; sin efecto verdadero, el estimador ajustado da ~0.
+- `test_la_ruta_confunde_y_la_estratificacion_la_neutraliza` — La ruta A es más cálida y 4 min más rápida, pero el calor NO tiene efecto: sin ajustar sale -4,4 min; con la ruta en los estratos, ~0; sin la ruta en los estratos, el sesgo vuelve (es lo que pasaba con los datos reales).
+- `test_estratificacion_descarta_las_tratadas_sin_controles_en_su_estrato_y_lo_cuenta`
+- `test_estratificacion_sin_soporte_comun_da_error` — Si cada estrato tiene solo tratadas o solo controles (aquí, una columna que separa los dos grupos), no hay comparación posible.
+- `test_las_columnas_de_estrato_desconocidas_dan_error_en_vez_de_romper`
+- `test_errores_de_los_estimadores_ajustados` ×2
+- `test_la_estratificacion_sin_columnas_de_estrato_avisa`
+- `test_el_psm_es_un_emparejamiento_real_y_no_la_diferencia_de_medias` — Regresión: antes se calculaban los propensity scores y no se usaban; el 'PSM' era la diferencia de medias entre tratadas y controles. Con la ruta confundiendo (-4,4 sin ajustar), el emparejamiento exacto por ruta la reduce mucho.
+- `test_el_psm_avisa_cuando_su_equilibrio_es_pobre_y_no_se_fia_de_si_mismo` — Con un propensity score casi constante el emparejamiento es casi aleatorio y puede no equilibrar (King y Nielsen, 2019). El diagnóstico lo detecta y el texto lo advierte en vez de presentar el número como bueno.
+- `test_con_la_mediana_global_el_tratamiento_queda_determinado_por_la_hora_y_el_equilibrio_falla` — 'Por encima de la mediana global' es casi 'es de día': sin solapamiento, el PSM no equilibra (SMD ~1).
+- `test_el_psm_informa_del_equilibrio_antes_y_despues_y_de_las_peores_covariables`
+- `test_el_psm_no_ajusta_por_consecuencias_del_trafico` — La velocidad media es CONSECUENCIA del tiempo de viaje: ajustar por ella sesga. Por defecto no entra.
+- `test_el_psm_es_determinista_con_la_misma_semilla_y_el_intervalo_contiene_el_efecto`
+- `test_el_intervalo_por_dias_es_mas_ancho_que_uno_que_trata_cada_medicion_como_independiente` — Las mediciones de un mismo día comparten el mismo golpe: remuestrear días completos da un intervalo más honesto.
+- `test_smd_de_dos_grupos_iguales_desplazados_y_con_pesos`
+- `test_la_matriz_de_ajuste_deriva_hora_dia_semana_ruta_y_fuente`
+- `test_una_covariable_numerica_con_pocos_valores_es_categorica_y_con_muchos_se_estandariza`
+- `test_sin_nada_con_que_ajustar_la_matriz_es_none`
+- `test_ningun_texto_presenta_una_asociacion_como_causa` — Los datos son observacionales: las salidas hablan de asociación y avisan de que no es prueba de causalidad.
+- `test_weather_impact_causal_incluye_los_dos_estimadores_ajustados`
+- `test_el_psm_ajusta_un_confusor_continuo_cuando_hay_solapamiento` — Donde el propensity score SÍ varía, el emparejamiento hace su trabajo: la diferencia sin ajustar (+3) se reduce a ~0 y el equilibrio pasa de SMD 2,3 a ~0,05.
+- `test_el_psm_con_confusor_continuo_recupera_un_efecto_positivo`
+- `test_el_caliper_descarta_las_tratadas_sin_pareja_cercana_y_sin_el_el_sesgo_reaparece` — Sin caliper se empareja a todas, también a las que no tienen un control parecido, y el estimador se sesga.
+- `test_el_equilibrio_pondera_cada_control_por_las_veces_que_se_usa` — Emparejamiento con reemplazo: un control usado dos veces pesa el doble. Tratadas x=1,1,1; controles x=1 (usado 2 veces) y x=100 (1 vez): la media ponderada es 34, no 50,5.
+- `test_una_covariable_constante_no_cuenta_como_ajuste` — Una variable sin variación se descarta de la matriz: no puede ajustar nada.
+- `test_el_vecino_mas_cercano_se_elige_entre_los_dos_lados` — Controles separados (0, 1, 5, 10): cada tratada se empareja con el más próximo, venga de la izquierda o de la derecha, y los extremos se quedan con el control del borde.
 
 ## `tests/test_check_collection_gaps.py`
 
