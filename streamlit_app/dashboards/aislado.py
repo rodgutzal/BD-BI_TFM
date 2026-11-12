@@ -27,6 +27,9 @@ def render_aislado(
 
     La sección se dibuja dentro de un hueco (`st.empty()`): si falla a mitad, lo que ya había dibujado se retira, para que
     nadie lea como completas unas tarjetas o una tabla a medias.
+
+    Límite: solo se retira lo que se dibujó. Si la sección registra widgets o escribe en `st.session_state` antes de
+    fallar, eso no se revierte; ninguna de las secciones que hoy usan este helper lo hace.
     """
     hueco = st.empty()
     try:
