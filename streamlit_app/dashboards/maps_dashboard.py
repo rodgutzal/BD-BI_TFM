@@ -1,5 +1,6 @@
 """Maps dashboard: visualización geográfica de las rutas monitorizadas."""
 
+import logging
 import sys
 from pathlib import Path
 
@@ -12,6 +13,9 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from src.database import RouteDatabase
 from src.locations import LOCATIONS, ROUTES
+from streamlit_app.dashboards.aislado import render_aislado
+
+logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 60
 
@@ -243,6 +247,57 @@ def render_route_status_table(db, selected_routes):
         st.info("Selecciona al menos una ruta para ver su estado.")
 
 
+def render_map_section(db, selected_routes, poi_labels, poi_source_key):
+    """El mapa de rutas con la capa de infraestructura elegida y su leyenda de colores."""
+    fig = render_route_map(db, selected_routes)
+    render_poi_layer(fig, db, poi_labels, poi_source_key)
+    st.plotly_chart(fig, width="stretch")
+
+    st.caption(
+        "🟢 Flujo libre (≤1 min de retraso) · 🟡 Moderado (1-4 min) · "
+        "🔴 Denso (>4 min) · ⚪ Sin datos en la última hora"
+    )
+
+
+def render_poi_summary(db, poi_source, poi_labels):
+    """Cuántos elementos de la fuente elegida hay y cuándo se actualizaron (o cómo cargarlos si no hay)."""
+    if poi_source == "Overpass (OSM)" and poi_labels:
+        pois_df = _fetch_pois(db, tuple(sorted(poi_labels)))
+        if pois_df.empty:
+            st.info(
+                "No hay datos de infraestructura (Overpass) todavía. Ejecuta "
+                "`python -m src.poi_extraction` para cargarlos (no requiere API key)."
+            )
+        else:
+            last_update = pd.to_datetime(pois_df["updated_at"]).max()
+            st.caption(
+                f"📍 {len(pois_df)} elementos de Overpass · "
+                f"Última actualización: {last_update.strftime('%Y-%m-%d %H:%M UTC')} "
+                "(se refresca automáticamente cada semana vía `src/poi_extraction.py`)"
+            )
+
+    elif poi_source == "Foursquare" and poi_labels:
+        pois_fsq_df = _fetch_pois_foursquare(db, tuple(sorted(poi_labels)))
+        if pois_fsq_df.empty:
+            st.info(
+                "No hay datos de Foursquare todavía. Requiere `FOURSQUARE_API_KEY` en `.env` "
+                "y correr el servicio opcional: "
+                "`docker compose --profile foursquare up -d poi-collector-foursquare` "
+                "(o `python -m src.poi_extraction_foursquare` fuera de Docker)."
+            )
+        else:
+            last_update_fsq = pd.to_datetime(pois_fsq_df["updated_at"]).max()
+            st.caption(
+                f"🍽️ {len(pois_fsq_df)} POIs de Foursquare (todas las categorías, sin filtrar) · "
+                f"Última actualización: {last_update_fsq.strftime('%Y-%m-%d %H:%M UTC')}"
+            )
+
+
+def _aislar(nombre: str, render) -> None:
+    """Ejecuta una sección de Maps; si falla, el error queda en su sitio y las demás secciones siguen."""
+    render_aislado(nombre, render, logger, ambito="Maps")
+
+
 def main():
     """Maps dashboard main function."""
     st.set_page_config(page_title="Maps Dashboard", layout="wide")
@@ -286,51 +341,16 @@ def main():
         else:
             poi_labels = []
 
-    fig = render_route_map(db, selected_routes)
     poi_source_key = {"Overpass (OSM)": "overpass", "Foursquare": "foursquare"}.get(poi_source)
-    render_poi_layer(fig, db, poi_labels, poi_source_key)
-    st.plotly_chart(fig, width="stretch")
 
-    st.caption(
-        "🟢 Flujo libre (≤1 min de retraso) · 🟡 Moderado (1-4 min) · "
-        "🔴 Denso (>4 min) · ⚪ Sin datos en la última hora"
-    )
-
-    if poi_source == "Overpass (OSM)" and poi_labels:
-        pois_df = _fetch_pois(db, tuple(sorted(poi_labels)))
-        if pois_df.empty:
-            st.info(
-                "No hay datos de infraestructura (Overpass) todavía. Ejecuta "
-                "`python -m src.poi_extraction` para cargarlos (no requiere API key)."
-            )
-        else:
-            last_update = pd.to_datetime(pois_df["updated_at"]).max()
-            st.caption(
-                f"📍 {len(pois_df)} elementos de Overpass · "
-                f"Última actualización: {last_update.strftime('%Y-%m-%d %H:%M UTC')} "
-                "(se refresca automáticamente cada semana vía `src/poi_extraction.py`)"
-            )
-
-    elif poi_source == "Foursquare" and poi_labels:
-        pois_fsq_df = _fetch_pois_foursquare(db, tuple(sorted(poi_labels)))
-        if pois_fsq_df.empty:
-            st.info(
-                "No hay datos de Foursquare todavía. Requiere `FOURSQUARE_API_KEY` en `.env` "
-                "y correr el servicio opcional: "
-                "`docker compose --profile foursquare up -d poi-collector-foursquare` "
-                "(o `python -m src.poi_extraction_foursquare` fuera de Docker)."
-            )
-        else:
-            last_update_fsq = pd.to_datetime(pois_fsq_df["updated_at"]).max()
-            st.caption(
-                f"🍽️ {len(pois_fsq_df)} POIs de Foursquare (todas las categorías, sin filtrar) · "
-                f"Última actualización: {last_update_fsq.strftime('%Y-%m-%d %H:%M UTC')}"
-            )
+    # Cada sección va aislada: si una falla (una consulta, el mapa), las demás se siguen viendo.
+    _aislar("Mapa de rutas", lambda: render_map_section(db, selected_routes, poi_labels, poi_source_key))
+    _aislar("Resumen de infraestructura", lambda: render_poi_summary(db, poi_source, poi_labels))
 
     st.divider()
 
     st.subheader("📊 Estado actual por ruta")
-    render_route_status_table(db, selected_routes)
+    _aislar("Estado actual por ruta", lambda: render_route_status_table(db, selected_routes))
 
 
 if __name__ == "__main__":
