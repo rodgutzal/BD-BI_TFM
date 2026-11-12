@@ -11,6 +11,10 @@ from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
 
+# Cuántas mediciones ANTERIORES promedia `travel_time_min_lag`. La usa también RoutePredictor al predecir, para que
+# la variable se construya igual al entrenar y al predecir.
+LAG_WINDOW = 5
+
 
 class TravelTimePredictor:
     """Predicts travel time based on historical data and current conditions."""
@@ -36,7 +40,15 @@ class TravelTimePredictor:
         - temperature (usa origin_temperature o temperature)
         - humidity (usa origin_humidity o humidity)
         - no_traffic_time_min
-        - historical_avg_travel_time
+        - travel_time_min_lag: media de las (hasta) LAG_WINDOW mediciones ANTERIORES, sin incluir la actual
+
+        Las filas se ordenan por tiempo (de la más antigua a la más reciente) antes de calcular el lag: la base las
+        entrega de la más reciente a la más antigua, y con ese orden una media móvil mezclaba mediciones POSTERIORES.
+        Antes el lag incluía además la propia fila (la medición que se quiere predecir), es decir, filtraba el
+        objetivo: en datos reales el error parecía ~30 % menor de lo que es. La primera fila (sin historia) usa
+        no_traffic_time_min, el mismo valor de respaldo que se usa al predecir sin histórico.
+
+        Devuelve (X, y) en orden cronológico, conservando el índice original de `df`.
         """
         if df.empty:
             return pd.DataFrame(), pd.Series()
@@ -45,6 +57,7 @@ class TravelTimePredictor:
 
         if "timestamp" in df_feat.columns:
             df_feat["timestamp"] = pd.to_datetime(df_feat["timestamp"], utc=True)
+            df_feat = df_feat.sort_values("timestamp", kind="stable")
             df_feat["hour_of_day"] = df_feat["timestamp"].dt.hour
             df_feat["day_of_week"] = df_feat["timestamp"].dt.dayofweek
         else:
@@ -66,7 +79,8 @@ class TravelTimePredictor:
             logger.warning("no_traffic_time_min column not found")
             return pd.DataFrame(), pd.Series()
 
-        df_feat["travel_time_min_lag"] = df_feat["travel_time_min"].rolling(window=5, min_periods=1).mean()
+        lag = df_feat["travel_time_min"].shift(1).rolling(window=LAG_WINDOW, min_periods=1).mean()
+        df_feat["travel_time_min_lag"] = lag.fillna(df_feat["no_traffic_time_min"])
 
         features_df = df_feat[
             ["hour_of_day", "day_of_week", temp_col, humid_col, "no_traffic_time_min", "travel_time_min_lag"]
@@ -105,19 +119,7 @@ class TravelTimePredictor:
                 logger.error("Could not prepare features")
                 return False
 
-            self.scaler = StandardScaler()
-            X_scaled = self.scaler.fit_transform(X)
-
-            self.model = RandomForestRegressor(
-                n_estimators=50,
-                max_depth=10,
-                random_state=42,
-                n_jobs=-1,
-            )
-
-            self.model.fit(X_scaled, y)
-            self.feature_names = X.columns.tolist()
-            self.is_trained = True
+            self.fit_features(X, y)
 
             logger.info(f"Model trained successfully on {len(df)} samples")
             return True
@@ -125,6 +127,24 @@ class TravelTimePredictor:
         except Exception as e:
             logger.error(f"Error training model: {e}")
             return False
+
+    def fit_features(self, X: pd.DataFrame, y) -> None:
+        """Ajusta escalador y modelo con variables ya preparadas (prepare_features). Separado de train() para poder
+        validar con un corte cronológico: tools/validate_travel_time_model.py calcula las variables de TODA la serie
+        (el lag necesita la historia) y ajusta solo con la parte antigua."""
+        self.scaler = StandardScaler()
+        X_scaled = self.scaler.fit_transform(X)
+
+        self.model = RandomForestRegressor(
+            n_estimators=50,
+            max_depth=10,
+            random_state=42,
+            n_jobs=-1,
+        )
+
+        self.model.fit(X_scaled, y)
+        self.feature_names = X.columns.tolist()
+        self.is_trained = True
 
     def predict(
         self,
