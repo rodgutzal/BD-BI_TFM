@@ -16,6 +16,7 @@ from src.analytics import MobilityAnalytics
 from src.analytics.time_series_analysis import TimeSeriesAnalytics
 from src.database import RouteDatabase
 from streamlit_app.dashboards import predictive_modeling_dashboard
+from streamlit_app.dashboards.aislado import render_aislado
 
 # Ver nota en executive_dashboard.py: mismo TTL, misma razón. Especialmente
 # importante aquí: st.tabs() ejecuta el contenido de las 7 pestañas en CADA
@@ -481,12 +482,7 @@ def _render_aislado(nombre: str, render) -> None:
     una tabla ausente) tumbaba la página entera y ninguna pestaña se veía. Solo se captura `Exception`: `st.stop()` y
     `st.rerun()` usan excepciones de control (BaseException) y deben seguir propagándose.
     """
-    try:
-        render()
-    except Exception as e:
-        logger.exception("Falló la pestaña «%s» del Analyst", nombre)
-        st.error(f"No se pudo mostrar «{nombre}»: {type(e).__name__}: {e}")
-        st.caption("Las demás pestañas no se ven afectadas. El detalle completo está en el registro de la aplicación.")
+    render_aislado(nombre, render, logger, ambito="Analyst", unidad="la pestaña", plural="pestañas")
 
 
 def main():

@@ -322,6 +322,7 @@ def test_las_demas_pestanas_siguen_mostrandose_cuando_una_falla(entorno, monkeyp
     at = _abrir()
     assert not at.exception and len(at.error) == 1
     assert len(at.text_area) >= 1 and "▶ Ejecutar" in [b.label for b in at.button]
+    assert any(c.value.startswith("Las demás pestañas no se ven afectadas") for c in at.caption)
 
 
 def test_sin_fallos_no_aparece_ningun_aviso_de_pestana(entorno):
