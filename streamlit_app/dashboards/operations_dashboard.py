@@ -1,5 +1,6 @@
 """Operations dashboard for managers and operations team."""
 
+import logging
 import sys
 from pathlib import Path
 
@@ -11,6 +12,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from src.database import RouteDatabase
+from streamlit_app.dashboards.aislado import render_aislado
+
+logger = logging.getLogger(__name__)
 
 # Ver nota en executive_dashboard.py: mismo TTL, misma razón.
 _CACHE_TTL = 60
@@ -274,6 +278,11 @@ def render_performance_heatmap(db):
     st.plotly_chart(fig, width="stretch")
 
 
+def _aislar(nombre: str, render) -> None:
+    """Ejecuta una sección de Operations; si falla, el error queda en su sitio y las demás secciones siguen."""
+    render_aislado(nombre, render, logger, ambito="Operations")
+
+
 def main():
     """Operations dashboard main function."""
     st.set_page_config(page_title="Operations Dashboard", layout="wide")
@@ -283,23 +292,24 @@ def main():
 
     db = get_database()
 
+    # Cada sección va aislada: si una falla (una consulta, un gráfico), las demás se siguen viendo.
     # Real-time alerts
-    render_real_time_alerts(db)
+    _aislar("Real-Time Alerts", lambda: render_real_time_alerts(db))
 
     st.divider()
 
     # Route status grid
-    render_route_status_grid(db)
+    _aislar("Route Status Overview", lambda: render_route_status_grid(db))
 
     st.divider()
 
     # Medición real de las últimas 24 h (reemplaza predicciones/incidentes ficticios)
-    render_last_24h_summary(db)
+    _aislar("Últimas 24 horas por ruta", lambda: render_last_24h_summary(db))
 
     st.divider()
 
     # Performance heatmap
-    render_performance_heatmap(db)
+    _aislar("Performance Heatmap", lambda: render_performance_heatmap(db))
 
     st.divider()
 
