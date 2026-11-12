@@ -542,3 +542,78 @@ def test_executive_st_stop_dentro_de_una_seccion_no_se_trata_como_un_error(base,
     assert not at.exception and not any("No se pudo mostrar" in e.value for e in at.error)
     assert not [r for r in caplog.records if r.name == ex.logger.name]
     assert not at.success  # el script se detuvo: las alertas, que vienen después, no se dibujaron
+
+
+# ---------------------------------------------------------------------------
+# Maps: un error en una sección no tumba las demás
+# ---------------------------------------------------------------------------
+
+SECCIONES_MAPS = [
+    ("render_map_section", "Mapa de rutas"),
+    ("render_poi_summary", "Resumen de infraestructura"),
+    ("render_route_status_table", "Estado actual por ruta"),
+]
+
+
+@pytest.mark.parametrize("funcion, nombre", SECCIONES_MAPS)
+def test_maps_un_error_en_una_seccion_se_muestra_en_ella_y_no_tumba_la_pagina(base, monkeypatch, funcion, nombre):
+    """Cada sección (parametrizado) se aísla: se dice cuál falló y por qué, y la página sigue hasta la última sección."""
+    monkeypatch.setattr(mp, funcion, _falla)
+    at = _abrir(APP_MAPS)
+    assert not at.exception, [e.value for e in at.exception]
+    assert [e.value for e in at.error] == [f"No se pudo mostrar «{nombre}»: RuntimeError: tabla inexistente"]
+    assert "📊 Estado actual por ruta" in [s.value for s in at.subheader]  # se llegó hasta el final de la pantalla
+
+
+def test_maps_las_demas_secciones_siguen_mostrandose_cuando_una_falla(base, monkeypatch):
+    """Con el mapa roto, los selectores y la tabla de estado (que viene después) se siguen viendo."""
+    monkeypatch.setattr(mp, "render_map_section", _falla)
+    at = _abrir(APP_MAPS)
+    assert not at.exception and len(at.error) == 1
+    assert at.multiselect and at.radio  # los controles son la entrada de la pantalla: no se aíslan
+    assert len(at.dataframe[0].value) == len(ROUTES)
+    assert any(c.value.startswith("Las demás secciones no se ven afectadas") for c in at.caption)
+
+
+def test_maps_una_seccion_que_falla_a_mitad_no_deja_lo_que_ya_habia_dibujado(base, monkeypatch):
+    """Si el mapa dibuja una nota y luego falla, esa nota a medias se retira: solo queda el aviso."""
+
+    def a_medias(*_args, **_kw):
+        st.caption("Parcial (no debería verse)")
+        raise RuntimeError("se cayó a mitad")
+
+    monkeypatch.setattr(mp, "render_map_section", a_medias)
+    at = _abrir(APP_MAPS)
+    assert not at.exception, [e.value for e in at.exception]
+    assert "Parcial (no debería verse)" not in [c.value for c in at.caption]
+    assert [e.value for e in at.error] == ["No se pudo mostrar «Mapa de rutas»: RuntimeError: se cayó a mitad"]
+
+
+def test_maps_sin_fallos_no_aparece_ningun_aviso_de_seccion(base):
+    """Si ninguna sección falla, no aparece ningún aviso «No se pudo mostrar»."""
+    at = _abrir(APP_MAPS)
+    assert not at.exception and not any("No se pudo mostrar" in e.value for e in at.error)
+
+
+def test_maps_el_fallo_de_una_seccion_queda_en_el_registro(base, monkeypatch, caplog):
+    """El mensaje en pantalla es corto; el traceback completo va al registro de la aplicación."""
+    monkeypatch.setattr(mp, "render_route_status_table", _falla)
+    with caplog.at_level("ERROR", logger=mp.logger.name):
+        _abrir(APP_MAPS)
+    assert any("Estado actual por ruta" in r.getMessage() and r.exc_info for r in caplog.records)
+
+
+def test_maps_st_stop_dentro_de_una_seccion_no_se_trata_como_un_error(base, monkeypatch, caplog):
+    """Solo se captura Exception: `st.stop()` usa una excepción de control y debe seguir deteniendo el script. Si se
+    capturara, se registraría como un fallo de la sección que no lo es; y la parada se nota en que las secciones
+    siguientes (el resumen y la tabla de estado) no se dibujan."""
+
+    def parar(*_args, **_kw):
+        st.stop()
+
+    monkeypatch.setattr(mp, "render_map_section", parar)
+    with caplog.at_level("ERROR", logger=mp.logger.name):
+        at = _abrir(APP_MAPS)
+    assert not at.exception and not any("No se pudo mostrar" in e.value for e in at.error)
+    assert not [r for r in caplog.records if r.name == mp.logger.name]
+    assert at.multiselect and not at.dataframe and "📊 Estado actual por ruta" not in [s.value for s in at.subheader]
