@@ -162,14 +162,46 @@ def test_predict_usa_el_historico_como_lag_y_si_falta_el_tiempo_sin_trafico(entr
     assert list(recibidas[0].columns) == FEATURES
 
 
-def test_el_lag_es_la_media_movil_de_5_valores_del_tiempo_de_viaje():
-    """Documenta cómo se construye hoy `travel_time_min_lag`: media móvil de 5 filas que INCLUYE la fila actual
-    (y las filas llegan de la base ordenadas de más reciente a más antigua). Ver README, limitaciones."""
+def _serie_conocida():
     df = _df(10)
     df["travel_time_min"] = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
-    X, _ = TravelTimePredictor().prepare_features(df)
-    assert X["travel_time_min_lag"].tolist()[:5] == [10.0, 15.0, 20.0, 25.0, 30.0]  # min_periods=1
-    assert X["travel_time_min_lag"].iloc[9] == 80.0  # media de 60..100
+    df["no_traffic_time_min"] = 7.0
+    return df
+
+
+def test_el_lag_es_la_media_de_las_5_mediciones_anteriores_sin_la_actual():
+    """travel_time_min_lag de la fila i = media de las hasta 5 mediciones ANTERIORES; la primera fila, sin
+    historia, usa no_traffic_time_min (el mismo respaldo que al predecir sin histórico)."""
+    X, _ = TravelTimePredictor().prepare_features(_serie_conocida())
+    assert X["travel_time_min_lag"].tolist() == [7.0, 10.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0]
+    assert X["travel_time_min_lag"].iloc[9] == 70.0  # media de 50..90, NO incluye el 100 actual
+
+
+def test_el_lag_no_depende_del_objetivo_ni_de_lo_posterior():
+    """Regresión de la fuga: el lag incluía la propia medición que se quiere predecir (y, al llegar las filas de más
+    reciente a más antigua, también mediciones posteriores). Cambiar el valor de la fila i y de las siguientes no
+    debe alterar el lag de la fila i; cambiar las anteriores sí."""
+    base = _serie_conocida()
+    X0, _ = TravelTimePredictor().prepare_features(base)
+    futuro = base.copy()
+    futuro.loc[5:, "travel_time_min"] = 999.0  # fila 5 (la «actual») y todas las posteriores
+    X1, _ = TravelTimePredictor().prepare_features(futuro)
+    assert X1["travel_time_min_lag"].iloc[:6].tolist() == X0["travel_time_min_lag"].iloc[:6].tolist()
+    pasado = base.copy()
+    pasado.loc[4, "travel_time_min"] = 999.0  # una medición anterior a la fila 5
+    X2, _ = TravelTimePredictor().prepare_features(pasado)
+    assert X2["travel_time_min_lag"].iloc[5] != X0["travel_time_min_lag"].iloc[5]
+
+
+def test_las_filas_en_orden_inverso_dan_las_mismas_variables_que_en_orden_cronologico():
+    """La base entrega las filas de la más reciente a la más antigua (ORDER BY timestamp DESC): el orden de entrada
+    no debe cambiar las variables ni el objetivo de cada medición."""
+    df = _serie_conocida()
+    X_cron, y_cron = TravelTimePredictor().prepare_features(df)
+    X_inv, y_inv = TravelTimePredictor().prepare_features(df.iloc[::-1])
+    pd.testing.assert_frame_equal(X_inv, X_cron)
+    pd.testing.assert_series_equal(y_inv, y_cron)
+    assert X_cron.index.tolist() == list(range(10))  # conserva el índice original, ya ordenado
 
 
 def test_guardar_y_cargar_reproduce_las_predicciones(entrenado, tmp_path):
@@ -282,6 +314,17 @@ def test_predice_el_tiempo_de_viaje_de_una_ruta_entrenada(predictor):
 def test_sin_modelo_entrenado_no_hay_prediccion(predictor):
     """Sin modelo entrenado para la ruta no hay predicción (`None`)."""
     assert predictor.predict_travel_time("Msida", "Sliema", 21, 55, 10) is None
+
+
+def test_al_predecir_el_lag_es_la_media_de_las_5_mediciones_mas_recientes(predictor, monkeypatch):
+    """Regresión: se promediaban las 100 últimas, una variable distinta de la que el modelo vio al entrenar."""
+    predictor.train_route_model("Msida", "Gzira")
+    modelo = predictor.get_or_create_model("Msida", "Gzira")
+    recibido = {}
+    monkeypatch.setattr(modelo, "predict", lambda **k: recibido.update(k) or (10.0, 80.0))
+    predictor.predict_travel_time("Msida", "Gzira", 21, 55, 10)
+    # _registros: la medición i (0 = la más reciente) dura 10 + (i % 5); las 5 más recientes son 10..14
+    assert recibido["historical_avg"] == pytest.approx(12.0)
 
 
 def test_un_predictor_nuevo_reutiliza_los_modelos_guardados(predictor, tmp_path):

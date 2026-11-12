@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**45 archivos · 735 funciones de test · 824 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**46 archivos · 749 funciones de test · 838 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -54,7 +54,8 @@
 | [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 25 | 25+ |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
-| [`tests/test_travel_time_predictor.py`](#teststest_travel_time_predictorpy) | 25 | 28 |
+| [`tests/test_travel_time_predictor.py`](#teststest_travel_time_predictorpy) | 28 | 31 |
+| [`tests/test_validate_travel_time_model.py`](#teststest_validate_travel_time_modelpy) | 11 | 11 |
 
 `+` = hay un `parametrize` con valores no literales; esos tests se cuentan como 1 caso.
 
@@ -1121,7 +1122,9 @@
 - `test_predict_responde_a_los_datos_de_entrada` — El modelo aprende la relación: con un tiempo sin tráfico mayor, predice más.
 - `test_predict_sin_entrenar_devuelve_none` — Predecir sin haber entrenado devuelve `None`, y la importancia de variables queda vacía.
 - `test_predict_usa_el_historico_como_lag_y_si_falta_el_tiempo_sin_trafico` — `historical_avg or no_traffic_time`: con histórico se usa como lag; con None o 0 (falsy) se usa el tiempo sin tráfico. Se espía la entrada que recibe el escalador.
-- `test_el_lag_es_la_media_movil_de_5_valores_del_tiempo_de_viaje` — Documenta cómo se construye hoy `travel_time_min_lag`: media móvil de 5 filas que INCLUYE la fila actual (y las filas llegan de la base ordenadas de más reciente a más antigua). Ver README, limitaciones.
+- `test_el_lag_es_la_media_de_las_5_mediciones_anteriores_sin_la_actual` — travel_time_min_lag de la fila i = media de las hasta 5 mediciones ANTERIORES; la primera fila, sin historia, usa no_traffic_time_min (el mismo respaldo que al predecir sin histórico).
+- `test_el_lag_no_depende_del_objetivo_ni_de_lo_posterior` — Regresión de la fuga: el lag incluía la propia medición que se quiere predecir (y, al llegar las filas de más reciente a más antigua, también mediciones posteriores). Cambiar el valor de la fila i y de las siguientes no debe alterar el lag de la fila i; cambiar las anteriores sí.
+- `test_las_filas_en_orden_inverso_dan_las_mismas_variables_que_en_orden_cronologico` — La base entrega las filas de la más reciente a la más antigua (ORDER BY timestamp DESC): el orden de entrada no debe cambiar las variables ni el objetivo de cada medición.
 - `test_guardar_y_cargar_reproduce_las_predicciones` — Un modelo guardado y vuelto a cargar da las mismas predicciones.
 - `test_no_guarda_un_modelo_sin_entrenar_y_carga_falla_con_gracia` — No guarda un modelo sin entrenar y cargar un archivo inexistente, corrupto o incompleto devuelve `False` sin lanzar excepción.
 - `test_el_nombre_del_archivo_del_modelo_no_tiene_espacios` — El nombre del archivo del modelo de una ruta cambia los espacios por guiones bajos y cuelga del directorio de modelos.
@@ -1132,8 +1135,26 @@
 - `test_train_all_models_devuelve_un_resultado_por_ruta` — `train_all_models` devuelve un resultado por ruta: entrenada o no.
 - `test_predice_el_tiempo_de_viaje_de_una_ruta_entrenada` — Una ruta entrenada predice un tiempo de viaje plausible con una confianza entre 50 y 100.
 - `test_sin_modelo_entrenado_no_hay_prediccion` — Sin modelo entrenado para la ruta no hay predicción (`None`).
+- `test_al_predecir_el_lag_es_la_media_de_las_5_mediciones_mas_recientes` — Regresión: se promediaban las 100 últimas, una variable distinta de la que el modelo vio al entrenar.
 - `test_un_predictor_nuevo_reutiliza_los_modelos_guardados` — Un predictor nuevo carga los modelos ya guardados en disco.
 - `test_el_estado_de_los_modelos` — El estado de los modelos lista todas las rutas; las entrenadas incluyen la importancia de variables y las demás no.
+
+## `tests/test_validate_travel_time_model.py`
+
+> Tests de tools/validate_travel_time_model.py: validación cronológica del modelo simple por ruta, y la demostración
+> de que el `lag` antiguo filtraba el objetivo.
+
+- `test_la_construccion_antigua_filtraba_el_objetivo_y_la_nueva_no` — Con una serie de ruido puro nada del pasado predice el presente: un modelo honesto no puede ganar mucho a la media, pero el lag antiguo (que incluía la medición a predecir) daba un error artificialmente bajo.
+- `test_la_version_anterior_solo_se_calcula_si_se_pide`
+- `test_las_rutas_con_pocas_filas_se_omiten`
+- `test_el_corte_es_cronologico_se_mide_en_el_20_por_ciento_mas_reciente`
+- `test_el_orden_de_las_filas_de_entrada_no_cambia_el_resultado` — Con tolerancia: el bosque aleatorio multihilo suma en un orden que varía y deja diferencias de ~1e-15 min entre ejecuciones idénticas (medido: en la mitad de ellas), así que una igualdad exacta fallaba al azar.
+- `test_el_ultimo_valor_se_toma_de_la_misma_fuente` — Alternando fuentes con valores muy distintos, 'último de la misma fuente' acierta y 'último a secas' no.
+- `test_el_veredicto_depende_de_si_el_modelo_gana_a_la_persistencia`
+- `test_la_herramienta_lee_en_solo_lectura_e_imprime_el_informe`
+- `test_sin_rutas_suficientes_devuelve_error`
+- `test_load_measurements_ignora_filas_sin_tiempo_de_viaje_y_parsea_fechas`
+- `test_features_version_anterior_documenta_el_orden_y_la_inclusion_de_la_fila_actual` — La versión antigua (solo para comparar) ordena de la más reciente a la más antigua e incluye la fila actual.
 
 ## Archivos de apoyo (no contienen tests)
 

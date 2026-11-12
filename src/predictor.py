@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from src.database import RouteDatabase
-from src.models.travel_time_model import TravelTimePredictor
+from src.models.travel_time_model import LAG_WINDOW, TravelTimePredictor
 
 logger = logging.getLogger(__name__)
 
@@ -99,11 +99,14 @@ class RoutePredictor:
         day_of_week = now.weekday()
 
         db = RouteDatabase(Path.home(), self.db_path)
-        recent_data = db.query_measurements(origin=origin, destination=destination, limit=100)
+        # El lag se construye igual que al entrenar: media de las LAG_WINDOW mediciones más recientes. Antes se
+        # promediaban las 100 últimas, una variable distinta de la que el modelo vio al entrenar.
+        recent_data = db.query_measurements(origin=origin, destination=destination, limit=LAG_WINDOW)
 
         historical_avg = None
         if not recent_data.empty and "travel_time_min" in recent_data.columns:
-            historical_avg = recent_data["travel_time_min"].mean()
+            ultimas = recent_data.sort_values("timestamp", ascending=False).head(LAG_WINDOW)
+            historical_avg = ultimas["travel_time_min"].mean()
 
         return model.predict(
             hour=hour,
