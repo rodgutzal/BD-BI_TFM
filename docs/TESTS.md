@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**44 archivos · 718 funciones de test · 807 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**44 archivos · 719 funciones de test · 808 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -20,7 +20,7 @@
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
-| [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 28 | 39+ |
+| [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 29 | 40+ |
 | [`tests/test_data_profile.py`](#teststest_data_profilepy) | 15 | 15 |
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
@@ -318,6 +318,7 @@
 - `test_la_capa_de_pois_no_hace_nada_sin_categorias_o_con_fuente_invalida` — La capa de POIs no dibuja nada si no hay categorías o si la fuente no es válida.
 - `test_executive_un_error_en_una_seccion_se_muestra_en_ella_y_no_tumba_la_pagina` — Cada sección (parametrizado) se aísla: se dice cuál falló y por qué, y la página sigue hasta la última sección.
 - `test_executive_las_demas_secciones_siguen_mostrandose_cuando_una_falla` — Con el gráfico de tendencia roto, las tarjetas y las alertas (que vienen antes y después) se siguen viendo.
+- `test_executive_una_seccion_que_falla_a_mitad_no_deja_lo_que_ya_habia_dibujado` — Si las tarjetas dibujan una métrica y luego fallan, esa métrica a medias se retira: solo queda el aviso.
 - `test_executive_sin_fallos_no_aparece_ningun_aviso_de_seccion` — Si ninguna sección falla, no aparece ningún aviso «No se pudo mostrar».
 - `test_executive_el_fallo_de_una_seccion_queda_en_el_registro` — El mensaje en pantalla es corto; el traceback completo va al registro de la aplicación.
 - `test_executive_st_stop_dentro_de_una_seccion_no_se_trata_como_un_error` — Solo se captura Exception: `st.stop()` usa una excepción de control y debe seguir deteniendo el script. Si se capturara, se registraría como un fallo de la sección que no lo es, así que se comprueba el registro.

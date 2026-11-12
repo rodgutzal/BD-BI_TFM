@@ -24,10 +24,16 @@ def render_aislado(
 
     Solo se captura `Exception`: `st.stop()` y `st.rerun()` usan excepciones de control (BaseException) y deben seguir
     propagándose. El error se registra con su traza completa en `logger`.
+
+    La sección se dibuja dentro de un hueco (`st.empty()`): si falla a mitad, lo que ya había dibujado se retira, para que
+    nadie lea como completas unas tarjetas o una tabla a medias.
     """
+    hueco = st.empty()
     try:
-        render()
+        with hueco.container():
+            render()
     except Exception as e:
+        hueco.empty()
         logger.exception("Falló %s «%s» del %s", unidad, nombre, ambito)
         st.error(f"No se pudo mostrar «{nombre}»: {type(e).__name__}: {e}")
         st.caption(f"Las demás {plural} no se ven afectadas. El detalle completo está en el registro de la aplicación.")
