@@ -491,6 +491,24 @@ def test_executive_las_demas_secciones_siguen_mostrandose_cuando_una_falla(base,
     assert any(c.value.startswith("Las demás secciones no se ven afectadas") for c in at.caption)
 
 
+def test_executive_una_seccion_que_falla_a_mitad_no_deja_lo_que_ya_habia_dibujado(base, monkeypatch):
+    """Si las tarjetas dibujan una métrica y luego fallan, esa métrica a medias se retira: solo queda el aviso."""
+    _, ruta = base
+    _poblar(ruta, dias_atras=[0, 1, 2])
+
+    def a_medias(*_args, **_kw):
+        st.metric("Parcial", "1")
+        raise RuntimeError("se cayó a mitad")
+
+    monkeypatch.setattr(ex, "render_kpi_cards", a_medias)
+    at = _abrir(APP_EXEC)
+    assert not at.exception, [e.value for e in at.exception]
+    assert not at.metric, "la métrica dibujada antes del fallo no debe quedar en pantalla"
+    assert [e.value for e in at.error] == [
+        "No se pudo mostrar «Key Performance Indicators»: RuntimeError: se cayó a mitad"
+    ]
+
+
 def test_executive_sin_fallos_no_aparece_ningun_aviso_de_seccion(base):
     """Si ninguna sección falla, no aparece ningún aviso «No se pudo mostrar»."""
     _, ruta = base
