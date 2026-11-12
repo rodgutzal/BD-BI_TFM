@@ -15,7 +15,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.analytics.causal_analysis import CausalAnalysis  # noqa: E402
+from src.analytics.causal_analysis import CausalAnalysis, _matched_smd, _nearest_control, _smd  # noqa: E402
 
 EFECTO = 0.5  # minutos por °C en los datos sintéticos
 
@@ -78,10 +78,22 @@ def test_un_efecto_negativo_lleva_signo_negativo():
     assert r["correlation"]["coefficient"] < -0.9 and r["stratified_analysis"]["effect_size"] < 0
 
 
-def test_sin_variables_de_ajuste_no_hay_propensity_score():
-    """Sin variables de ajuste no se calcula el propensity score (`None`), pero el análisis estratificado sí."""
+def test_sin_marca_de_tiempo_ni_covariables_no_hay_ajuste():
+    """Sin timestamp, ruta ni covariables no hay con qué ajustar: ni propensity score ni estratificación (`None`),
+    pero el análisis sin ajustar sí. Antes bastaba con que faltaran `hour`/`day_of_week`/`average_speed_kmh`."""
+    r = CausalAnalysis(_datos(extra=False).drop(columns="timestamp")).weather_impact_causal()
+    assert r["propensity_score_matching"] is None and r["stratified_adjusted"] is None
+    assert r["adjusted_conclusion"] is None and "stratified_analysis" in r
+
+
+def test_con_marca_de_tiempo_se_ajusta_aunque_no_existan_las_columnas_hour_y_day_of_week():
+    """Regresión: el 'PSM' solo corría si existían las columnas hour/day_of_week/average_speed_kmh, que en los datos
+    reales casi nunca existen. Ahora hora, día y semana se derivan del timestamp."""
     r = CausalAnalysis(_datos(extra=False)).weather_impact_causal()
-    assert r["propensity_score_matching"] is None and "stratified_analysis" in r
+    assert (
+        r["propensity_score_matching"]["status"] == "calculated" and r["stratified_adjusted"]["status"] == "calculated"
+    )
+    assert r["adjusted_conclusion"] and "not proof of causality" in r["adjusted_conclusion"]
 
 
 def test_usa_otra_columna_de_clima_si_se_pide():
@@ -260,3 +272,300 @@ def test_interpretacion_del_p_valor(p, texto):
 def test_interpretacion_de_cohen(d, etiqueta):
     """La etiqueta de magnitud de la d de Cohen (parametrizado) corresponde a cada valor de d."""
     assert CausalAnalysis._interpret_cohens_d(d) == etiqueta
+
+
+# ---------------------------------------------------------------------------
+# Estimación ajustada: estratificación exacta y propensity-score matching REAL
+# ---------------------------------------------------------------------------
+
+
+def _panel(efecto=0.0, dias=60, seed=0, desfase_ruta=0.0, efecto_ruta=0.0):
+    """Panel con dos rutas donde el calor y el tráfico dependen de la HORA (confusor). `efecto` = minutos por °C de
+    anomalía (calor por encima de lo habitual para esa hora). Con `desfase_ruta`/`efecto_ruta`, la ruta A sale de un
+    origen más cálido y es más rápida: la ruta confunde, sin que el calor tenga efecto alguno."""
+    rng = np.random.default_rng(seed)
+    filas = []
+    inicio = pd.Timestamp("2026-09-01", tz="UTC")
+    for d in range(dias):
+        anomalia_dia = rng.normal(0, 2)
+        for h in range(24):
+            ciclo = 8 * np.sin((h - 9) / 24 * 2 * np.pi)
+            punta = 6 * np.exp(-((h - 8) ** 2) / 8) + 5 * np.exp(-((h - 18) ** 2) / 8)
+            for ruta, signo in (("A", 1), ("B", -1)):
+                anomalia = anomalia_dia + rng.normal(0, 0.7)
+                filas.append(
+                    {
+                        "timestamp": inicio + pd.Timedelta(days=d, hours=h),
+                        "origin": ruta,
+                        "destination": "Z",
+                        "data_source": "tomtom",
+                        "origin_temperature": 20 + ciclo + anomalia + signo * desfase_ruta,
+                        "travel_time_min": 12 + signo * efecto_ruta + punta + efecto * anomalia + rng.normal(0, 0.5),
+                    }
+                )
+    return pd.DataFrame(filas)
+
+
+def test_la_estratificacion_recupera_un_efecto_conocido():
+    """Con efecto 0,5 min/°C de anomalía, la diferencia entre 'más calor de lo habitual' y 'menos' es ~0,5 × 3,4 °C
+    (esperado ~1,7; medido 1,59): se recupera y el intervalo excluye el 0."""
+    r = CausalAnalysis(_panel(efecto=0.5)).stratified_adjusted(n_boot=200)
+    assert r["status"] == "calculated" and 1.3 < r["att"] < 1.9 and r["ci_excludes_zero"]
+
+
+def test_la_estratificacion_sin_efecto_no_inventa_uno_aunque_la_hora_confunda():
+    """El calor y el tráfico dependen de la hora; sin efecto verdadero, el estimador ajustado da ~0."""
+    r = CausalAnalysis(_panel(efecto=0.0)).stratified_adjusted(n_boot=200)
+    assert abs(r["att"]) < 0.1 and r["ci_95"][0] <= 0.0 + 0.06 and r["ci_95"][1] >= -0.06
+
+
+def test_la_ruta_confunde_y_la_estratificacion_la_neutraliza():
+    """La ruta A es más cálida y 4 min más rápida, pero el calor NO tiene efecto: sin ajustar sale -4,4 min; con la ruta
+    en los estratos, ~0; sin la ruta en los estratos, el sesgo vuelve (es lo que pasaba con los datos reales)."""
+    ca = CausalAnalysis(_panel(efecto=0.0, desfase_ruta=1.5, efecto_ruta=-4.0))
+    con_ruta, sin_ruta = ca.stratified_adjusted(n_boot=200), ca.stratified_adjusted(strata=["hour", "week"], n_boot=200)
+    assert con_ruta["naive_difference"] < -3.5 and abs(con_ruta["att"]) < 0.2
+    assert sin_ruta["att"] < -3.5
+
+
+def test_estratificacion_descarta_las_tratadas_sin_controles_en_su_estrato_y_lo_cuenta():
+    r = CausalAnalysis(_panel(efecto=0.0, dias=10)).stratified_adjusted(
+        strata=["origin", "destination", "hour", "week"]
+    )
+    assert 0 < r["share_used"] <= 1 and r["n_used"] <= r["n_treated"] and r["n_strata_used"] > 0
+    assert r["strata_on"] == ["origin", "destination", "hour", "week"]
+
+
+def test_estratificacion_sin_soporte_comun_da_error():
+    """Si cada estrato tiene solo tratadas o solo controles (aquí, una columna que separa los dos grupos), no hay
+    comparación posible."""
+    df = _panel(dias=10)
+    df["grupo"] = (df["origin_temperature"] > df["origin_temperature"].median()).astype(str)
+    r = CausalAnalysis(df).stratified_adjusted(strata=["grupo"], treatment="above_median")
+    assert "no common support" in r["error"]
+
+
+def test_las_columnas_de_estrato_desconocidas_dan_error_en_vez_de_romper():
+    ca = CausalAnalysis(_panel(dias=10))
+    assert "Unknown stratification column" in ca.stratified_adjusted(strata=["no_existe"])["error"]
+    assert "Unknown stratification column" in ca.propensity_score_matching(exact=["no_existe"])["error"]
+
+
+@pytest.mark.parametrize("metodo", ["stratified_adjusted", "propensity_score_matching"])
+def test_errores_de_los_estimadores_ajustados(metodo):
+    ca = CausalAnalysis(_panel(dias=10))
+    assert "Unknown treatment" in getattr(ca, metodo)(treatment="otro")["error"]
+    assert "Missing columns" in getattr(ca, metodo)(weather_col="no_existe")["error"]
+    pocos = CausalAnalysis(_panel(dias=10).head(20))
+    assert getattr(pocos, metodo)() == {"error": "Insufficient data"}
+    constante = _panel(dias=10)
+    constante["origin_temperature"] = 20.0
+    assert getattr(CausalAnalysis(constante), metodo)()["error"] == "No variation in treatment"
+
+
+def test_la_estratificacion_sin_columnas_de_estrato_avisa():
+    sin = _panel(dias=10).drop(columns=["timestamp", "origin", "destination", "data_source"])
+    assert "No stratification columns" in CausalAnalysis(sin).stratified_adjusted()["error"]
+
+
+def test_el_psm_es_un_emparejamiento_real_y_no_la_diferencia_de_medias():
+    """Regresión: antes se calculaban los propensity scores y no se usaban; el 'PSM' era la diferencia de medias entre
+    tratadas y controles. Con la ruta confundiendo (-4,4 sin ajustar), el emparejamiento exacto por ruta la reduce mucho.
+    """
+    r = CausalAnalysis(_panel(efecto=0.0, desfase_ruta=1.5, efecto_ruta=-4.0)).propensity_score_matching(n_boot=100)
+    assert r["status"] == "calculated" and r["naive_difference"] < -3.5
+    assert abs(r["att"]) < 0.25 * abs(r["naive_difference"])
+    assert r["exact_match_on"] == ["origin", "destination", "data_source"]
+
+
+def test_el_psm_avisa_cuando_su_equilibrio_es_pobre_y_no_se_fia_de_si_mismo():
+    """Con un propensity score casi constante el emparejamiento es casi aleatorio y puede no equilibrar (King y
+    Nielsen, 2019). El diagnóstico lo detecta y el texto lo advierte en vez de presentar el número como bueno."""
+    r = CausalAnalysis(_panel(efecto=0.0, desfase_ruta=1.5, efecto_ruta=-4.0)).propensity_score_matching(n_boot=100)
+    b = r["balance"]
+    assert b["quality"] == "poor" and not b["balanced"] and b["max_abs_smd_after"] >= 0.25
+    assert "WARNING" in r["interpretation"] and "do not rely" in r["interpretation"]
+
+
+def test_con_la_mediana_global_el_tratamiento_queda_determinado_por_la_hora_y_el_equilibrio_falla():
+    """'Por encima de la mediana global' es casi 'es de día': sin solapamiento, el PSM no equilibra (SMD ~1)."""
+    r = CausalAnalysis(_panel(efecto=0.0)).propensity_score_matching(treatment="above_median", n_boot=100)
+    assert r["balance"]["quality"] == "poor" and r["balance"]["max_abs_smd_after"] > 0.5
+
+
+def test_el_psm_informa_del_equilibrio_antes_y_despues_y_de_las_peores_covariables():
+    r = CausalAnalysis(_panel(efecto=0.5)).propensity_score_matching(n_boot=100)
+    b = r["balance"]
+    assert {
+        "max_abs_smd_before",
+        "max_abs_smd_after",
+        "mean_abs_smd_before",
+        "mean_abs_smd_after",
+        "quality",
+        "worst_after",
+    } <= set(b)
+    assert len(b["worst_after"]) == 5 and b["quality"] in ("good", "acceptable", "poor")
+    assert r["n_matched"] <= r["n_treated"] and 0 < r["share_matched"] <= 1 and r["caliper"] > 0
+
+
+def test_el_psm_no_ajusta_por_consecuencias_del_trafico():
+    """La velocidad media es CONSECUENCIA del tiempo de viaje: ajustar por ella sesga. Por defecto no entra."""
+    df = _panel(efecto=0.5, dias=20)
+    df["average_speed_kmh"] = 60 - df["travel_time_min"]
+    r = CausalAnalysis(df).propensity_score_matching(n_boot=50)
+    # (la fuente no aparece: en este panel solo hay una, su indicador es constante y se descarta)
+    assert "average" not in " ".join(r["covariates"]) and set(r["covariates"]) == {"dia", "hora", "ruta", "semana"}
+
+
+def test_el_psm_es_determinista_con_la_misma_semilla_y_el_intervalo_contiene_el_efecto():
+    ca = CausalAnalysis(_panel(efecto=0.5, dias=30))
+    a, b = ca.propensity_score_matching(n_boot=80, seed=3), ca.propensity_score_matching(n_boot=80, seed=3)
+    assert a["att"] == b["att"] and a["ci_95"] == b["ci_95"]
+    assert a["ci_95"][0] <= a["att"] <= a["ci_95"][1]
+
+
+def test_el_intervalo_por_dias_es_mas_ancho_que_uno_que_trata_cada_medicion_como_independiente():
+    """Las mediciones de un mismo día comparten el mismo golpe: remuestrear días completos da un intervalo más honesto."""
+    rng = np.random.default_rng(0)
+    dias, por_dia = 40, 48
+    golpe = rng.normal(0, 1, dias)
+    diff = np.repeat(golpe, por_dia) + rng.normal(0, 0.5, dias * por_dia)
+    df = pd.DataFrame(
+        {"timestamp": pd.to_datetime(np.repeat(pd.date_range("2026-09-01", periods=dias, tz="UTC"), por_dia))}
+    )
+    lo, hi = CausalAnalysis._cluster_bootstrap(diff, df, np.arange(len(diff)), 500, 0)
+    ingenuo = np.quantile([rng.choice(diff, len(diff)).mean() for _ in range(500)], [0.025, 0.975])
+    assert (hi - lo) > 3 * (ingenuo[1] - ingenuo[0])
+
+
+def test_smd_de_dos_grupos_iguales_desplazados_y_con_pesos():
+    base = np.random.default_rng(0).normal(0, 1, (4000, 1))
+    assert abs(_smd(base, base.copy(), None)[0]) < 1e-12
+    assert _smd(base + 1.0, base, None)[0] == pytest.approx(1.0, abs=0.02)  # un desvío típico de diferencia
+    pesos = np.zeros(4000)
+    pesos[:2000] = 1 / 2000  # solo cuenta la mitad de los controles
+    assert _smd(base[:2000], base, pesos)[0] == pytest.approx(0.0, abs=1e-12)
+    constante = np.ones((10, 1))
+    assert _smd(constante, constante, None)[0] == 0.0  # sin varianza: 0, no NaN
+
+
+def test_la_matriz_de_ajuste_deriva_hora_dia_semana_ruta_y_fuente():
+    ca = CausalAnalysis(_panel(dias=14))
+    X = ca._adjustment_matrix(ca.df)
+    prefijos = {c.split("_")[0] for c in X.columns}
+    assert prefijos == {"hora", "dia", "semana", "ruta", "fuente"} or prefijos == {"hora", "dia", "semana", "ruta"}
+    assert X.shape[0] == len(ca.df) and (X.std() > 0).all()  # sin columnas constantes
+
+
+def test_una_covariable_numerica_con_pocos_valores_es_categorica_y_con_muchos_se_estandariza():
+    df = pd.DataFrame({"hora": np.arange(200) % 24, "continua": np.random.default_rng(0).normal(50, 10, 200)})
+    X = CausalAnalysis(pd.DataFrame({"travel_time_min": [1.0]}))._adjustment_matrix(df, ["hora", "continua"])
+    assert sum(c.startswith("hora_") for c in X.columns) == 23  # 24 valores -> 23 indicadores (drop_first)
+    assert abs(X["continua"].mean()) < 1e-9 and X["continua"].std() == pytest.approx(1.0, abs=0.01)
+
+
+def test_sin_nada_con_que_ajustar_la_matriz_es_none():
+    ca = CausalAnalysis(pd.DataFrame({"travel_time_min": [1.0, 2.0], "origin_temperature": [20.0, 21.0]}))
+    assert ca._adjustment_matrix(ca.df) is None
+
+
+def test_ningun_texto_presenta_una_asociacion_como_causa():
+    """Los datos son observacionales: las salidas hablan de asociación y avisan de que no es prueba de causalidad."""
+    ca = CausalAnalysis(_panel(efecto=0.5, dias=20))
+    textos = [
+        ca.weather_impact_causal()["adjusted_conclusion"],
+        ca.weather_impact_causal()["conclusion"],
+        ca.weather_impact_causal()["stratified_analysis"]["effect_interpretation"],
+        ca.weather_intervention_simulation()["interpretation"],
+        ca.route_intervention_effectiveness(ca.df)["intervention_effect"]["interpretation"],
+        ca.propensity_score_matching(n_boot=30)["interpretation"],
+    ]
+    for t in textos:
+        assert " causes " not in t and "caused" not in t and "causal effect" not in t, t
+    assert all("associated" in t or "difference" in t or "change" in t for t in textos)
+    assert "not proof of causality" in textos[0]
+
+
+def test_weather_impact_causal_incluye_los_dos_estimadores_ajustados():
+    r = CausalAnalysis(_panel(efecto=0.5, dias=20)).weather_impact_causal()
+    assert (
+        r["stratified_adjusted"]["status"] == "calculated" and r["propensity_score_matching"]["status"] == "calculated"
+    )
+    assert r["adjusted_conclusion"] == r["stratified_adjusted"]["interpretation"]
+
+
+def _confusor_continuo(n=3000, seed=0, efecto=0.0):
+    """El calor depende de un confusor continuo `x` y el tiempo de viaje también; `efecto` = minutos por °C."""
+    rng = np.random.default_rng(seed)
+    x = rng.normal(0, 1, n)
+    temperatura = 3 * x + rng.normal(0, 1, n)
+    return pd.DataFrame(
+        {
+            "x": x,
+            "origin_temperature": temperatura,
+            "travel_time_min": 10 + 2 * x + efecto * temperatura + rng.normal(0, 0.5, n),
+        }
+    )
+
+
+def _psm_continuo(df, **kw):
+    return CausalAnalysis(df).propensity_score_matching(
+        covariates=["x"], treatment="above_median", exact=[], n_boot=100, **kw
+    )
+
+
+def test_el_psm_ajusta_un_confusor_continuo_cuando_hay_solapamiento():
+    """Donde el propensity score SÍ varía, el emparejamiento hace su trabajo: la diferencia sin ajustar (+3) se reduce a
+    ~0 y el equilibrio pasa de SMD 2,3 a ~0,05."""
+    r = _psm_continuo(_confusor_continuo())
+    assert r["naive_difference"] > 2.5 and abs(r["att"]) < 0.2
+    b = r["balance"]
+    assert b["max_abs_smd_before"] > 1.0 and b["max_abs_smd_after"] < 0.1 and b["quality"] == "good" and b["balanced"]
+    assert "WARNING" not in r["interpretation"] and "acceptable" not in r["interpretation"]
+
+
+def test_el_psm_con_confusor_continuo_recupera_un_efecto_positivo():
+    r = _psm_continuo(_confusor_continuo(efecto=0.5))
+    assert r["att"] > 0.8 and r["ci_excludes_zero"]
+
+
+def test_el_caliper_descarta_las_tratadas_sin_pareja_cercana_y_sin_el_el_sesgo_reaparece():
+    """Sin caliper se empareja a todas, también a las que no tienen un control parecido, y el estimador se sesga."""
+    df = _confusor_continuo()
+    con, sin = _psm_continuo(df), _psm_continuo(df, caliper_sd=100)
+    assert con["share_matched"] < 0.8 and sin["share_matched"] == 1.0
+    assert abs(sin["att"]) > 3 * abs(con["att"])
+    assert (
+        _psm_continuo(df, caliper_sd=0.02)["share_matched"] < con["share_matched"]
+    )  # un caliper más estrecho descarta más
+
+
+def test_el_equilibrio_pondera_cada_control_por_las_veces_que_se_usa():
+    """Emparejamiento con reemplazo: un control usado dos veces pesa el doble. Tratadas x=1,1,1; controles x=1 (usado
+    2 veces) y x=100 (1 vez): la media ponderada es 34, no 50,5."""
+    x = np.array([[1.0], [1.0], [1.0], [1.0], [100.0]])
+    despues = _matched_smd(x, np.array([0, 1, 2]), np.array([3, 3, 4]))
+    esperado = _smd(x[[0, 1, 2]], x[[3, 4]], np.array([2 / 3, 1 / 3]))
+    np.testing.assert_allclose(despues, esperado)
+    assert abs(despues[0]) > 0.5
+
+
+def test_una_covariable_constante_no_cuenta_como_ajuste():
+    """Una variable sin variación se descarta de la matriz: no puede ajustar nada."""
+    df = _confusor_continuo(n=200)
+    df["constante"] = 5.0
+    assert CausalAnalysis(df)._adjustment_matrix(df, ["constante"]).shape[1] == 0
+    assert "No adjustment covariates" in CausalAnalysis(df).propensity_score_matching(covariates=["constante"])["error"]
+
+
+def test_el_vecino_mas_cercano_se_elige_entre_los_dos_lados():
+    """Controles separados (0, 1, 5, 10): cada tratada se empareja con el más próximo, venga de la izquierda o de la
+    derecha, y los extremos se quedan con el control del borde."""
+    controles = np.array([0.0, 1.0, 5.0, 10.0])
+    elegidos = _nearest_control(np.array([0.9, 4.0, 7.4, 7.6, -3.0, 99.0]), controles)
+    assert elegidos.tolist() == [1, 2, 2, 3, 0, 3]
+    assert _nearest_control(np.array([3.0]), np.array([1.0, 5.0])).tolist() in (
+        [0],
+        [1],
+    )  # empate: cualquiera de los dos
+    assert _nearest_control(np.array([2.9]), np.array([1.0, 5.0])).tolist() == [0]
