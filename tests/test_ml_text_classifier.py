@@ -178,13 +178,40 @@ def test_respuesta_aplica_la_abstencion():
     assert tt.respuesta(clases, np.array([[0.5, 0.3, 0.2]]), 0.5) == ["hospital"]  # justo en el umbral: responde
 
 
-def test_elegir_umbral_toma_el_de_mayor_exactitud_y_en_empate_el_mas_alto():
-    """Con probabilidades que no discriminan entre umbrales el empate lo gana el más alto (más prudente)."""
+def test_elegir_umbral_toma_el_mas_bajo_que_no_pasa_de_las_equivocadas_de_las_palabras_mas_la_tolerancia():
+    """El umbral es el más bajo cuyo híbrido no comete más respuestas equivocadas que las palabras clave (+2 puntos).
+    Aquí las palabras no responden nunca (0 equivocadas): a 0,6 o menos el clasificador contesta «hospital» a dos
+    frases fuera de alcance (2 de 3 equivocadas); a 0,65 se abstiene y deja de equivocarse."""
     clases = ["hospital", "ninguna"]
-    p = np.array([[0.99, 0.01], [0.98, 0.02]])
-    assert tt.elegir_umbral(clases, p, ["hospital", "hospital"]) == tt.UMBRALES[-1]
-    p2 = np.array([[0.6, 0.4], [0.6, 0.4], [0.9, 0.1]])  # a 0,6 y 0,9: dos «hospital» falsos para ninguna
-    assert tt.elegir_umbral(clases, p2, ["ninguna", "ninguna", "hospital"]) > 0.6
+    p = np.array([[0.6, 0.4], [0.6, 0.4], [0.9, 0.1]])
+    assert tt.elegir_umbral(clases, p, ["ninguna", "ninguna", "hospital"], [None, None, None]) == 0.65
+
+
+def test_elegir_umbral_la_tolerancia_incluye_el_borde_y_se_pasa_a_la_siguiente_rejilla():
+    """Con 98 frases de hospital bien respondidas y 2 fuera de alcance respondidas mal (2 %), el borde de la tolerancia
+    (palabras 0 % + 2 puntos) se cumple y sale el umbral más bajo; con 3 mal (3 %) ya no y hay que subirlo."""
+    clases = ["hospital", "ninguna"]
+    p = np.array([[0.9, 0.1]] * 98 + [[0.5, 0.5]] * 2)
+    sin_palabras = [None] * 100
+    assert tt.elegir_umbral(clases, p, ["hospital"] * 98 + ["ninguna"] * 2, sin_palabras) == tt.UMBRALES[0]
+    p3 = np.array([[0.9, 0.1]] * 97 + [[0.5, 0.5]] * 3)
+    assert tt.elegir_umbral(clases, p3, ["hospital"] * 97 + ["ninguna"] * 3, sin_palabras) == 0.55
+
+
+def test_elegir_umbral_si_ninguno_cumple_toma_el_mas_alto():
+    """Una frase fuera de alcance a la que el clasificador responde con 0,99 se contesta mal con cualquier umbral: sin
+    umbral válido se elige el más alto (el más prudente), no el más bajo."""
+    clases = ["hospital", "ninguna"]
+    p = np.array([[0.99, 0.01], [0.99, 0.01]])
+    assert tt.elegir_umbral(clases, p, ["ninguna", "hospital"], [None, None]) == tt.UMBRALES[-1]
+
+
+def test_elegir_umbral_mide_el_hibrido_no_el_clasificador_solo():
+    """Si las palabras clave ya responden bien una frase, lo que el clasificador diría de ella no cuenta: el híbrido solo
+    lo consulta cuando las palabras se abstienen. Aquí el clasificador solo se equivocaría siempre, el híbrido nunca."""
+    clases = ["hospital", "school"]
+    p = np.array([[0.1, 0.9], [0.1, 0.9]])
+    assert tt.elegir_umbral(clases, p, ["hospital", "hospital"], ["hospital", "hospital"]) == tt.UMBRALES[0]
 
 
 def test_bootstrap_pareado_con_diferencia_constante_y_con_diferencia_nula():
@@ -379,3 +406,95 @@ def test_el_softmax_es_estable_con_logits_enormes():
     m = tc.ModeloTexto(["a", "b"], {" x ": 0}, np.array([1.0]), np.array([[1000.0], [-1000.0]]), np.zeros(2), (3, 3))
     p = m.probabilidades("x")
     assert p["a"] == pytest.approx(1.0) and p["b"] == pytest.approx(0.0) and np.isfinite(list(p.values())).all()
+
+
+EVALUACION_V2 = etc.DATA / "frases_evaluacion_v2.psv"
+
+
+def test_la_evaluacion_v2_cumple_las_cuotas_fijadas_y_no_solapa_con_el_entrenamiento():
+    """El conjunto escrito por Codex tiene la composición fijada en el protocolo (§3.L2): 200 frases con las cuotas por
+    tipo y por categoría, sin repetidas ni coincidencias con el entrenamiento, y con la etiqueta ciega de cada una."""
+    tr, ev = etc.cargar(evaluacion=EVALUACION_V2)
+    assert len(ev) == 200 and etc.validar_datos(tr, ev) == []
+    assert ev["tipo"].value_counts().to_dict() == {
+        "larga": 50,
+        "directa": 40,
+        "sinonimo": 40,
+        "fuera": 40,
+        "errata": 30,
+    }
+    assert ev["categoria"].value_counts().to_dict() == {
+        "food_drink": 30,
+        "business": 30,
+        "ninguna": 40,
+        "hospital": 20,
+        "school": 20,
+        "sport": 20,
+        "leisure": 20,
+        "mall": 20,
+    }
+    assert set(ev.loc[ev["tipo"] == "fuera", "categoria"]) == {"ninguna"}
+    assert ev["ciego"].notna().all() and (ev["ciego"] != "").all()
+
+
+def test_solo_coincidentes_deja_las_frases_donde_autor_y_etiquetador_ciego_coinciden():
+    """Las ambiguas (etiqueta distinta) se quitan de la evaluación principal; no se tocan ni se reetiquetan las demás."""
+    ev = pd.DataFrame(
+        {
+            "tipo": ["directa", "directa", "errata"],
+            "categoria": ["hospital", "school", "ninguna"],
+            "frase": ["a", "b", "c"],
+            "ciego": ["hospital", "leisure", "ninguna"],
+        }
+    )
+    s = etc.solo_coincidentes(ev)
+    assert list(s["frase"]) == ["a", "c"] and list(s.index) == [0, 1]
+
+
+def test_validar_datos_rechaza_una_etiqueta_ciega_desconocida():
+    """Una etiqueta del etiquetador que no es una categoría (p. ej. una errata suya) invalida la evaluación."""
+    tr, ev = etc.cargar(evaluacion=EVALUACION_V2)
+    ev.loc[0, "ciego"] = "restaurante"
+    assert any("ciego" in p and "restaurante" in p for p in etc.validar_datos(tr, ev))
+
+
+def test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_escribio_las_frases(tmp_path, capsys):
+    """Con --solo-coincidentes se evalúan solo las frases con la misma etiqueta del autor y del etiquetador ciego, se
+    informa de cuántas se dejan fuera, y la advertencia del manifiesto ya no dice «mismo autor»."""
+    ruta = str(EVALUACION_V2)
+    assert (
+        etc.main(
+            ["--evaluacion", ruta, "--solo-coincidentes", "--boot", "100", "--sin-mlp", "--exportar", str(tmp_path)]
+        )
+        == 0
+    )
+    salida = capsys.readouterr().out
+    assert "Se evalúan 192 de 200 frases" in salida and "evaluación reservada: 192 frases" in salida
+    # las 8 ambiguas se imprimen con la respuesta de los sistemas, no solo se cuentan
+    assert (
+        "Las 8 frases ambiguas" in salida
+        and "«Cine en St Julian's»" in salida
+        and "coincide con el autor en 5 y con el etiquetador en 2 de 8." in salida
+    )
+    m = json.loads((tmp_path / "text_classifier_manifest.json").read_text(encoding="utf-8"))
+    assert m["datos"]["evaluacion"]["frases"] == 192 and "Codex" in m["advertencia"]
+
+
+def test_main_solo_coincidentes_sin_columna_ciego_se_niega(tmp_path, capsys):
+    """El archivo de evaluación antiguo no tiene la columna `ciego`: la opción lo dice en vez de fallar a medias."""
+    assert etc.main(["--solo-coincidentes"]) == 1
+    assert "columna `ciego`" in capsys.readouterr().out
+
+
+def test_ambiguas_es_el_complemento_de_solo_coincidentes():
+    """Cada frase está en exactamente uno de los dos conjuntos: las coincidentes se evalúan y las ambiguas se informan."""
+    ev = pd.DataFrame(
+        {
+            "tipo": ["directa", "directa", "errata"],
+            "categoria": ["hospital", "school", "ninguna"],
+            "frase": ["a", "b", "c"],
+            "ciego": ["hospital", "leisure", "ninguna"],
+        }
+    )
+    assert list(etc.ambiguas(ev)["frase"]) == ["b"] and list(etc.solo_coincidentes(ev)["frase"]) == ["a", "c"]
+    assert len(etc.ambiguas(ev)) + len(etc.solo_coincidentes(ev)) == len(ev)

@@ -12,6 +12,9 @@ evaluación supera a la de las palabras clave con el intervalo de confianza (boo
 y (b) su tasa de respuestas equivocadas no pasa de la de las palabras clave más 2 puntos. Se prefiere el híbrido a
 sustituir las palabras clave porque estas, cuando responden, suelen acertar: el clasificador solo entra donde ellas se
 abstienen.
+
+Umbral de confianza (fijado el 12-nov-2026, ANTES de generar el segundo conjunto de evaluación): el más bajo cuyo híbrido
+no supera, fuera de muestra sobre el entrenamiento, las respuestas equivocadas de las palabras clave más 2 puntos.
 """
 
 import warnings
@@ -100,14 +103,24 @@ def probabilidades_oof(
     return clases, oof
 
 
-def elegir_umbral(clases: Sequence[str], p: np.ndarray, categorias: Sequence[str]) -> float:
-    """Umbral con mayor exactitud fuera de muestra sobre el entrenamiento (en empate, el más alto: más prudente)."""
-    mejor, mejor_exactitud = UMBRALES[0], -1.0
+def elegir_umbral(
+    clases: Sequence[str], p: np.ndarray, categorias: Sequence[str], palabras: Sequence[Optional[str]]
+) -> float:
+    """El umbral MÁS BAJO cuyo híbrido (palabras clave y, solo si se abstienen, el clasificador) comete, fuera de
+    muestra sobre el entrenamiento, como mucho las respuestas equivocadas de las palabras clave más TOLERANCIA_ERRORES.
+    Si ninguno lo cumple, el más alto (el más prudente).
+
+    Es el mismo criterio que la regla (b) de decisión, medido con el entrenamiento: antes se elegía el umbral de mayor
+    exactitud, que trata igual una respuesta equivocada que una pregunta sin respuesta y salía el más atrevido (0,30).
+    `p` son probabilidades fuera de muestra (`probabilidades_oof`) y `palabras` las respuestas de las palabras clave a
+    esas mismas frases de entrenamiento.
+    """
+    tope = float(equivocadas(palabras, categorias).mean()) + TOLERANCIA_ERRORES
     for u in UMBRALES:
-        exactitud = float(np.mean([_acierta(r, c) for r, c in zip(respuesta(clases, p, u), categorias)]))
-        if exactitud >= mejor_exactitud:
-            mejor, mejor_exactitud = u, exactitud
-    return mejor
+        h = hibrido(palabras, respuesta(clases, p, u))
+        if float(equivocadas(h, categorias).mean()) <= tope:
+            return u
+    return UMBRALES[-1]
 
 
 # ---------------------------------------------------------------------------

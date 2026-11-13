@@ -288,7 +288,7 @@ El panorama aparece en **Recomendación**, debajo del resultado por zona (`strea
 
 ### L. Clasificador de texto (fase 3, 9-nov-2026)
 
-**Resultado: el clasificador entrenado NO se adopta; se queda el método de palabras clave.** Es un resultado negativo según la regla fijada antes de ver los datos, y con una causa concreta que se explica abajo.
+**Resultado de la primera evaluación: el clasificador entrenado NO se adopta; se queda el método de palabras clave** (la repetición con otro conjunto, en la sección 3.L2, sí lo adopta). Es un resultado negativo según la regla fijada antes de ver los datos, y con una causa concreta que se explica abajo.
 
 **Qué se construyó** (`src/ml/text_classifier.py`, `src/ml/text_training.py`, `tools/evaluate_text_classifier.py`, datos en `data/text/`):
 - TF-IDF de n-gramas de caracteres (2 a 5, por palabra) + regresión logística, con una clase `ninguna` (frases que no describen un negocio) y un umbral de confianza: si gana `ninguna` o no se llega al umbral, no se elige categoría, como hace el método actual.
@@ -328,6 +328,76 @@ El panorama aparece en **Recomendación**, debajo del resultado por zona (`strea
 
 **Qué haría falta para adoptarlo:** (i) un criterio de umbral coherente con la regla, fijado antes —p. ej. el umbral más bajo cuyas respuestas equivocadas fuera de muestra no superen las de las palabras clave más la tolerancia—; (ii) un conjunto de evaluación nuevo, idealmente con consultas reales o escritas por otras personas. Con eso, la herramienta ya está lista: `python tools/evaluate_text_classifier.py` (`--exportar data/ml` guarda el modelo y su manifiesto; `--sin-mlp` omite la red).
 
+### L2. Repetición de la fase 3: protocolo fijado antes de generar los datos (12-nov-2026)
+
+Este apartado se escribe y se sube al repositorio **antes** de generar el segundo conjunto de evaluación; el historial de git lo prueba. Corrige los dos defectos que dejó la sección L.
+
+**Qué cambia respecto a la primera evaluación**
+1. **El umbral de confianza se elige con un criterio coherente con la regla (b):** el más bajo cuyo híbrido no comete, fuera de muestra sobre el entrenamiento, más respuestas equivocadas que las palabras clave más 2 puntos (`elegir_umbral`). Antes se elegía el de mayor exactitud, que trata igual una respuesta equivocada que una pregunta sin respuesta.
+2. **Conjunto de evaluación nuevo, escrito por otro autor.** Las frases de evaluación de la sección L (200) quedan **consumidas** y no vuelven a usarse para decidir. El conjunto nuevo lo escribe **Codex** (un modelo de OpenAI), sin ver las 347 frases de entrenamiento ni las 200 de la primera evaluación: solo recibe las siete categorías con su definición, los cinco tipos de frase y las cuotas de abajo. No se le envía ningún dato del proyecto.
+
+**Lo que NO cambia:** las 347 frases de entrenamiento, el vectorizador, la regresión logística, la red MLP, las palabras clave, la rejilla de umbrales y la regla de decisión: (a) la exactitud del híbrido supera a la de las palabras clave con el IC por bootstrap pareado por encima de 0 y (b) sus respuestas equivocadas no pasan de las de las palabras clave más 2 puntos. **Después de ver los resultados no se cambia nada de lo anterior**; si se encuentra un error, se documenta y se repite la evaluación completa declarando que hubo una repetición.
+
+**Composición fijada de antemano (200 frases):**
+
+| Tipo | Frases | Qué es |
+|---|---|---|
+| directa | 40 | nombra el negocio, sin rodeos |
+| sinónimo | 40 | lo describe con otras palabras o con un término poco habitual |
+| errata | 30 | con faltas de ortografía o letras cambiadas |
+| larga | 50 | una frase con contexto, como la escribiría una persona al explicar su idea |
+| fuera de alcance | 40 | no describe un negocio (otro tema, ruido, algo vago o sin sentido) |
+
+Las 160 frases que sí describen un negocio se reparten así por categoría: `food_drink` 30, `business` 30, `hospital` 20, `school` 20, `sport` 20, `leisure` 20, `mall` 20 (las 40 fuera de alcance son la clase `ninguna`). Se pide además variedad de redacción (varios registros, español de distintos países, localidades de Malta cuando encaje) y que las frases parezcan consultas reales, no ejemplos escolares.
+
+**Etiquetado doble y ciego.** Una segunda sesión de Codex recibe solo las frases, **barajadas y sin etiqueta ni tipo**, más las definiciones de categoría (las mismas que el generador, salvo una cláusula añadida a `ninguna`: «o que solo menciona un negocio sin pedir abrirlo»; ver el límite 7), y las etiqueta. Las frases en las que su etiqueta **no coincide** con la del autor se consideran ambiguas: se **excluyen de la evaluación principal** y se evalúan aparte, informando cuántas son y cómo salen los sistemas en ellas. Esto ataca el límite 3 de la sección L (etiquetas discutibles) a costa de favorecer las frases claras, y se declara así. La regla de decisión se aplica al conjunto principal; el resultado sobre las 200 completas se informa también.
+
+**Control de calidad de los datos (mecánico, definido ya):** se descartan las frases vacías, las repetidas y las que coinciden (sin distinguir mayúsculas) con una de entrenamiento; se informa cuántas se descartaron. Si tras descartar quedan menos de las cuotas, se piden las que faltan a Codex con las mismas instrucciones, sin ver los resultados de ningún sistema.
+
+**Límites que siguen valiendo:** las frases las escribe un modelo de lenguaje, no usuarios reales (otro tipo de sesgo: puede ser más correcto y más variado que un usuario real, y su estilo no es el del entrenamiento escrito a mano); la composición la fijamos nosotros; 200 frases dan intervalos anchos; y el etiquetador ciego es también un modelo, así que su acuerdo con el autor mide consistencia, no verdad.
+
+**Resultado (12-nov-2026): con la regla fijada de antemano, el híbrido SE ADOPTA.** Se ejecutó una sola vez por configuración preregistrada (principal y completa), sin cambiar nada después de verlas. El etiquetado ciego coincidió con el del autor en **192 de 200 frases (96 %)**; esas 192 son el conjunto principal y las otras 8 se evalúan aparte.
+
+| Sistema (192 frases) | Exactitud | Respuestas equivocadas | Sin respuesta |
+|---|---|---|---|
+| palabras clave | 66,7 % | 5,7 % | 27,6 % |
+| logística | 58,3 % | 2,6 % | 39,1 % |
+| red MLP | 61,5 % | 1,0 % | 37,5 % |
+| **híbrido (palabras + logística)** | **76,0 %** | 6,2 % | 17,7 % |
+
+- **(a) Exactitud:** el híbrido mejora a las palabras clave en **+9,4 puntos [IC 95 %: +5,2, +13,5]**: el intervalo queda por encima de 0 → cumple.
+- **(b) Respuestas equivocadas:** 6,2 % frente a 5,7 % (+0,5 puntos; tolerancia +2) → cumple.
+- **Umbral elegido solo con el entrenamiento:** 0,50 para la logística (0,75 para la red). Con el criterio antiguo habría salido 0,30; ya no.
+- **Conjunto completo (200 frases):** +9,0 [+5,0, +13,0] y 7,0 % frente a 6,5 %; misma decisión.
+- La red no se distingue de la logística (−3,1 [−8,3, +2,1]); se queda la logística, que es la exportable a JSON.
+
+| Tipo (n) | palabras clave | logística | híbrido |
+|---|---|---|---|
+| directa (36) | 81 % / 3 % | 72 % / 0 % | 92 % / 3 % |
+| errata (29) | 69 % / 0 % | 55 % / 0 % | 79 % / 0 % |
+| larga (48) | 69 % / 2 % | 42 % / 4 % | 81 % / 4 % |
+| sinónimo (39) | 36 % / 3 % | 33 % / 0 % | 49 % / 3 % |
+| fuera de alcance (40) | 80 % / 20 % | 92 % / 8 % | 80 % / 20 % |
+
+(exactitud / respuestas equivocadas.)
+
+**Lectura honesta**
+- **Dónde ayuda:** gana entre 10 y 13 puntos en los cuatro tipos que sí describen un negocio. Sin embargo, **los sinónimos siguen en solo el 49 %**: la mitad de las frases con otras palabras se queda sin respuesta o se responde mal.
+- **Dónde no ayuda:** en las frases fuera de alcance el híbrido se equivoca el **20 %**, igual que las palabras clave, porque hereda su fallo: de las 8 que contesta mal, 5 solo *mencionan* un negocio («mi tía trabaja en una farmacia», «El gimnasio de mi barrio cierra demasiado temprano», «mi primo va a una escuela de inglés», «ayer cené en un restaurante», «Mi hermano tiene una cita en el dentista mañana») y 3 contienen una palabra suelta de negocio sin pedir abrir nada («¿Qué barrios de Malta son más seguros para vivir?» → `business`, «¿Cómo preparo un buen café con leche en casa?» → `food_drink`, «la dirección de la oficina de correos» → `business`). La logística sola solo se equivoca el 8 % ahí. Es un defecto real del híbrido tal como está definido (las palabras clave van primero) y **no se ha corregido**, porque cambiarlo exigiría una evaluación nueva.
+- **Las 8 ambiguas:** varias parecen errores del etiquetador más que ambigüedad real (y una causa plausible de al menos cuatro es una asimetría del protocolo, ver el límite 7) («Cine en St Julian's», «Farmacia de guardia en Sliema», «Veterinaria en Marsaskala» y «Busco una panadería artesanal» etiquetadas como `ninguna`). La regla las excluye igualmente, y excluirlas apenas cambia el resultado (completo: +9,0 frente a +9,4). En esas 8 las palabras clave y el híbrido dan la misma respuesta (siete responden y una se abstiene): coincide con la etiqueta del autor en 5 y con la del etiquetador en 2.
+- **Sensibilidad al umbral (solo descriptiva):** el híbrido cumple la regla en todos los umbrales mostrados de 0,40 a 0,80 (la tabla avanza de 0,10 en 0,10); falla a 0,30 (13 % de respuestas equivocadas) y a 0,90 (ya no mejora a las palabras clave con claridad). El 0,50 elegido no está en el borde.
+- **Las cifras absolutas no son comparables con la sección L:** otro conjunto, otra composición y otras frases. Las palabras clave suben del 45 % al 66,7 % sobre todo porque aciertan mucho más dentro de cada tipo (sinónimos 0 % → 36 %, erratas 21 % → 69 %, frases largas 24 % → 69 %): las frases de este conjunto usan más a menudo palabras que el método ya conoce. No se debe leer como una mejora de las palabras clave.
+
+**Límites que condicionan la conclusión**
+1. **Las frases las escribió un modelo de lenguaje, no usuarios reales.** Su español es más correcto y variado que el de un usuario, y sus erratas son plausibles pero artificiales.
+2. **El etiquetador ciego es el mismo modelo en otra sesión:** comparte puntos ciegos con el generador. El 96 % de acuerdo mide consistencia, no verdad.
+3. **El entrenamiento sigue siendo del autor** (347 frases escritas a mano), con un estilo distinto al de las de evaluación, lo que es sano, pero no equivale a consultas reales.
+4. **La composición la fijamos nosotros** (cuotas por tipo y categoría) y el desglose por tipo es lo comparable; 200 frases dan intervalos anchos.
+5. **No se registró el nombre del modelo de Codex** (`codex-cli 0.167.2`, modelo por defecto, sin configuración propia): la procedencia exacta de las frases no es reproducible, aunque los prompts y las etiquetas están en `data/text/evaluacion_v2/`.
+6. **Este segundo conjunto también queda consumido:** una mejora futura del clasificador exigiría un tercero.
+7. **Asimetría de las definiciones:** el etiquetador ciego recibió, para `ninguna`, una cláusula que los prompts de generación de los tipos directa, sinónimo, errata y larga no llevaban («o que solo menciona un negocio sin pedir abrirlo»). Es plausible que explique cuatro de los ocho desacuerdos («Busco una panadería artesanal», «Cine en St Julian's», «Farmacia de guardia» y «Veterinaria en Marsaskala», etiquetadas `ninguna`). No cambia la decisión (con las 200 frases se cumple igual) pero se declara: el 96 % de acuerdo está algo deprimido por esa diferencia.
+8. **Adoptar no está conectado a la app todavía:** el híbrido existe como herramienta y como inferencia solo con numpy, pero la pantalla de Recomendación sigue usando las palabras clave. Integrarlo es un paso aparte.
+
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
 
@@ -350,7 +420,7 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 | 1c | **Hecha (PR #41).** Entrenamiento en otra máquina (sección 3.I): paquete de entrada de ~1 MB con manifiesto y verificación (`tools/export_ml_inputs.py`), `--db` acepta el paquete, `requirements-ml.txt` con versiones exactas y convención de salida (tablas con procedencia, sin `.pkl`) | 1b |
 | 2a | **Hecha (PR #42).** Tabla precalculada de panoramas por celda (tres lentes, percentiles, confianza y brecha exploratoria etiquetada), conteos para recalcular con otro perfil y manifiesto: `src/ml/panorama.py` y `tools/build_panorama.py` (sección 3.J). Sin interfaz | 1c |
 | 2b | **Hecha (PR #43).** Interfaz (sección 3.K): mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 2a |
-| 3 | **Hecha (PR #44).** Clasificador de texto comparado con las palabras clave (sección 3.L): **no se adopta** (más respuestas equivocadas que las palabras clave); herramienta y datos listos para repetir con una evaluación nueva | — |
+| 3 | **Hecha (PR #44) y repetida (PR #71).** Clasificador de texto comparado con las palabras clave: la primera evaluación (sección 3.L) **no lo adopta**; la repetición con un conjunto escrito por Codex y etiquetado a ciegas (3.L2) **sí adopta el híbrido** (+9,4 puntos de exactitud, 6,2 % frente a 5,7 % de respuestas equivocadas), aún **sin conectar a la app**. La primera evaluación no lo adoptó por tener más respuestas equivocadas que las palabras clave. | — |
 | 4 | Riesgo de cierre exploratorio (etiquetas de Overpass histórico de toda el área) | 0, **autorización de descarga** |
 
 ## 6. Riesgos y sesgos que hay que declarar en el TFM
@@ -367,6 +437,6 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 1. **Resuelta para la fase 1b** (edificios, alojamiento, transporte e industria, a archivos temporales). Sigue pendiente la autorización del **estado histórico de toda el área** para la fase 4 (riesgo de cierre); la sonda inicial cubrió solo una zona.
 2. ¿Se añade **`torch`** (solo para entrenar, no en el dashboard)? El MLP de scikit-learn rindió peor y de forma inestable, en parte por no tener pérdida de Poisson (sección 3.G); una red con esa pérdida es la comparación justa que falta, pero es una dependencia pesada para un resultado que probablemente siga sin superar a la densidad.
 3. **Aplicado:** el criterio de éxito de la sección 4 se aplicó tal como estaba fijado y dio un resultado negativo (no se publica puntaje de ML). Queda por decidir qué hacer con la brecha de oferta en la fase 2: (a) no mostrarla, (b) mostrarla etiquetada como **exploratoria** junto a las lentes explícitas, o (c) esperar a la fase 1b.
-4. ¿Quién escribe las **~200 frases de evaluación** del clasificador de texto? Idealmente alguien que conozca el lenguaje real de los usuarios; yo puedo proponer un borrador.
+4. **Resuelta (sección 3.L2):** las 200 frases de evaluación las escribió Codex con etiquetado ciego. Antes: ¿quién escribe las **~200 frases de evaluación** del clasificador de texto? Idealmente alguien que conozca el lenguaje real de los usuarios; yo puedo proponer un borrador.
 5. ¿Quién **revisa los valores por defecto de los perfiles de negocio** (sección E)? Ya no es crítico, porque el usuario puede corregirlos; basta con que alguien con criterio de negocio los repase una vez: el propio autor, su tutor o una persona con experiencia en el sector. Yo preparo el borrador completo. Si no hay revisión externa, el TFM debe decir que son criterio del autor.
 6. ¿Qué **umbral** de desviación del perfil por defecto activa el aviso al usuario (por ejemplo, quitar más de la mitad de los elementos de competencia)? Propongo empezar en la mitad y ajustarlo con las primeras pruebas.

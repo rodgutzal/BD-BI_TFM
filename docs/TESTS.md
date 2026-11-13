@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**50 archivos · 811 funciones de test · 901 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**50 archivos · 820 funciones de test · 910 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -43,7 +43,7 @@
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
 | [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 23 | 23 |
-| [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 34 | 47 |
+| [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 43 | 56 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_dashboard.py`](#teststest_operations_dashboardpy) | 7 | 7+ |
@@ -874,7 +874,10 @@
 - `test_aciertos_equivocadas_y_perdidas_tienen_el_significado_documentado` — Una frase fuera de alcance se acierta no respondiendo; responderle es una respuesta equivocada; no responder a un negocio es una pérdida, no un error.
 - `test_el_hibrido_prefiere_las_palabras_clave_y_usa_el_modelo_solo_si_se_abstienen` — Donde las palabras clave responden, manda su respuesta aunque el modelo diga otra cosa.
 - `test_respuesta_aplica_la_abstencion` — Gana «ninguna» o no llega al umbral: None.
-- `test_elegir_umbral_toma_el_de_mayor_exactitud_y_en_empate_el_mas_alto` — Con probabilidades que no discriminan entre umbrales el empate lo gana el más alto (más prudente).
+- `test_elegir_umbral_toma_el_mas_bajo_que_no_pasa_de_las_equivocadas_de_las_palabras_mas_la_tolerancia` — El umbral es el más bajo cuyo híbrido no comete más respuestas equivocadas que las palabras clave (+2 puntos). Aquí las palabras no responden nunca (0 equivocadas): a 0,6 o menos el clasificador contesta «hospital» a dos frases fuera de alcance (2 de 3 equivocadas); a 0,65 se abstiene y deja de equivocarse.
+- `test_elegir_umbral_la_tolerancia_incluye_el_borde_y_se_pasa_a_la_siguiente_rejilla` — Con 98 frases de hospital bien respondidas y 2 fuera de alcance respondidas mal (2 %), el borde de la tolerancia (palabras 0 % + 2 puntos) se cumple y sale el umbral más bajo; con 3 mal (3 %) ya no y hay que subirlo.
+- `test_elegir_umbral_si_ninguno_cumple_toma_el_mas_alto` — Una frase fuera de alcance a la que el clasificador responde con 0,99 se contesta mal con cualquier umbral: sin umbral válido se elige el más alto (el más prudente), no el más bajo.
+- `test_elegir_umbral_mide_el_hibrido_no_el_clasificador_solo` — Si las palabras clave ya responden bien una frase, lo que el clasificador diría de ella no cuenta: el híbrido solo lo consulta cuando las palabras se abstienen. Aquí el clasificador solo se equivocaría siempre, el híbrido nunca.
 - `test_bootstrap_pareado_con_diferencia_constante_y_con_diferencia_nula` — Si a acierta siempre y b nunca, el IC es [1, 1]; si son iguales, la diferencia es 0.
 - `test_la_regla_adopta_solo_si_mejora_y_no_sube_los_errores` — Las tres salidas posibles de la regla fijada: adoptar, fallar por exactitud y fallar por errores.
 - `test_la_tolerancia_de_errores_es_de_dos_puntos` — Justo en la tolerancia (+2 puntos) todavía cumple; por encima, no.
@@ -894,6 +897,12 @@
 - `test_la_regla_exige_que_el_intervalo_quede_por_encima_de_cero_no_solo_la_media` — Una mejora pequeña (2 aciertos más de 40) tiene media positiva pero un IC que llega a 0: no cumple la exactitud.
 - `test_el_bootstrap_da_un_intervalo_con_anchura_que_contiene_la_media` — Con diferencias variables el IC tiene anchura positiva y rodea a la media.
 - `test_el_softmax_es_estable_con_logits_enormes` — Con coeficientes gigantes no hay desbordamiento: las probabilidades siguen siendo válidas.
+- `test_la_evaluacion_v2_cumple_las_cuotas_fijadas_y_no_solapa_con_el_entrenamiento` — El conjunto escrito por Codex tiene la composición fijada en el protocolo (§3.L2): 200 frases con las cuotas por tipo y por categoría, sin repetidas ni coincidencias con el entrenamiento, y con la etiqueta ciega de cada una.
+- `test_solo_coincidentes_deja_las_frases_donde_autor_y_etiquetador_ciego_coinciden` — Las ambiguas (etiqueta distinta) se quitan de la evaluación principal; no se tocan ni se reetiquetan las demás.
+- `test_validar_datos_rechaza_una_etiqueta_ciega_desconocida` — Una etiqueta del etiquetador que no es una categoría (p. ej. una errata suya) invalida la evaluación.
+- `test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_escribio_las_frases` — Con --solo-coincidentes se evalúan solo las frases con la misma etiqueta del autor y del etiquetador ciego, se informa de cuántas se dejan fuera, y la advertencia del manifiesto ya no dice «mismo autor».
+- `test_main_solo_coincidentes_sin_columna_ciego_se_niega` — El archivo de evaluación antiguo no tiene la columna `ciego`: la opción lo dice en vez de fallar a medias.
+- `test_ambiguas_es_el_complemento_de_solo_coincidentes` — Cada frase está en exactamente uno de los dos conjuntos: las coincidentes se evalúan y las ambiguas se informan.
 
 ## `tests/test_ml_validation.py`
 

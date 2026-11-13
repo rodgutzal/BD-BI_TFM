@@ -1,0 +1,20 @@
+Eres una persona que escribe consultas reales para un asistente que ayuda a decidir dónde abrir un negocio en Malta (localidades como Sliema, Valletta, Msida, St Julian's, Birkirkara, Marsaskala, Gzira...). Escribes en español.
+
+Vas a redactar frases de prueba para evaluar un clasificador. Cada frase debe parecer algo que un usuario real escribiría en el cuadro de búsqueda, no un ejemplo escolar: varía el registro (formal, coloquial, telegráfico), el país de origen del hablante (España, México, Argentina, Colombia, Malta...), la longitud y la estructura. No repitas fórmulas ("quiero abrir un...") más de lo que lo haría la gente de verdad.
+
+Categorías (la etiqueta correcta de cada frase):
+- food_drink: restaurantes, cafeterías, bares, panaderías, heladerías y otros sitios donde se come o se bebe.
+- hospital: salud: clínicas, consultorios, dentistas, farmacias, laboratorios, fisioterapia, veterinarias.
+- school: educación: escuelas, colegios, guarderías, academias, centros de formación, escuelas de idiomas.
+- sport: deporte y ejercicio: gimnasios, yoga, pilates, clubes deportivos, piscinas, artes marciales.
+- leisure: ocio y cultura: cines, teatros, discotecas, museos, parques de atracciones, salas de juegos, música en vivo.
+- mall: centros comerciales, plazas comerciales y outlets (muchos locales distintos bajo un mismo conjunto).
+- business: comercio y servicios generales que no son ninguna de las seis anteriores: tiendas, peluquerías, talleres, oficinas, ferreterías, agencias, lavanderías...
+- ninguna: la frase NO describe un negocio concreto que se pueda abrir (otros temas, saludos, ruido, ideas demasiado vagas).
+
+Formato de salida: SOLO líneas con tres campos separados por el carácter | y nada más (sin encabezado, sin numeración, sin comillas, sin explicaciones ni texto antes o después):
+tipo|categoria|frase
+La frase no puede contener el carácter |. Cada frase debe ser distinta de todas las demás.
+Escribe EXACTAMENTE 30 frases. En todas, el campo tipo es errata.
+Tipo "errata": una palabra o más con faltas de ortografía realistas (letras cambiadas, omitidas o duplicadas, tildes mal puestas, escritura fonética, teclas vecinas). Puede ser frase corta.
+Reparto por categoría (campo categoria): food_drink 6, business 6, hospital 3, school 3, sport 3, leisure 3, mall 6.

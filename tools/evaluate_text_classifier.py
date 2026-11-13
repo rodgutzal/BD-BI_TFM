@@ -54,12 +54,28 @@ def validar_datos(tr: pd.DataFrame, ev: pd.DataFrame) -> list:
             problemas.append(f"{nombre}: categorías desconocidas {malas}")
         if df["frase"].str.strip().eq("").any() or df["frase"].duplicated().any():
             problemas.append(f"{nombre}: frases vacías o repetidas")
+    if "ciego" in ev.columns:
+        malas = sorted(set(ev["ciego"]) - validas)
+        if malas:
+            problemas.append(f"evaluación: etiquetas del etiquetador ciego desconocidas {malas}")
     comunes = set(tr["frase"].str.lower().str.strip()) & set(ev["frase"].str.lower().str.strip())
     if comunes:
         problemas.append(
             f"{len(comunes)} frases están a la vez en entrenamiento y evaluación (p. ej. {sorted(comunes)[:3]})"
         )
     return problemas
+
+
+def solo_coincidentes(ev: pd.DataFrame) -> pd.DataFrame:
+    """Las frases cuya etiqueta del autor coincide con la del etiquetador ciego (docs/DISENO_ML_RECOMENDACION.md §3.L2).
+    Las que no coinciden son las ambiguas (`ambiguas`): quedan fuera de la evaluación principal y `main` imprime cómo
+    responden los sistemas a cada una."""
+    return ev[ev["ciego"] == ev["categoria"]].reset_index(drop=True)
+
+
+def ambiguas(ev: pd.DataFrame) -> pd.DataFrame:
+    """Las frases cuya etiqueta del autor NO coincide con la del etiquetador ciego (el complemento de `solo_coincidentes`)."""
+    return ev[ev["ciego"] != ev["categoria"]].reset_index(drop=True)
 
 
 def evaluar(
@@ -73,12 +89,13 @@ def evaluar(
     c_lr, p_lr = tt.probabilidades_oof(
         X, y, lambda a, b, c: tt.probabilidades_sklearn(a, b, c, seed=seed), n_folds, seed
     )
-    umbral_lr, umbral_mlp = tt.elegir_umbral(c_lr, p_lr, y), None
+    palabras_tr = tt.palabras_clave(X)  # las palabras clave no se entrenan: sirven de referencia para el umbral
+    umbral_lr, umbral_mlp = tt.elegir_umbral(c_lr, p_lr, y, palabras_tr), None
     if con_mlp:
         c_mlp, p_mlp = tt.probabilidades_oof(
             X, y, lambda a, b, c: tt.probabilidades_mlp(a, b, c, seed=seed), n_folds, seed
         )
-        umbral_mlp = tt.elegir_umbral(c_mlp, p_mlp, y)
+        umbral_mlp = tt.elegir_umbral(c_mlp, p_mlp, y, palabras_tr)
 
     modelo = tt.entrenar_logistica(X, y, seed=seed)
     modelo.umbral = umbral_lr
@@ -123,6 +140,7 @@ def evaluar(
         ),
         "n_entrenamiento": len(tr),
         "n_evaluacion": len(ev),
+        "con_ciego": "ciego" in ev.columns,
     }
 
 
@@ -152,8 +170,8 @@ def imprimir(r: dict) -> None:
         ]
         print(f"   {t:10} {int(r['por_tipo']['palabras'].loc[t, 'n']):>3} " + " ".join(f"{c:>22}" for c in celdas))
     print(
-        "\nLa composición del conjunto (más sinónimos, erratas y frases largas que frases directas) la fijó el autor; "
-        "el número global depende de ella. Lo que se compara es el desglose por tipo."
+        "\nLa composición del conjunto (cuotas por tipo y categoría) la fijó el autor antes de generarlo; el número global "
+        "depende de ella. Lo que se compara es el desglose por tipo."
     )
     d = r["decision"]
     e = d["exactitud"]
@@ -197,6 +215,22 @@ def imprimir(r: dict) -> None:
             print(f"   «{f}»: dijo {resp}, era {real}")
 
 
+def imprimir_ambiguas(tr: pd.DataFrame, dudosas: pd.DataFrame, seed: int = 0) -> None:
+    """Cómo responden las palabras clave y el híbrido a las frases ambiguas (excluidas de la evaluación principal). Es
+    informativo: el modelo y el umbral son los mismos, sin tocar nada."""
+    r = evaluar(tr, dudosas, seed, 100, con_mlp=False)
+    print(
+        f"\nLas {len(dudosas)} frases ambiguas (no coinciden con el etiquetador ciego), fuera de la evaluación principal:"
+    )
+    pal, hib = r["sistemas"]["palabras"], r["sistemas"]["hibrido"]
+    for f, autor, ciego, p, h in zip(dudosas["frase"], dudosas["categoria"], dudosas["ciego"], pal, hib):
+        print(f"   autor={autor}, ciego={ciego} | palabras={p}, híbrido={h} | «{f}»")
+    print(
+        f"   El híbrido coincide con el autor en {sum(h == a for h, a in zip(hib, dudosas['categoria']))} y con el etiquetador "
+        f"en {sum(h == c for h, c in zip(hib, dudosas['ciego']))} de {len(dudosas)}."
+    )
+
+
 def exportar(r: dict, destino: Path, entrenamiento=ENTRENAMIENTO, evaluacion=EVALUACION, commit: str = "") -> dict:
     """Escribe text_classifier.json y text_classifier_manifest.json en `destino` y devuelve el manifiesto."""
     destino = Path(destino)
@@ -235,8 +269,16 @@ def exportar(r: dict, destino: Path, entrenamiento=ENTRENAMIENTO, evaluacion=EVA
             },
         },
         "advertencia": (
-            "Frases de entrenamiento y de evaluación escritas por el mismo autor (no son consultas reales de usuarios): "
-            "la exactitud sobre ellas es optimista y depende de la composición del conjunto."
+            (
+                "Frases de evaluación escritas por un modelo de lenguaje (Codex) y etiquetadas por otra sesión a ciegas; "
+                "no son consultas reales de usuarios: la exactitud puede ser optimista y depende de la composición del "
+                "conjunto."
+            )
+            if r.get("con_ciego")
+            else (
+                "Frases de entrenamiento y de evaluación escritas por el mismo autor (no son consultas reales de "
+                "usuarios): la exactitud sobre ellas es optimista y depende de la composición del conjunto."
+            )
         ),
         "procedencia": {
             "commit": commit or "desconocido",
@@ -263,6 +305,11 @@ def main(argv=None) -> int:
     ap.add_argument(
         "--exportar", default=None, help="directorio donde escribir el modelo y su manifiesto (p. ej. data/ml)"
     )
+    ap.add_argument(
+        "--solo-coincidentes",
+        action="store_true",
+        help="evalúa solo las frases cuya etiqueta coincide con la del etiquetador ciego (columna `ciego`)",
+    )
     ap.add_argument("--sin-mlp", action="store_true", help="omite la red MLP (es lo que más tarda: ~1 minuto)")
     ap.add_argument("--boot", type=int, default=5000)
     ap.add_argument("--seed", type=int, default=0)
@@ -270,11 +317,22 @@ def main(argv=None) -> int:
 
     tr, ev = cargar(args.entrenamiento, args.evaluacion)
     problemas = validar_datos(tr, ev)
+    if args.solo_coincidentes and "ciego" not in ev.columns:
+        problemas.append("--solo-coincidentes necesita la columna `ciego` en el archivo de evaluación")
     if problemas:
         print("Los datos no son válidos para evaluar:\n  " + "\n  ".join(problemas))
         return 1
+    if args.solo_coincidentes:
+        n_antes = len(ev)
+        dudosas = ambiguas(ev)
+        ev = solo_coincidentes(ev)
+        print(
+            f"Se evalúan {len(ev)} de {n_antes} frases: las otras {n_antes - len(ev)} son ambiguas (no coinciden con el etiquetador ciego).\n"
+        )
     r = evaluar(tr, ev, args.seed, args.boot, con_mlp=not args.sin_mlp)
     imprimir(r)
+    if args.solo_coincidentes and len(dudosas):
+        imprimir_ambiguas(tr, dudosas, args.seed)
     if args.exportar:
         m = exportar(r, Path(args.exportar), args.entrenamiento, args.evaluacion, _commit())
         print(
