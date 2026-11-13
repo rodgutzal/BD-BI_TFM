@@ -804,3 +804,213 @@ def test_el_canario_no_guarda_nada_en_disco(tmp_path):
     dh.descargar(ClienteFalso({"https://x": con_usuarios}), tmp_path, ["2022-01-01"], pausa_s=0, log=lambda *_: None)
     assert pedido["n"] == 1
     assert all("colaborador_secreto" not in p.read_text(encoding="utf-8") for p in tmp_path.iterdir())
+
+
+# ---- verificación de integridad: el recuento del servidor frente a lo guardado -----------------------------------------
+def servidor_con_recuento(total=None, n=4, respeta_fecha=True):
+    """Como `servidor`, pero además contesta a `out count;` con el total que se indique (por defecto, `n`: coincide)."""
+    base = servidor(respeta_fecha=respeta_fecha, n=n)
+
+    def responder(consulta):
+        if "out count;" in consulta:
+            t = n if total is None else total
+            tags = {"nodes": str(t), "ways": "0", "relations": "0", "total": str(t)}
+            return {"osm3s": {}, "elements": [{"type": "count", "id": 0, "tags": tags}]}
+        return base(consulta)
+
+    return responder
+
+
+def _descargado(tmp_path, n=4, instantes=("2022-01-01",)):
+    """Descarga con un servidor falso que da `n` elementos por trozo; devuelve el cliente de la descarga."""
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=n)})
+    dh.descargar(cliente, tmp_path, list(instantes), pausa_s=0, log=lambda *_: None)
+    return cliente
+
+
+def _verificar(tmp_path, total=None, n=4, instantes=("2022-01-01",), **kw):
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(total=total, n=n)})
+    return dh.verificar_descarga(cliente, tmp_path, list(instantes), pausa_s=0, log=lambda *_: None, espera_s=0, **kw)
+
+
+def test_la_consulta_de_recuento_es_la_misma_consulta_pidiendo_solo_cuantos():
+    """Mismas cláusulas, misma zona y misma fecha; solo cambia la salida: `out count;` en vez de `out center tags;`."""
+    for nombre, franja, fecha, consulta in dh.plan():
+        recuento = dh.consulta_de_recuento(consulta)
+        assert recuento.rstrip().endswith("out count;") and "out center tags;" not in recuento
+        assert recuento.replace("out count;", "out center tags;") == consulta.rstrip()
+
+
+def test_la_consulta_de_recuento_se_niega_a_convertir_lo_que_no_es_una_consulta_de_datos():
+    """Si la consulta no termina en `out center tags;` no se inventa un recuento."""
+    with pytest.raises(ValueError, match="out center tags"):
+        dh.consulta_de_recuento("[out:json];node(1);out meta;")
+
+
+@pytest.mark.parametrize(
+    "respuesta_mala",
+    [
+        {"elements": []},
+        {"elements": [{"type": "node", "id": 1}]},  # no es un `count`
+        {"elements": [{"type": "count", "id": 0, "tags": {"total": "7"}}, {"type": "count", "id": 1, "tags": {}}]},
+        {"elements": [{"type": "count", "id": 0}]},  # sin tags
+        {"elements": [{"type": "count", "id": 0, "tags": {"total": "muchos"}}]},  # no numérico
+    ],
+)
+def test_total_del_servidor_rechaza_respuestas_que_no_son_un_recuento_valido(respuesta_mala):
+    """Un recuento ausente, doble o no numérico no se interpreta: es un error (la verificación queda «sin verificar»)."""
+    with pytest.raises(ValueError):
+        dh.total_del_servidor(respuesta_mala)
+
+
+def test_total_del_servidor_lee_el_total_que_declara_overpass():
+    assert dh.total_del_servidor({"elements": [{"type": "count", "id": 0, "tags": {"total": "1370"}}]}) == 1370
+
+
+def test_una_descarga_completa_se_verifica_y_queda_anotado_en_el_manifiesto(tmp_path):
+    """Si el recuento del servidor coincide con lo guardado, el archivo es `completo` y el manifiesto lo registra con el
+    criterio, las dos cifras y el espejo. Los archivos de datos no se tocan."""
+    _descargado(tmp_path, n=4)
+    antes = {p.name: dh.sha256_de(p) for p in tmp_path.glob("2022-01-01_*.json")}
+    r = _verificar(tmp_path, n=4)
+    assert r["ok"] and sorted(r["correctos"]) == ["2022-01-01_0.json", "2022-01-01_1.json"]
+    v = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))["archivos"]["2022-01-01_0.json"][
+        "verificacion"
+    ]
+    assert v["estado"] == "completo" and v["total_servidor"] == 4 and v["elementos_en_archivo"] == 4
+    assert v["criterio"] == "exacto" and v["espejo"] == "https://x" and v["verificado_utc"].endswith("Z")
+    assert {p.name: dh.sha256_de(p) for p in tmp_path.glob("2022-01-01_*.json")} == antes  # datos intactos
+
+
+def test_un_archivo_con_menos_elementos_que_el_servidor_es_incompleto_aunque_su_json_sea_valido(tmp_path):
+    """El caso que no se podía detectar de otro modo: una respuesta parcial pero JSON válido y sin `remark`. El servidor
+    dice 10 y el archivo tiene 4: INCOMPLETO, `ok` falso, y queda anotado."""
+    _descargado(tmp_path, n=4)
+    r = _verificar(tmp_path, total=10)
+    assert not r["ok"] and len(r["incorrectos"]) == 2 and r["correctos"] == []
+    v = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))["archivos"]["2022-01-01_0.json"][
+        "verificacion"
+    ]
+    assert v["estado"] == "INCOMPLETO" and v["total_servidor"] == 10 and v["elementos_en_archivo"] == 4
+
+
+def test_para_un_instante_pasado_la_coincidencia_es_exacta_sin_tolerancia(tmp_path):
+    """El pasado no cambia: una diferencia de UN solo elemento ya es un fallo (también por arriba)."""
+    _descargado(tmp_path, n=100)
+    assert not _verificar(tmp_path, total=101, n=100)["ok"]
+    assert not _verificar(tmp_path, total=99, n=100)["ok"]
+    assert _verificar(tmp_path, total=100, n=100)["ok"]
+
+
+def test_para_el_estado_actual_se_admite_una_diferencia_del_uno_por_ciento(tmp_path):
+    """«Hoy» cambia cada minuto: 1000 guardados frente a 1005 en el servidor (0,5 %) vale; 1030 (3 %) no."""
+    _descargado(tmp_path, n=1000, instantes=("hoy",))
+    assert _verificar(tmp_path, total=1005, n=1000, instantes=("hoy",))["ok"]
+    r = _verificar(tmp_path, total=1030, n=1000, instantes=("hoy",))
+    assert not r["ok"] and r["incorrectos"]
+    v = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))["archivos"]["hoy_0.json"]["verificacion"]
+    assert "tolerancia" in v["criterio"] and v["estado"] == "INCOMPLETO"
+
+
+def test_un_recuento_ilegible_deja_el_archivo_sin_verificar_y_no_lo_da_por_bueno(tmp_path):
+    """Si el servidor no contesta un recuento válido, el archivo queda `sin_verificar` (no `completo`) y `ok` es falso."""
+    _descargado(tmp_path, n=4)
+
+    def sin_count(consulta):
+        return (
+            {"osm3s": {}, "elements": [{"type": "node", "id": 1}]} if "out count;" in consulta else servidor()(consulta)
+        )
+
+    cliente = ClienteFalso({"https://x": sin_count})
+    r = dh.verificar_descarga(cliente, tmp_path, ["2022-01-01"], pausa_s=0, log=lambda *_: None, rondas=1, espera_s=0)
+    assert not r["ok"] and len(r["sin_verificar"]) == 2 and r["correctos"] == []
+    v = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))["archivos"]["2022-01-01_0.json"][
+        "verificacion"
+    ]
+    assert v["estado"] == "sin_verificar" and "count" in v["error"]
+
+
+def test_un_archivo_que_falta_se_informa_y_no_se_da_por_verificado(tmp_path):
+    """Si algún trozo no está descargado, `ok` es falso aunque los demás estén completos."""
+    _descargado(tmp_path, n=4)
+    (tmp_path / "2022-01-01_1.json").unlink()
+    r = _verificar(tmp_path, n=4)
+    assert not r["ok"] and r["sin_archivo"] == ["2022-01-01_1.json"] and r["correctos"] == ["2022-01-01_0.json"]
+
+
+def test_sin_manifiesto_no_hay_nada_que_verificar(tmp_path):
+    """Verificar una carpeta sin descargar da un error claro, no un informe vacío «correcto»."""
+    with pytest.raises(FileNotFoundError, match="primero hay que descargar"):
+        _verificar(tmp_path)
+
+
+def test_no_hay_verificacion_correcta_sin_ningun_archivo_verificado(tmp_path):
+    """`ok` exige al menos un archivo completo: una verificación que no comprobó nada no puede dar luz verde."""
+    (tmp_path / "manifest.json").write_text(json.dumps({"archivos": {}, "fallidos": []}), encoding="utf-8")
+    r = _verificar(tmp_path)
+    assert not r["ok"] and r["correctos"] == [] and len(r["sin_archivo"]) == 2
+
+
+def test_el_canario_tambien_protege_la_verificacion_de_los_instantes_pasados(tmp_path):
+    """Los recuentos fechados se piden con el mismo control de fecha: un espejo que ignora la fecha no puede 'verificar'."""
+    _descargado(tmp_path, n=4)
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=4, respeta_fecha=False)})
+    r = dh.verificar_descarga(cliente, tmp_path, ["2022-01-01"], pausa_s=0, log=lambda *_: None, rondas=1, espera_s=0)
+    assert not r["ok"] and len(r["sin_verificar"]) == 2
+    assert (
+        "ignoró la fecha"
+        in json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))["archivos"]["2022-01-01_0.json"][
+            "verificacion"
+        ]["error"]
+    )
+
+
+def test_main_con_verificar_no_descarga_y_su_codigo_de_salida_refleja_el_resultado(tmp_path, monkeypatch, capsys):
+    """`--verificar` solo verifica (no hace la descarga) y sale con 0 si todo está completo y con 1 si no."""
+    _descargado(tmp_path, n=4)
+    argumentos = [
+        "--verificar",
+        "--out",
+        str(tmp_path),
+        "--instantes",
+        "2022-01-01",
+        "--pausa",
+        "0",
+        "--rondas",
+        "1",
+        "--espera",
+        "0",
+    ]
+    monkeypatch.setattr(dh, "OverpassClient", lambda **kw: ClienteFalso({"https://x": servidor_con_recuento(n=4)}))
+    monkeypatch.setattr(dh, "descargar", lambda *a, **k: pytest.fail("--verificar no debe descargar"))
+    assert dh.main(argumentos) == 0 and "2 completos, 0 INCOMPLETOS" in capsys.readouterr().out
+    monkeypatch.setattr(
+        dh, "OverpassClient", lambda **kw: ClienteFalso({"https://x": servidor_con_recuento(total=9, n=4)})
+    )
+    assert dh.main(argumentos) == 1 and "0 completos, 2 INCOMPLETOS" in capsys.readouterr().out
+
+
+def _verificar_mixto(tmp_path, segundo):
+    """Verifica 2022 (2 trozos): el canario y el recuento del primer trozo salen bien; el del segundo lo decide `segundo`."""
+    _descargado(tmp_path, n=4)
+    bien = servidor_con_recuento(n=4)
+    cliente = ClienteFalso({"https://x": [bien, bien, segundo]})  # 1.º canario, 2.º trozo 0, 3.º trozo 1
+    return dh.verificar_descarga(
+        cliente, tmp_path, ["2022-01-01"], pausa_s=0, log=lambda *_: None, rondas=1, espera_s=0
+    )
+
+
+def test_un_solo_archivo_incompleto_basta_para_que_la_verificacion_no_sea_correcta(tmp_path):
+    """Caso realista: uno completo y otro INCOMPLETO. `ok` debe ser falso aunque haya algún archivo correcto."""
+    r = _verificar_mixto(tmp_path, servidor_con_recuento(total=9, n=4))
+    assert r["correctos"] == ["2022-01-01_0.json"] and r["incorrectos"] == ["2022-01-01_1.json"] and not r["ok"]
+
+
+def test_un_solo_archivo_sin_verificar_basta_para_que_la_verificacion_no_sea_correcta(tmp_path):
+    """Uno completo y otro cuyo recuento no se pudo leer: `ok` es falso (lo no verificado no se da por bueno)."""
+
+    def sin_count(consulta):
+        return {"osm3s": {}, "elements": []}
+
+    r = _verificar_mixto(tmp_path, sin_count)
+    assert r["correctos"] == ["2022-01-01_0.json"] and r["sin_verificar"] == ["2022-01-01_1.json"] and not r["ok"]

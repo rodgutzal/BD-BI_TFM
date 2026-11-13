@@ -19,8 +19,10 @@ Qué hace y qué NO hace:
     `uid`, `changeset`, `version` o `timestamp` (datos de colaboradores de OSM), no se escriben a disco ni al manifiesto.
   - Rechaza también una respuesta con HTTP 200 pero un `remark` de error, sin `elements`, o un cuerpo que no sea un JSON
     completo (un corte de red deja el JSON a medias y falla al leerlo). Una respuesta parcial pero JSON válido y sin `remark`
-    no es un modo de fallo conocido de Overpass, y no se puede distinguir de una legítima con certeza: por eso el análisis
-    comprobará la coherencia entre instantes antes de usar los datos.
+    no es un modo de fallo conocido de Overpass y no se puede distinguir de una legítima mirando solo la respuesta; por eso
+    se detecta con `--verificar`: repite cada consulta como un recuento (`out count;`, que calcula el propio servidor) y compara
+    con lo guardado (exacto para el pasado; 1 % para el estado actual, que cambia cada minuto), y anota el resultado en el
+    manifiesto. El análisis debe usar solo archivos con `verificacion.estado == "completo"`.
   - Pausa entre peticiones, tiempo máximo de servidor y el área partida en franjas, como `download_osm_context.py`.
   - `--dry-run` muestra las consultas sin hacer NINGUNA llamada de red.
 
@@ -133,6 +135,9 @@ CANARIO_MIN_ELEMENTOS = 20
 CANARIO_VENTANA_DIAS = 730
 FORMATO_FECHA = "%Y-%m-%dT%H:%M:%SZ"
 _PATRON_MARCA = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+# Verificación de integridad: para un instante pasado el recuento del servidor debe coincidir EXACTAMENTE con lo guardado (el
+# pasado no cambia); para el estado actual («hoy», ciclo de vida) el mapa cambia cada minuto y se admite hasta un 1 %.
+TOLERANCIA_ESTADO_ACTUAL = 0.01
 # Campos de cada elemento que SE GUARDAN. `out meta` (solo el canario) devuelve además `user`, `uid`, `changeset`,
 # `timestamp` y `version`, que son datos de colaboradores de OSM y no hacen falta: aunque un espejo los incluyera en una
 # respuesta normal, no se escriben a disco.
@@ -370,6 +375,101 @@ def descargar(
     return manifiesto
 
 
+def consulta_de_recuento(consulta: str) -> str:
+    """La misma consulta pero pidiendo solo CUÁNTOS elementos devuelve (`out count;`): el recuento lo calcula el propio servidor
+    sobre los mismos datos, sin depender de que la respuesta de los datos llegara entera."""
+    final = "out center tags;"
+    cuerpo = consulta.rstrip()
+    if not cuerpo.endswith(final):
+        raise ValueError("la consulta no termina en `out center tags;`: no se sabe convertirla en un recuento")
+    return cuerpo[: -len(final)] + "out count;"
+
+
+def total_del_servidor(respuesta: dict) -> int:
+    """El total que declara Overpass en una respuesta a `out count;` (un único elemento `count` con `tags.total`)."""
+    elementos = respuesta["elements"]
+    if len(elementos) != 1 or elementos[0].get("type") != "count":
+        raise ValueError("la respuesta al recuento no trae un único elemento `count`")
+    try:
+        return int(elementos[0]["tags"]["total"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("el elemento `count` no trae `tags.total` numérico") from None
+
+
+def verificar_descarga(
+    cliente,
+    out_dir: Path,
+    instantes: Optional[List[str]] = None,
+    pausa_s: float = PAUSA_S,
+    log=print,
+    rondas: Optional[int] = None,
+    espera_s: Optional[float] = None,
+) -> dict:
+    """Comprueba que cada archivo descargado está COMPLETO: repite su consulta como recuento y compara el total del servidor con
+    los elementos guardados. Es la barrera contra una respuesta parcial pero JSON válido y sin `remark` (que de otro modo no se
+    distinguiría de una legítima). Anota el resultado en `manifest.json` (`archivos[...]["verificacion"]`) y devuelve
+    `{"correctos", "incorrectos", "sin_verificar", "sin_archivo", "ok"}`. Los instantes pasados deben coincidir exactamente; el
+    estado actual admite `TOLERANCIA_ESTADO_ACTUAL`. NO toca los archivos de datos."""
+    out_dir = Path(out_dir)
+    ruta_manifiesto = out_dir / "manifest.json"
+    if not ruta_manifiesto.exists():
+        raise FileNotFoundError(f"No hay {ruta_manifiesto}: primero hay que descargar.")
+    manifiesto = json.loads(ruta_manifiesto.read_text(encoding="utf-8"))
+    verificados: Dict[Tuple[str, str], Optional[str]] = {}
+    resumen: Dict[str, list] = {"correctos": [], "incorrectos": [], "sin_verificar": [], "sin_archivo": []}
+    trabajo = plan(instantes)
+    for k, (nombre, franja, fecha, consulta) in enumerate(trabajo):
+        archivo = f"{nombre}_{franja}.json"
+        ruta = out_dir / archivo
+        if archivo not in manifiesto["archivos"] or not ruta.exists():
+            resumen["sin_archivo"].append(archivo)
+            log(f"   {archivo}: no está descargado")
+            continue
+        en_archivo = len(json.loads(ruta.read_text(encoding="utf-8"))["elements"])
+        ahora = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        try:
+            datos, endpoint = pedir(
+                cliente, consulta_de_recuento(consulta), fecha, rondas, espera_s, verificados=verificados
+            )
+            total = total_del_servidor(datos)
+        except (RuntimeError, ValueError) as e:
+            manifiesto["archivos"][archivo]["verificacion"] = {
+                "estado": "sin_verificar",
+                "error": str(e)[:300],
+                "verificado_utc": ahora,
+            }
+            resumen["sin_verificar"].append(archivo)
+            log(f"   {archivo}: NO SE PUDO VERIFICAR ({str(e)[:120]})")
+        else:
+            exacto = fecha is not None
+            coincide = (
+                total == en_archivo
+                if exacto
+                else abs(total - en_archivo) <= TOLERANCIA_ESTADO_ACTUAL * max(total, en_archivo)
+            )
+            manifiesto["archivos"][archivo]["verificacion"] = {
+                "estado": "completo" if coincide else "INCOMPLETO",
+                "total_servidor": total,
+                "elementos_en_archivo": en_archivo,
+                "criterio": (
+                    "exacto" if exacto else f"tolerancia del {TOLERANCIA_ESTADO_ACTUAL:.0%} (el mapa actual cambia)"
+                ),
+                "espejo": endpoint,
+                "verificado_utc": ahora,
+            }
+            resumen["correctos" if coincide else "incorrectos"].append(archivo)
+            log(f"   {archivo}: servidor {total} | archivo {en_archivo} -> {'COMPLETO' if coincide else 'INCOMPLETO'}")
+        if k < len(trabajo) - 1:
+            time.sleep(pausa_s)
+    ruta_manifiesto.write_text(
+        json.dumps(manifiesto, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    resumen["ok"] = bool(resumen["correctos"]) and not (
+        resumen["incorrectos"] or resumen["sin_verificar"] or resumen["sin_archivo"]
+    )
+    return resumen
+
+
 def main(argv: Optional[list] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", default=str(SALIDA_POR_DEFECTO), help="directorio donde guardar los JSON (NO la base)")
@@ -378,6 +478,11 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--pausa", type=float, default=PAUSA_S, help="segundos de pausa entre peticiones")
     ap.add_argument("--rondas", type=int, default=RONDAS, help="rondas por todos los espejos antes de rendirse")
     ap.add_argument("--espera", type=float, default=ESPERA_RONDAS_S, help="segundos entre rondas")
+    ap.add_argument(
+        "--verificar",
+        action="store_true",
+        help="no descarga: comprueba que lo ya descargado está completo comparando con el recuento que da el servidor",
+    )
     args = ap.parse_args(argv)
 
     trabajo = plan(args.instantes)
@@ -389,6 +494,21 @@ def main(argv: Optional[list] = None) -> int:
             print(f"\n--- {nombre} [{franja}] (fecha pedida: {fecha or 'hoy'}) ---\n{consulta}")
         print("\n(dry-run: no se hizo ninguna llamada de red)")
         return 0
+
+    if args.verificar:
+        resumen = verificar_descarga(
+            OverpassClient(timeout=TIMEOUT_HTTP_S, max_retries=1),
+            Path(args.out),
+            args.instantes,
+            args.pausa,
+            rondas=args.rondas,
+            espera_s=args.espera,
+        )
+        print(
+            f"\nVerificación: {len(resumen['correctos'])} completos, {len(resumen['incorrectos'])} INCOMPLETOS, "
+            f"{len(resumen['sin_verificar'])} sin verificar, {len(resumen['sin_archivo'])} sin archivo"
+        )
+        return 0 if resumen["ok"] else 1
 
     manifiesto = descargar(
         OverpassClient(timeout=TIMEOUT_HTTP_S, max_retries=1),

@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 901 funciones de test · 1004 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 917 funciones de test · 1024 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 59 | 72+ |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 75 | 92+ |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -525,6 +525,22 @@
 - `test_limpiar_elemento_conserva_solo_los_campos_de_la_lista_blanca` — Se quedan tipo, id, posición y etiquetas; se van versión, fecha, conjunto de cambios, uid y nombre de usuario.
 - `test_los_datos_guardados_no_contienen_datos_de_colaboradores_aunque_el_espejo_los_envie` — Aunque un espejo devolviera `user`/`uid` en una respuesta normal, no llegan al JSON del disco, ni al manifiesto, ni a lo que se imprime. Es una garantía explícita, no un efecto de usar `out center tags`.
 - `test_el_canario_no_guarda_nada_en_disco` — El canario (el único con `out meta`, con usuarios y uid) solo se comprueba en memoria: ningún archivo lo contiene.
+- `test_la_consulta_de_recuento_es_la_misma_consulta_pidiendo_solo_cuantos` — Mismas cláusulas, misma zona y misma fecha; solo cambia la salida: `out count;` en vez de `out center tags;`.
+- `test_la_consulta_de_recuento_se_niega_a_convertir_lo_que_no_es_una_consulta_de_datos` — Si la consulta no termina en `out center tags;` no se inventa un recuento.
+- `test_total_del_servidor_rechaza_respuestas_que_no_son_un_recuento_valido` ×5 — Un recuento ausente, doble o no numérico no se interpreta: es un error (la verificación queda «sin verificar»).
+- `test_total_del_servidor_lee_el_total_que_declara_overpass`
+- `test_una_descarga_completa_se_verifica_y_queda_anotado_en_el_manifiesto` — Si el recuento del servidor coincide con lo guardado, el archivo es `completo` y el manifiesto lo registra con el criterio, las dos cifras y el espejo. Los archivos de datos no se tocan.
+- `test_un_archivo_con_menos_elementos_que_el_servidor_es_incompleto_aunque_su_json_sea_valido` — El caso que no se podía detectar de otro modo: una respuesta parcial pero JSON válido y sin `remark`. El servidor dice 10 y el archivo tiene 4: INCOMPLETO, `ok` falso, y queda anotado.
+- `test_para_un_instante_pasado_la_coincidencia_es_exacta_sin_tolerancia` — El pasado no cambia: una diferencia de UN solo elemento ya es un fallo (también por arriba).
+- `test_para_el_estado_actual_se_admite_una_diferencia_del_uno_por_ciento` — «Hoy» cambia cada minuto: 1000 guardados frente a 1005 en el servidor (0,5 %) vale; 1030 (3 %) no.
+- `test_un_recuento_ilegible_deja_el_archivo_sin_verificar_y_no_lo_da_por_bueno` — Si el servidor no contesta un recuento válido, el archivo queda `sin_verificar` (no `completo`) y `ok` es falso.
+- `test_un_archivo_que_falta_se_informa_y_no_se_da_por_verificado` — Si algún trozo no está descargado, `ok` es falso aunque los demás estén completos.
+- `test_sin_manifiesto_no_hay_nada_que_verificar` — Verificar una carpeta sin descargar da un error claro, no un informe vacío «correcto».
+- `test_no_hay_verificacion_correcta_sin_ningun_archivo_verificado` — `ok` exige al menos un archivo completo: una verificación que no comprobó nada no puede dar luz verde.
+- `test_el_canario_tambien_protege_la_verificacion_de_los_instantes_pasados` — Los recuentos fechados se piden con el mismo control de fecha: un espejo que ignora la fecha no puede 'verificar'.
+- `test_main_con_verificar_no_descarga_y_su_codigo_de_salida_refleja_el_resultado` — `--verificar` solo verifica (no hace la descarga) y sale con 0 si todo está completo y con 1 si no.
+- `test_un_solo_archivo_incompleto_basta_para_que_la_verificacion_no_sea_correcta` — Caso realista: uno completo y otro INCOMPLETO. `ok` debe ser falso aunque haya algún archivo correcto.
+- `test_un_solo_archivo_sin_verificar_basta_para_que_la_verificacion_no_sea_correcta` — Uno completo y otro cuyo recuento no se pudo leer: `ok` es falso (lo no verificado no se da por bueno).
 
 ## `tests/test_ensemble_predictor.py`
 
