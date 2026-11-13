@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**48 archivos · 785 funciones de test · 875 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**49 archivos · 804 funciones de test · 894 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 7 | 7 |
+| [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
 | [`tests/test_foursquare_client.py`](#teststest_foursquare_clientpy) | 12 | 28 |
@@ -57,6 +57,7 @@
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
 | [`tests/test_travel_time_predictor.py`](#teststest_travel_time_predictorpy) | 28 | 31 |
+| [`tests/test_validate_ensemble_model.py`](#teststest_validate_ensemble_modelpy) | 9 | 9 |
 | [`tests/test_validate_travel_time_model.py`](#teststest_validate_travel_time_modelpy) | 11 | 11 |
 
 `+` = hay un `parametrize` con valores no literales; esos tests se cuentan como 1 caso.
@@ -460,6 +461,16 @@
 - `test_prediction_output` — Test prediction output format.
 - `test_anomaly_detection` — Test anomaly detection.
 - `test_insufficient_data` — Test handling of insufficient data.
+- `test_train_informa_la_r2_fuera_de_muestra_ademas_de_la_de_entrenamiento` — Cada modelo trae `r2_entrenamiento` (en muestra) y `r2` y `mae` fuera de muestra; el resumen va en `holdout`.
+- `test_con_ruido_puro_la_r2_en_muestra_engana_y_la_de_fuera_de_muestra_no` — Los bosques profundos se aprenden de memoria los datos de entrenamiento: con ruido puro la R² en muestra sale alta (lo que se informaba antes) y fuera de muestra no pasa de ~0. Es la razón de medir fuera de muestra.
+- `test_el_corte_es_cronologico_aunque_las_filas_lleguen_de_la_mas_reciente_a_la_mas_antigua` — La base entrega las filas de la más reciente a la más antigua: el corte debe ordenarlas antes, y el tramo de prueba es el 20 % más reciente por fecha.
+- `test_la_referencia_de_ultimo_valor_se_calcula_con_la_medicion_anterior_de_la_misma_fuente` — Con dos fuentes alternando, el «último valor» de cada fila es el de la misma fuente, no el de la fila contigua.
+- `test_el_tramo_de_prueba_es_el_mas_reciente_y_la_media_de_referencia_sale_del_entrenamiento` — Con un cambio de nivel al final (10 min las primeras 320 filas, 30 las últimas 80), el tramo de prueba tiene que ser el final: la media del entrenamiento (10) se equivoca en ~20 min sobre él. Si se midiera con el tramo antiguo, o la media se calculara con el de prueba, ese error sería muy distinto.
+- `test_supera_a_ultimo_valor_es_verdadero_cuando_las_variables_si_predicen` — Si el tiempo de viaje depende de la hora (par o impar) y la fila anterior siempre es de la otra paridad, repetir la última medición se equivoca en 10 min y el ensemble, que ve la hora, casi no: tiene que ganar.
+- `test_el_ensemble_pondera_los_modelos_y_normaliza_los_pesos_sobre_los_que_hay` — La predicción del ensemble es el promedio ponderado de los modelos disponibles, con los pesos normalizados: sin xgboost instalado, los pesos de los otros dos se reescalan para sumar 1.
+- `test_con_pocas_filas_no_se_mide_fuera_de_muestra_y_solo_queda_la_r2_en_muestra` — Con menos de 100 filas no hay tramo de prueba fiable: se entrena igualmente, pero sin `r2`, y se dice por qué.
+- `test_sin_timestamp_no_hay_corte_cronologico` — Sin columna de fecha no se puede ordenar el tiempo: no se inventa un corte.
+- `test_el_modelo_definitivo_se_reajusta_con_todos_los_datos` — Tras medir con el 80 %, el modelo que se guarda y se usa para predecir se ajusta con las 400 filas.
 - `test_model_save_load` — Test model saving and loading.
 
 ## `tests/test_forecasting.py`
@@ -1186,6 +1197,21 @@
 - `test_al_predecir_el_lag_es_la_media_de_las_5_mediciones_mas_recientes` — Regresión: se promediaban las 100 últimas, una variable distinta de la que el modelo vio al entrenar.
 - `test_un_predictor_nuevo_reutiliza_los_modelos_guardados` — Un predictor nuevo carga los modelos ya guardados en disco.
 - `test_el_estado_de_los_modelos` — El estado de los modelos lista todas las rutas; las entrenadas incluyen la importancia de variables y las demás no.
+
+## `tests/test_validate_ensemble_model.py`
+
+> Tests de tools/validate_ensemble_model.py: validación fuera de muestra del ensemble por ruta, y la demostración de que la
+> R² en muestra (la que se informaba antes) engaña.
+
+- `test_evaluate_route_devuelve_las_metricas_y_mide_el_20_por_ciento_mas_reciente` — Devuelve R² en y fuera de muestra, el MAE del ensemble y el de las dos referencias, sobre el 20 % más reciente.
+- `test_las_rutas_con_pocas_filas_se_omiten` — Una ruta con menos filas que el mínimo no se evalúa.
+- `test_con_ruido_puro_la_r2_en_muestra_es_mayor_que_la_de_fuera_de_muestra` — La demostración: la R² en muestra (la que se informaba antes) supera a la honesta, que con ruido no pasa de ~0.
+- `test_el_orden_de_las_filas_de_entrada_no_cambia_el_resultado` — La base entrega las filas de la más reciente a la más antigua; el corte las ordena, así que el resultado no depende del orden de entrada (con tolerancia: los bosques multihilo suman en un orden que varía).
+- `test_summarize_anade_la_fila_media_sin_ponderar` — La tabla trae una fila por ruta y una fila MEDIA con el promedio simple entre rutas.
+- `test_el_veredicto_dice_que_no_mejora_si_pierde_frente_a_repetir_la_ultima_medicion` — Si el ensemble tiene más error que repetir la última medición de la misma fuente, el veredicto lo dice y cuenta en cuántas rutas gana.
+- `test_el_veredicto_dice_que_mejora_si_gana_en_la_media` — Si el ensemble tiene menos error medio que la referencia, el veredicto dice que mejora.
+- `test_main_es_de_solo_lectura_y_muestra_las_dos_r2` — La herramienta no modifica la base ni crea archivos junto a ella, e imprime la R² en muestra, la de fuera y el veredicto.
+- `test_main_sin_rutas_suficientes_devuelve_error` — Si ninguna ruta llega al mínimo de filas, devuelve 1 y lo dice.
 
 ## `tests/test_validate_travel_time_model.py`
 
