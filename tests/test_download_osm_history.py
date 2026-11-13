@@ -1014,3 +1014,127 @@ def test_un_solo_archivo_sin_verificar_basta_para_que_la_verificacion_no_sea_cor
 
     r = _verificar_mixto(tmp_path, sin_count)
     assert r["correctos"] == ["2022-01-01_0.json"] and r["sin_verificar"] == ["2022-01-01_1.json"] and not r["ok"]
+
+
+# ---- «completo» va ligado a la identidad del archivo --------------------------------------------------------------------
+def _reescribir_con_sha_nuevo(tmp_path, archivo, cambiar):
+    """Altera el contenido de un archivo descargado y pone el sha256 NUEVO en el manifiesto (como si el manifiesto hubiera
+    sido reescrito a juego), para probar que lo que se comprueba no es solo el hash."""
+    ruta = tmp_path / archivo
+    contenido = json.loads(ruta.read_text(encoding="utf-8"))
+    cambiar(contenido)
+    ruta.write_text(json.dumps(contenido), encoding="utf-8")
+    manifiesto = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    manifiesto["archivos"][archivo]["sha256"] = dh.sha256_de(ruta)
+    (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
+
+
+def _estado(tmp_path, archivo):
+    m = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    return m["archivos"][archivo]["verificacion"]
+
+
+def test_un_archivo_alterado_con_el_mismo_numero_de_elementos_no_sale_completo(tmp_path):
+    """Si el JSON cambia después de descargarlo (mismo número de elementos, distinto contenido) el sha256 ya no coincide con
+    el manifiesto: queda MODIFICADO, `ok` es falso y ni siquiera se gasta una consulta de recuento para ese archivo."""
+    _descargado(tmp_path, n=4)
+    ruta = tmp_path / "2022-01-01_0.json"
+    contenido = json.loads(ruta.read_text(encoding="utf-8"))
+    contenido["elements"][0]["tags"] = {"amenity": "bar", "name": "Inventado"}  # misma cantidad, otros datos
+    ruta.write_text(json.dumps(contenido), encoding="utf-8")
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=4)})
+    r = dh.verificar_descarga(cliente, tmp_path, ["2022-01-01"], pausa_s=0, log=lambda *_: None, rondas=1, espera_s=0)
+    assert r["alterados"] == ["2022-01-01_0.json"] and r["correctos"] == ["2022-01-01_1.json"] and not r["ok"]
+    assert _estado(tmp_path, "2022-01-01_0.json")["estado"] == "MODIFICADO"
+    assert "sha256" in _estado(tmp_path, "2022-01-01_0.json")["motivo"]
+    assert cliente.consultas_reales() == 1  # solo se pidió el recuento del archivo íntegro
+
+
+@pytest.mark.parametrize(
+    "campo, valor",
+    [("instante", "2024-01-01"), ("franja", 1), ("fecha_pedida", "2024-01-01T00:00:00Z"), ("fecha_pedida", None)],
+)
+def test_un_archivo_que_dice_ser_de_otro_instante_franja_o_fecha_queda_modificado(tmp_path, campo, valor):
+    """Aunque el manifiesto lleve el sha256 del archivo cambiado, si DENTRO dice otro instante, otra franja u otra fecha
+    pedida que la que le corresponde, no puede salir «completo» (p. ej. un trozo de 2024 copiado como si fuera de 2022).
+    """
+    _descargado(tmp_path, n=4)
+    _reescribir_con_sha_nuevo(tmp_path, "2022-01-01_0.json", lambda c: c.__setitem__(campo, valor))
+    r = _verificar(tmp_path, n=4)
+    assert r["alterados"] == ["2022-01-01_0.json"] and not r["ok"]
+    assert campo in _estado(tmp_path, "2022-01-01_0.json")["motivo"]
+
+
+def test_un_archivo_con_distinto_numero_de_elementos_que_el_manifiesto_queda_modificado(tmp_path):
+    """El manifiesto dice 4 elementos; si el archivo tiene otros, no es el descargado (aunque el sha256 se hubiera puesto a
+    juego)."""
+    _descargado(tmp_path, n=4)
+    _reescribir_con_sha_nuevo(tmp_path, "2022-01-01_0.json", lambda c: c["elements"].pop())
+    r = _verificar(tmp_path, n=4)
+    assert r["alterados"] == ["2022-01-01_0.json"] and "3 elementos" in _estado(tmp_path, "2022-01-01_0.json")["motivo"]
+
+
+def test_un_archivo_sin_sha256_en_el_manifiesto_no_se_puede_dar_por_completo(tmp_path):
+    """Un manifiesto sin el hash del archivo no permite asegurar que sea el descargado: MODIFICADO, no «completo»."""
+    _descargado(tmp_path, n=4)
+    manifiesto = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    del manifiesto["archivos"]["2022-01-01_0.json"]["sha256"]
+    (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
+    r = _verificar(tmp_path, n=4)
+    assert (
+        r["alterados"] == ["2022-01-01_0.json"]
+        and "no trae el sha256" in _estado(tmp_path, "2022-01-01_0.json")["motivo"]
+    )
+
+
+def test_un_archivo_que_no_es_un_json_legible_queda_modificado(tmp_path):
+    """Un archivo corrupto cuyo hash se pusiera a juego tampoco pasa: se comprueba que se pueda leer con `elements`."""
+    _descargado(tmp_path, n=4)
+    (tmp_path / "2022-01-01_0.json").write_text("{ esto no es json", encoding="utf-8")
+    manifiesto = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    manifiesto["archivos"]["2022-01-01_0.json"]["sha256"] = dh.sha256_de(tmp_path / "2022-01-01_0.json")
+    (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
+    r = _verificar(tmp_path, n=4)
+    assert r["alterados"] == ["2022-01-01_0.json"] and "legible" in _estado(tmp_path, "2022-01-01_0.json")["motivo"]
+
+
+def test_un_archivo_intacto_deja_anotado_el_sha256_que_se_verifico(tmp_path):
+    """«Completo» queda ligado al hash del archivo verificado (trazabilidad: qué archivo exacto se comprobó)."""
+    _descargado(tmp_path, n=4)
+    _verificar(tmp_path, n=4)
+    m = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))["archivos"]["2022-01-01_0.json"]
+    assert m["verificacion"]["sha256_verificado"] == m["sha256"] == dh.sha256_de(tmp_path / "2022-01-01_0.json")
+
+
+def test_el_resumen_de_main_cuenta_los_archivos_modificados(tmp_path, monkeypatch, capsys):
+    """`--verificar` informa también de los MODIFICADOS y sale con 1."""
+    _descargado(tmp_path, n=4)
+    (tmp_path / "2022-01-01_0.json").write_text(json.dumps({"instante": "x", "elements": []}), encoding="utf-8")
+    monkeypatch.setattr(dh, "OverpassClient", lambda **kw: ClienteFalso({"https://x": servidor_con_recuento(n=4)}))
+    argumentos = ["--verificar", "--out", str(tmp_path), "--instantes", "2022-01-01", "--pausa", "0", "--rondas", "1"]
+    assert dh.main(argumentos + ["--espera", "0"]) == 1
+    assert "1 MODIFICADOS" in capsys.readouterr().out
+
+
+# ---- el total del servidor debe ser un entero no negativo en el formato de Overpass ----------------------------------------
+@pytest.mark.parametrize("total", ["-5", "+5", " 5", "5 ", "5.0", "1e3", "٥", "", "cinco", None, 7, 7.0, True])
+def test_el_total_del_servidor_debe_ser_una_cadena_de_digitos_ascii(total):
+    """`int()` aceptaría «-5», «+5», « 5 » o dígitos de otros alfabetos: un recuento así no es válido y no se interpreta."""
+    with pytest.raises(ValueError, match="count"):
+        dh.total_del_servidor({"elements": [{"type": "count", "id": 0, "tags": {"total": total}}]})
+
+
+@pytest.mark.parametrize("total, esperado", [("0", 0), ("1370", 1370), ("007", 7)])
+def test_el_total_del_servidor_acepta_cadenas_de_digitos_ascii(total, esperado):
+    assert dh.total_del_servidor({"elements": [{"type": "count", "id": 0, "tags": {"total": total}}]}) == esperado
+
+
+def test_un_archivo_cuyo_elements_no_es_una_lista_queda_modificado_aunque_tenga_la_longitud_esperada(tmp_path):
+    """`elements` como cadena de 4 caracteres tiene `len` 4, como los 4 elementos del manifiesto: se comprueba el tipo."""
+    _descargado(tmp_path, n=4)
+    _reescribir_con_sha_nuevo(tmp_path, "2022-01-01_0.json", lambda c: c.__setitem__("elements", "abcd"))
+    r = _verificar(tmp_path, n=4)
+    assert (
+        r["alterados"] == ["2022-01-01_0.json"]
+        and "no es una lista" in _estado(tmp_path, "2022-01-01_0.json")["motivo"]
+    )

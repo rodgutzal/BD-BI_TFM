@@ -20,9 +20,9 @@ Qué hace y qué NO hace:
   - Rechaza también una respuesta con HTTP 200 pero un `remark` de error, sin `elements`, o un cuerpo que no sea un JSON
     completo (un corte de red deja el JSON a medias y falla al leerlo). Una respuesta parcial pero JSON válido y sin `remark`
     no es un modo de fallo conocido de Overpass y no se puede distinguir de una legítima mirando solo la respuesta; por eso
-    se detecta con `--verificar`: repite cada consulta como un recuento (`out count;`, que calcula el propio servidor) y compara
-    con lo guardado (exacto para el pasado; 1 % para el estado actual, que cambia cada minuto), y anota el resultado en el
-    manifiesto. El análisis debe usar solo archivos con `verificacion.estado == "completo"`.
+    se detecta con `--verificar`: comprueba que cada archivo es el descrito por el manifiesto (sha256, instante, franja, fecha y
+    número de elementos), repite su consulta como un recuento (`out count;`, que calcula el propio servidor) y compara con lo
+    guardado (exacto para el pasado; 1 % para el estado actual, que cambia cada minuto), y anota el resultado en el manifiesto. El análisis debe usar solo archivos con `verificacion.estado == "completo"`.
   - Pausa entre peticiones, tiempo máximo de servidor y el área partida en franjas, como `download_osm_context.py`.
   - `--dry-run` muestra las consultas sin hacer NINGUNA llamada de red.
 
@@ -391,9 +391,40 @@ def total_del_servidor(respuesta: dict) -> int:
     if len(elementos) != 1 or elementos[0].get("type") != "count":
         raise ValueError("la respuesta al recuento no trae un único elemento `count`")
     try:
-        return int(elementos[0]["tags"]["total"])
-    except (KeyError, TypeError, ValueError):
-        raise ValueError("el elemento `count` no trae `tags.total` numérico") from None
+        total = elementos[0]["tags"]["total"]
+    except (KeyError, TypeError):
+        raise ValueError("el elemento `count` no trae `tags.total`") from None
+    # Overpass escribe el total como una cadena de dígitos ASCII (sin signo, espacios ni decimales). `int()` aceptaría
+    # además «-5», «+5», « 5 » o dígitos de otros alfabetos, que no son un recuento válido.
+    if not isinstance(total, str) or not re.fullmatch(r"[0-9]+", total):
+        raise ValueError(f"el elemento `count` no trae un `tags.total` entero no negativo: {total!r}")
+    return int(total)
+
+
+def comprobar_identidad(ruta: Path, entrada: dict, nombre: str, franja: int, fecha: Optional[str]) -> Optional[str]:
+    """None si el archivo es EL QUE DESCRIBE el manifiesto; si no, el motivo. «Completo» solo tiene sentido para el archivo que
+    se descargó: se comprueba el sha256 y que dentro diga el mismo instante, franja y fecha pedida y el mismo número de
+    elementos (un JSON alterado a mano, de otra franja o de otra fecha, con la misma cantidad, no puede salir «completo»).
+    """
+    esperado = entrada.get("sha256")
+    if not esperado:
+        return "el manifiesto no trae el sha256 de este archivo"
+    real = sha256_de(ruta)
+    if real != esperado:
+        return f"el sha256 del archivo ({real[:12]}…) no coincide con el del manifiesto ({esperado[:12]}…)"
+    try:
+        contenido = json.loads(ruta.read_text(encoding="utf-8"))
+        elementos = contenido["elements"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return "el archivo no es un JSON legible con `elements`"
+    if not isinstance(elementos, list):
+        return "`elements` del archivo no es una lista"
+    for campo, valor in (("instante", nombre), ("franja", franja), ("fecha_pedida", fecha)):
+        if contenido.get(campo) != valor:
+            return f"el archivo dice {campo}={contenido.get(campo)!r} y debería ser {valor!r}"
+    if len(elementos) != entrada.get("elementos"):
+        return f"el archivo tiene {len(elementos)} elementos y el manifiesto dice {entrada.get('elementos')}"
+    return None
 
 
 def verificar_descarga(
@@ -408,7 +439,8 @@ def verificar_descarga(
     """Comprueba que cada archivo descargado está COMPLETO: repite su consulta como recuento y compara el total del servidor con
     los elementos guardados. Es la barrera contra una respuesta parcial pero JSON válido y sin `remark` (que de otro modo no se
     distinguiría de una legítima). Anota el resultado en `manifest.json` (`archivos[...]["verificacion"]`) y devuelve
-    `{"correctos", "incorrectos", "sin_verificar", "sin_archivo", "ok"}`. Los instantes pasados deben coincidir exactamente; el
+    `{"correctos", "incorrectos", "sin_verificar", "sin_archivo", "alterados", "ok"}`. Antes de contar comprueba que el archivo
+    es el descrito por el manifiesto (sha256, instante, franja, fecha y número de elementos): si no, queda «MODIFICADO». Los instantes pasados deben coincidir exactamente; el
     estado actual admite `TOLERANCIA_ESTADO_ACTUAL`. NO toca los archivos de datos."""
     out_dir = Path(out_dir)
     ruta_manifiesto = out_dir / "manifest.json"
@@ -416,7 +448,13 @@ def verificar_descarga(
         raise FileNotFoundError(f"No hay {ruta_manifiesto}: primero hay que descargar.")
     manifiesto = json.loads(ruta_manifiesto.read_text(encoding="utf-8"))
     verificados: Dict[Tuple[str, str], Optional[str]] = {}
-    resumen: Dict[str, list] = {"correctos": [], "incorrectos": [], "sin_verificar": [], "sin_archivo": []}
+    resumen: Dict[str, list] = {
+        "correctos": [],
+        "incorrectos": [],
+        "sin_verificar": [],
+        "sin_archivo": [],
+        "alterados": [],
+    }
     trabajo = plan(instantes)
     for k, (nombre, franja, fecha, consulta) in enumerate(trabajo):
         archivo = f"{nombre}_{franja}.json"
@@ -425,8 +463,18 @@ def verificar_descarga(
             resumen["sin_archivo"].append(archivo)
             log(f"   {archivo}: no está descargado")
             continue
-        en_archivo = len(json.loads(ruta.read_text(encoding="utf-8"))["elements"])
         ahora = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        alteracion = comprobar_identidad(ruta, manifiesto["archivos"][archivo], nombre, franja, fecha)
+        if alteracion:  # no es el archivo descargado: no se gasta una consulta ni se le da el visto bueno
+            manifiesto["archivos"][archivo]["verificacion"] = {
+                "estado": "MODIFICADO",
+                "motivo": alteracion,
+                "verificado_utc": ahora,
+            }
+            resumen["alterados"].append(archivo)
+            log(f"   {archivo}: MODIFICADO ({alteracion})")
+            continue
+        en_archivo = manifiesto["archivos"][archivo]["elementos"]  # ya comprobado: coincide con el archivo
         try:
             datos, endpoint = pedir(
                 cliente, consulta_de_recuento(consulta), fecha, rondas, espera_s, verificados=verificados
@@ -454,6 +502,7 @@ def verificar_descarga(
                 "criterio": (
                     "exacto" if exacto else f"tolerancia del {TOLERANCIA_ESTADO_ACTUAL:.0%} (el mapa actual cambia)"
                 ),
+                "sha256_verificado": manifiesto["archivos"][archivo]["sha256"],
                 "espejo": endpoint,
                 "verificado_utc": ahora,
             }
@@ -465,7 +514,7 @@ def verificar_descarga(
         json.dumps(manifiesto, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
     )
     resumen["ok"] = bool(resumen["correctos"]) and not (
-        resumen["incorrectos"] or resumen["sin_verificar"] or resumen["sin_archivo"]
+        resumen["incorrectos"] or resumen["sin_verificar"] or resumen["sin_archivo"] or resumen["alterados"]
     )
     return resumen
 
@@ -506,7 +555,8 @@ def main(argv: Optional[list] = None) -> int:
         )
         print(
             f"\nVerificación: {len(resumen['correctos'])} completos, {len(resumen['incorrectos'])} INCOMPLETOS, "
-            f"{len(resumen['sin_verificar'])} sin verificar, {len(resumen['sin_archivo'])} sin archivo"
+            f"{len(resumen['sin_verificar'])} sin verificar, {len(resumen['sin_archivo'])} sin archivo, "
+            f"{len(resumen['alterados'])} MODIFICADOS"
         )
         return 0 if resumen["ok"] else 1
 

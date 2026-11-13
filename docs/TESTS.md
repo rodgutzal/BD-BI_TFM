@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 917 funciones de test · 1024 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 927 funciones de test · 1051 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 75 | 92+ |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 85 | 119+ |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -541,6 +541,16 @@
 - `test_main_con_verificar_no_descarga_y_su_codigo_de_salida_refleja_el_resultado` — `--verificar` solo verifica (no hace la descarga) y sale con 0 si todo está completo y con 1 si no.
 - `test_un_solo_archivo_incompleto_basta_para_que_la_verificacion_no_sea_correcta` — Caso realista: uno completo y otro INCOMPLETO. `ok` debe ser falso aunque haya algún archivo correcto.
 - `test_un_solo_archivo_sin_verificar_basta_para_que_la_verificacion_no_sea_correcta` — Uno completo y otro cuyo recuento no se pudo leer: `ok` es falso (lo no verificado no se da por bueno).
+- `test_un_archivo_alterado_con_el_mismo_numero_de_elementos_no_sale_completo` — Si el JSON cambia después de descargarlo (mismo número de elementos, distinto contenido) el sha256 ya no coincide con el manifiesto: queda MODIFICADO, `ok` es falso y ni siquiera se gasta una consulta de recuento para ese archivo.
+- `test_un_archivo_que_dice_ser_de_otro_instante_franja_o_fecha_queda_modificado` ×4 — Aunque el manifiesto lleve el sha256 del archivo cambiado, si DENTRO dice otro instante, otra franja u otra fecha pedida que la que le corresponde, no puede salir «completo» (p. ej. un trozo de 2024 copiado como si fuera de 2022).
+- `test_un_archivo_con_distinto_numero_de_elementos_que_el_manifiesto_queda_modificado` — El manifiesto dice 4 elementos; si el archivo tiene otros, no es el descargado (aunque el sha256 se hubiera puesto a juego).
+- `test_un_archivo_sin_sha256_en_el_manifiesto_no_se_puede_dar_por_completo` — Un manifiesto sin el hash del archivo no permite asegurar que sea el descargado: MODIFICADO, no «completo».
+- `test_un_archivo_que_no_es_un_json_legible_queda_modificado` — Un archivo corrupto cuyo hash se pusiera a juego tampoco pasa: se comprueba que se pueda leer con `elements`.
+- `test_un_archivo_intacto_deja_anotado_el_sha256_que_se_verifico` — «Completo» queda ligado al hash del archivo verificado (trazabilidad: qué archivo exacto se comprobó).
+- `test_el_resumen_de_main_cuenta_los_archivos_modificados` — `--verificar` informa también de los MODIFICADOS y sale con 1.
+- `test_el_total_del_servidor_debe_ser_una_cadena_de_digitos_ascii` ×13 — `int()` aceptaría «-5», «+5», « 5 » o dígitos de otros alfabetos: un recuento así no es válido y no se interpreta.
+- `test_el_total_del_servidor_acepta_cadenas_de_digitos_ascii` ×3
+- `test_un_archivo_cuyo_elements_no_es_una_lista_queda_modificado_aunque_tenga_la_longitud_esperada` — `elements` como cadena de 4 caracteres tiene `len` 4, como los 4 elementos del manifiesto: se comprueba el tipo.
 
 ## `tests/test_ensemble_predictor.py`
 
