@@ -70,9 +70,9 @@
     "mall"
   ],
   "procedencia": {
-    "commit": "756553e",
+    "commit": "a05eb3e",
     "ejecutado": "2026-11-09T03:38:37Z",
-    "entrada_commit": "0e32acf",
+    "entrada_commit": "5fa6890",
     "entrada_creada": "2026-11-09T03:34:18Z",
     "entrada_sha256": "596f17badc88dbfc47111b63b5378e87ed20c17431a9064b9a2415fa4527fb88",
     "python_exe": "python.exe",
