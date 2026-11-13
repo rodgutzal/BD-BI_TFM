@@ -24,7 +24,7 @@ Al ser datos con *share-alike*, quien redistribuya una versión adaptada de ello
 
 Los términos del portal de TomTom prohíben almacenar y redistribuir los resultados de su API: la cláusula 11.4 prohíbe cachear o almacenar resultados salvo en cachés de cliente de corta vida, la 11.6.1 prohíbe crear bases de datos derivadas con su contenido, y la 20.2.3 prohíbe combinarlo con datos que lo sometan a una licencia *copyleft* (como las ODbL y CC BY-SA de arriba). Por eso **no se publican** ni el histórico heredado (`legacy_tomtom_route_weather_data.csv`) ni las filas TomTom de la muestra de los *notebooks*, ni la salida HTML del `.Rmd` (sus tablas incluían filas de TomTom), y `.gitignore` impide volver a añadirlos por accidente.
 
-**Estado de la historia de git:** estos archivos se retiraron de la rama principal, pero siguen en la historia anterior (y en las ramas ya publicadas) hasta que esta se reescriba. Mientras tanto, seguirían descargables desde un commit antiguo.
+**Estado de la historia de git:** el 12-13 de noviembre de 2026 se reescribió la historia de las 24 ramas (`git filter-repo`) para eliminar estos archivos y dos volcados PostgreSQL con datos de TomTom (`backup.sql` y `backup_.sql`, que ya no estaban en la rama principal pero seguían en commits antiguos). Los SHA de los commits cambiaron. **Límite:** GitHub conserva las referencias `refs/pull/*` de los PR antiguos, que siguen apuntando a commits previos a la reescritura, así que esos datos pueden seguir descargables por SHA hasta que GitHub Support los purgue. No hay copias conocidas en forks (0 forks) pero no se puede descartar que alguien clonara el repositorio antes.
 
 Consecuencias que conviene conocer:
 

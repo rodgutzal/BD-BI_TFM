@@ -2,8 +2,8 @@
 # Uso local (una vez): git config blame.ignoreRevsFile .git-blame-ignore-revs
 # GitHub lo aplica solo en la vista de blame.
 # PR #59: black + isort sobre src/ y tests/
-23e689734f1756fa822a600e05335c07c36f0670
+ea9a38d5b32122f56a9103de59ca0b0618bf6228
 # PR #59: black + isort sobre streamlit_app/ y tools/
-16e94504bf278c77f042403eaa1356f69003b000
+d19992aea115b983b884ebc1c923f9867e3fac6f
 # PR #59: black + isort sobre los scripts de la raiz
-12a1b0f30f2f5e4f968885c148ee729a8a443fd4
+15a32fa41c4a996b7a7d012e84ed2337acf9d5a7
