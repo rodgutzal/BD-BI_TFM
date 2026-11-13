@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**50 archivos · 820 funciones de test · 910 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**52 archivos · 842 funciones de test · 932 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -32,7 +32,7 @@
 | [`tests/test_foursquare_client.py`](#teststest_foursquare_clientpy) | 12 | 28 |
 | [`tests/test_hybrid_scheduler.py`](#teststest_hybrid_schedulerpy) | 3 | 3 |
 | [`tests/test_license.py`](#teststest_licensepy) | 4 | 4 |
-| [`tests/test_location_scoring.py`](#teststest_location_scoringpy) | 22 | 22 |
+| [`tests/test_location_scoring.py`](#teststest_location_scoringpy) | 25 | 25 |
 | [`tests/test_locations.py`](#teststest_locationspy) | 5 | 5 |
 | [`tests/test_medallion.py`](#teststest_medallionpy) | 20 | 20 |
 | [`tests/test_merge_legacy_data.py`](#teststest_merge_legacy_datapy) | 1 | 1 |
@@ -54,8 +54,10 @@
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
+| [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
 | [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 25 | 25+ |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
+| [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
 | [`tests/test_travel_time_predictor.py`](#teststest_travel_time_predictorpy) | 28 | 31 |
 | [`tests/test_validate_ensemble_model.py`](#teststest_validate_ensemble_modelpy) | 9 | 9 |
@@ -566,6 +568,9 @@
 - `test_recomienda_de_extremo_a_extremo` — La recomendación de extremo a extremo devuelve todas las zonas ordenadas por puntaje y con el desglose completo, no solo el puntaje final.
 - `test_recomendar_con_texto_incomprensible_lanza_error` — Un texto que no se entiende como negocio lanza `ValueError`.
 - `test_recomendar_acepta_pesos_personalizados` — Con pesos personalizados, todo el peso en demanda hace ganar a la zona más poblada.
+- `test_recomendar_con_modelo_usa_el_modelo_solo_si_las_palabras_clave_no_reconocen` — Un texto que las palabras clave no reconocen se interpreta con el modelo; uno que sí reconocen ignora al modelo.
+- `test_recomendar_sin_modelo_sigue_fallando_con_un_texto_que_las_palabras_clave_no_reconocen` — Sin modelo (el comportamiento por defecto) un texto desconocido da el mismo error de siempre.
+- `test_recomendar_por_categoria_da_lo_mismo_que_recomendar_por_texto` — `recommend_for_category` es la segunda mitad de `recommend_locations`: para la misma categoría, el mismo resultado.
 
 ## `tests/test_locations.py`
 
@@ -1117,6 +1122,20 @@
 - `test_una_zona_sin_dato_queda_en_blanco_y_se_nota` — Una zona sin dato queda en blanco (NaN) en vez de en 0 y su recuento de datos completos baja de 3.
 - `test_normalize_weights_conserva_proporciones_y_suma_uno` — Los pesos normalizados conservan las proporciones y suman 1; con todo en cero se usan los pesos por defecto sin dividir entre cero.
 
+## `tests/test_recommendation_interpretacion_ui.py`
+
+> Tests de pantalla (Streamlit AppTest) de cómo Recomendación interpreta el texto: palabras clave primero, el modelo
+> entrenado solo donde ellas no reconocen el negocio (con una lectura marcada como menos segura) y la posibilidad de
+> corregir la categoría (docs/DISENO_ML_RECOMENDACION.md §3.L2).
+
+- `test_una_palabra_clave_se_interpreta_sin_aviso_del_modelo_y_se_puede_corregir` — Con una palabra clave se muestra la interpretación de siempre, sin aviso, y el selector de categoría está disponible pero plegado.
+- `test_un_texto_que_solo_entiende_el_modelo_se_marca_como_menos_seguro` — Si las palabras clave no reconocen el negocio y responde el modelo, la pantalla lo dice, da su confianza y deja el selector abierto para revisarlo.
+- `test_corregir_la_categoria_es_la_que_llega_al_puntaje` — La categoría que elige el usuario sustituye a la interpretada: es la que se usa para calcular el puntaje, y la pantalla dice que se usa la elegida.
+- `test_la_correccion_no_se_arrastra_a_la_siguiente_busqueda` — Una corrección vale para esa búsqueda: con otro texto, la categoría vuelve a ser la interpretada.
+- `test_un_texto_que_nadie_entiende_da_el_error_de_siempre` — Si ni las palabras clave ni el modelo responden, se muestra el mensaje de siempre y no se calcula nada.
+- `test_sin_modelo_la_pantalla_funciona_como_antes` — Si el artefacto falta o no se verifica (`get_text_model` devuelve None), solo responden las palabras clave: una errata que antes no se entendía sigue sin entenderse y no hay aviso del modelo.
+- `test_con_el_modelo_real_una_errata_se_entiende_y_se_marca` — Con el artefacto versionado en data/ml/: «una pizeria» (errata) la entiende el modelo como restauración, con aviso de lectura menos segura, y se calcula el puntaje de esa categoría.
+
 ## `tests/test_recommendation_panorama_ui.py`
 
 > Tests de pantalla de la fase 2b (Streamlit AppTest): el panorama por celda dentro de Recomendación, con la tabla
@@ -1170,6 +1189,24 @@
 - `test_parametrize_con_valores_no_literales_no_se_puede_contar` — Si los valores de `parametrize` no son literales, el número de casos es `None`.
 - `test_sin_parametrize_es_un_caso` — Un test sin `parametrize` cuenta como un caso.
 - `test_el_generador_encuentra_funciones_y_metodos_de_clases_test` — El generador del catálogo encuentra las funciones de test y los métodos de clases `Test*`, usa la primera frase del docstring e ignora lo que no es test.
+
+## `tests/test_text_hibrido.py`
+
+> Pruebas del sistema híbrido de interpretación del texto (src/ml/text_hibrido.py) y de la carga verificada del modelo
+> adoptado en la fase 3: palabras clave primero y, solo si se abstienen, el clasificador entrenado.
+
+- `test_las_palabras_clave_mandan_aunque_el_modelo_diga_otra_cosa` — Si las palabras clave reconocen el negocio, esa es la respuesta y ni siquiera se consulta al modelo.
+- `test_el_modelo_solo_entra_cuando_las_palabras_clave_se_abstienen` — Con un texto que las palabras clave no reconocen, responde el modelo y se indica su confianza.
+- `test_si_el_modelo_tambien_se_abstiene_no_se_adivina` — Sin respuesta de ninguno de los dos, no hay categoría (nunca se elige una al azar).
+- `test_sin_modelo_el_comportamiento_es_el_de_las_palabras_clave_solas` — Sin modelo (no hay artefacto o no se verificó) se vuelve al comportamiento anterior.
+- `test_un_texto_vacio_o_nulo_no_falla` — Vacío, solo espacios o None no rompen la pantalla ni el modelo: no hay categoría.
+- `test_con_el_modelo_real_una_errata_se_entiende_y_sin_el_no` — Caso de extremo a extremo con el artefacto versionado: «una pizeria» no es una palabra clave, pero el modelo la entiende como restauración; sin modelo no se entendía.
+- `test_el_modelo_versionado_se_carga_y_su_hash_coincide_con_el_manifiesto` — El artefacto de data/ml/ está adoptado, completo y es el que describe su manifiesto.
+- `test_sin_archivos_no_hay_modelo_y_se_avisa` — Sin modelo en la carpeta devuelve None y deja un aviso, en vez de fallar.
+- `test_un_modelo_que_el_manifiesto_no_da_por_adoptado_no_se_usa` — Aunque el archivo exista y su hash cuadre, si el manifiesto dice adoptado=false no se usa.
+- `test_un_modelo_alterado_no_se_usa` — Si el archivo del modelo cambia (hash distinto al del manifiesto), no se carga.
+- `test_un_manifiesto_roto_o_incompleto_no_rompe_la_carga` — JSON inválido o sin el hash del modelo: se vuelve a las palabras clave en vez de lanzar una excepción.
+- `test_la_aplicacion_da_la_misma_respuesta_que_la_evaluacion_para_cada_frase` — El híbrido de la aplicación y el de la evaluación de la fase 3 coinciden frase a frase sobre las 192 del conjunto principal (mismo modelo, mismo umbral, mismas palabras clave). Así las cifras de docs/DISENO_ML_RECOMENDACION.md §3.L2 (76,0 % de exactitud, 6,2 % de respuestas equivocadas) son las de lo que ve el usuario.
 
 ## `tests/test_time_series.py`
 
