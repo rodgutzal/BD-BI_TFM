@@ -1,5 +1,14 @@
 # Research Paper: Urban Mobility Analytics
 
+> **Nota (12-nov-2026): las cifras de rendimiento de este documento no están verificadas y no deben citarse.**
+> Es un texto heredado de otro proyecto. Las R² de la sección 4.1 y el «R² > 0.91» del resumen **no se pueden reproducir**
+> con el código y los datos actuales: `EnsemblePredictor.train()` calculaba la R² sobre los **mismos datos** con los que
+> ajustaba el modelo (en muestra), y con un corte cronológico medido fuera de muestra
+> (`python tools/validate_ensemble_model.py`, 12 rutas) la R² media es **0,12** (en muestra, 0,24) y el ensemble **no
+> mejora a repetir la última medición** (error medio 1,71 min frente a 0,20 min). Tampoco debe leerse como causal el
+> análisis de clima («truly CAUSES»): ver `src/analytics/causal_analysis.py`, ahora con estratificación y sin lenguaje causal.
+> Detalle y límites en la sección «Límites conocidos» del `README.md` principal. El resto del texto se deja como estaba.
+
 ## Executive Summary
 
 This paper presents a comprehensive system for real-time traffic prediction and analysis in urban environments. We implement advanced machine learning ensemble methods, rigorous statistical analysis, and causal inference techniques to move beyond correlation and understand the true drivers of urban traffic congestion.

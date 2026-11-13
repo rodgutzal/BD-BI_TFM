@@ -26,6 +26,10 @@ except ImportError:
 
 warnings.filterwarnings("ignore")
 
+# Medición fuera de muestra con un corte cronológico: entrenar con el 80 % más antiguo, medir en el 20 % más reciente.
+FRACCION_ENTRENAMIENTO = 0.8
+MIN_FILAS_FUERA_DE_MUESTRA = 100
+
 
 class EnsemblePredictor:
     """Ensemble de modelos de regresión sobre features tabulares (hora, día,
@@ -84,56 +88,142 @@ class EnsemblePredictor:
 
         return X, y, feature_cols
 
+    @staticmethod
+    def _build_models() -> dict:
+        """Modelos sin ajustar, con los hiperparámetros de siempre (xgboost solo si está instalado)."""
+        modelos = {}
+        if HAS_XGBOOST:
+            modelos["xgboost"] = xgb.XGBRegressor(
+                n_estimators=100, max_depth=5, learning_rate=0.1, subsample=0.8, random_state=42
+            )
+        modelos["random_forest"] = RandomForestRegressor(
+            n_estimators=100, max_depth=15, min_samples_split=5, random_state=42, n_jobs=-1
+        )
+        modelos["gradient_boosting"] = GradientBoostingRegressor(
+            n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42
+        )
+        return modelos
+
+    @classmethod
+    def _fit_all(cls, X_scaled, y) -> tuple:
+        """Ajusta cada modelo por separado: si uno falla, los demás siguen. Devuelve (ajustados, errores)."""
+        ajustados, errores = {}, {}
+        for nombre, modelo in cls._build_models().items():
+            try:
+                if nombre == "xgboost":
+                    modelo.fit(X_scaled, y, verbose=False)
+                else:
+                    modelo.fit(X_scaled, y)
+                ajustados[nombre] = modelo
+            except Exception as e:
+                errores[nombre] = str(e)
+        return ajustados, errores
+
+    def _weighted(self, predicciones: dict):
+        """Predicción ponderada del ensemble con los pesos normalizados sobre los modelos disponibles."""
+        nombres = list(predicciones)
+        pesos = np.array([self.ensemble_weights[n] for n in nombres], dtype=float)
+        return np.average([predicciones[n] for n in nombres], axis=0, weights=pesos / pesos.sum())
+
+    def _evaluar_fuera_de_muestra(self, df: pd.DataFrame, X, y) -> dict:
+        """Corte CRONOLÓGICO: ajusta con el 80 % más antiguo y mide (R² y MAE) en el 20 % más reciente, que ningún
+        modelo ha visto. `df` debe llegar ya ordenado de más antiguo a más reciente.
+
+        Las referencias son las mismas que en tools/validate_travel_time_model.py: la media del tramo de entrenamiento y
+        repetir la última medición de la MISMA fuente de datos (la base mezcla ORS, sin tráfico, y TomTom, con él). Todo
+        se mide sobre las filas que tienen esa última medición, para que la comparación sea justa."""
+        corte = int(len(df) * FRACCION_ENTRENAMIENTO)
+        escalador = StandardScaler()
+        X_ent = escalador.fit_transform(X[:corte])
+        X_test = escalador.transform(X[corte:])
+        y_ent, y_test = y[:corte], y[corte:]
+
+        serie = pd.Series(y, index=df.index)
+        if "data_source" in df.columns:
+            ultimo = serie.groupby(df["data_source"]).shift(1)
+        else:
+            ultimo = serie.shift(1)
+        ultimo_test = ultimo.to_numpy()[corte:]
+        valido = ~np.isnan(ultimo_test)
+        if valido.sum() < 2:
+            return {"error": "Sin filas de prueba con una medición anterior de la misma fuente"}
+
+        y_val = y_test[valido]
+        ajustados, _ = self._fit_all(X_ent, y_ent)
+        predicciones = {n: m.predict(X_test)[valido] for n, m in ajustados.items()}
+
+        def _metricas(pred):
+            return {"r2": float(r2_score(y_val, pred)), "mae": float(np.mean(np.abs(y_val - pred)))}
+
+        resultado = {
+            "n_entrenamiento": int(corte),
+            "n_prueba": int(valido.sum()),
+            "corte": str(df["timestamp"].iloc[corte]) if "timestamp" in df.columns else None,
+            "modelos": {n: _metricas(p) for n, p in predicciones.items()},
+            "referencias": {
+                "media_entrenamiento": {"mae": float(np.mean(np.abs(y_val - np.mean(y_ent))))},
+                "ultimo_valor": {"mae": float(np.mean(np.abs(y_val - ultimo_test[valido])))},
+            },
+        }
+        if predicciones:
+            resultado["ensemble"] = _metricas(self._weighted(predicciones))
+            resultado["supera_a_ultimo_valor"] = bool(
+                resultado["ensemble"]["mae"] < resultado["referencias"]["ultimo_valor"]["mae"]
+            )
+        return resultado
+
     def train(self, df: pd.DataFrame) -> dict:
-        """Entrenar ensemble."""
+        """Entrenar ensemble.
+
+        Devuelve, por modelo, `r2_entrenamiento` (EN MUESTRA: mide lo bien que el modelo se aprendió los datos con los que
+        se ajustó, no su capacidad de predecir) y, si hay datos suficientes, `r2` y `mae` FUERA DE MUESTRA con un corte
+        cronológico, más las referencias en `holdout`. Después de medir, el modelo definitivo se reajusta con todos los
+        datos. Antes solo se devolvía la R² en muestra con el nombre `r2`, que con bosques profundos sale muy alta aunque
+        el modelo no sirva para predecir."""
         if len(df) < 50:
             return {"error": "Insufficient data (need 50+ samples)", "trained": False}
+
+        # Orden cronológico: la base entrega las filas de la más reciente a la más antigua, y un corte sin ordenar mediría
+        # con las mediciones más antiguas.
+        if "timestamp" in df.columns:
+            df = df.assign(timestamp=pd.to_datetime(df["timestamp"], utc=True)).sort_values("timestamp", kind="stable")
+            df = df.reset_index(drop=True)
 
         X, y, feature_cols = self.prepare_features(df)
 
         if y is None or len(y) < 50:
             return {"error": "Insufficient target data", "trained": False}
 
-        # Escalar features
-        X_scaled = self.scaler.fit_transform(X)
-
         results = {"models_trained": []}
 
-        # 1. XGBoost (optional)
-        if HAS_XGBOOST:
-            try:
-                self.models["xgboost"] = xgb.XGBRegressor(
-                    n_estimators=100, max_depth=5, learning_rate=0.1, subsample=0.8, random_state=42
-                )
-                self.models["xgboost"].fit(X_scaled, y, verbose=False)
-                xgb_score = r2_score(y, self.models["xgboost"].predict(X_scaled))
-                results["models_trained"].append({"model": "xgboost", "r2": float(xgb_score)})
-            except Exception as e:
-                results["models_trained"].append({"model": "xgboost", "error": str(e)})
+        if "timestamp" not in df.columns:
+            results["holdout"] = {"error": "Sin columna timestamp: no se puede hacer un corte cronológico"}
+        elif len(df) < MIN_FILAS_FUERA_DE_MUESTRA:
+            results["holdout"] = {
+                "error": f"Menos de {MIN_FILAS_FUERA_DE_MUESTRA} filas: no se mide fuera de muestra, solo en muestra"
+            }
         else:
-            results["models_trained"].append({"model": "xgboost", "status": "skipped (not installed)"})
+            results["holdout"] = self._evaluar_fuera_de_muestra(df, X, y)
 
-        # 2. Random Forest
-        try:
-            self.models["random_forest"] = RandomForestRegressor(
-                n_estimators=100, max_depth=15, min_samples_split=5, random_state=42, n_jobs=-1
-            )
-            self.models["random_forest"].fit(X_scaled, y)
-            rf_score = r2_score(y, self.models["random_forest"].predict(X_scaled))
-            results["models_trained"].append({"model": "random_forest", "r2": float(rf_score)})
-        except Exception as e:
-            results["models_trained"].append({"model": "random_forest", "error": str(e)})
+        # Modelo definitivo: con TODOS los datos
+        X_scaled = self.scaler.fit_transform(X)
+        ajustados, errores = self._fit_all(X_scaled, y)
+        fuera = results["holdout"].get("modelos", {})
 
-        # 3. Gradient Boosting
-        try:
-            self.models["gradient_boosting"] = GradientBoostingRegressor(
-                n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42
-            )
-            self.models["gradient_boosting"].fit(X_scaled, y)
-            gb_score = r2_score(y, self.models["gradient_boosting"].predict(X_scaled))
-            results["models_trained"].append({"model": "gradient_boosting", "r2": float(gb_score)})
-        except Exception as e:
-            results["models_trained"].append({"model": "gradient_boosting", "error": str(e)})
+        for nombre in ("xgboost", "random_forest", "gradient_boosting"):
+            self.models[nombre] = ajustados.get(nombre)
+            if nombre in ajustados:
+                entrada = {
+                    "model": nombre,
+                    "r2_entrenamiento": float(r2_score(y, ajustados[nombre].predict(X_scaled))),
+                }
+                if nombre in fuera:
+                    entrada.update(fuera[nombre])
+                results["models_trained"].append(entrada)
+            elif nombre in errores:
+                results["models_trained"].append({"model": nombre, "error": errores[nombre]})
+            else:
+                results["models_trained"].append({"model": nombre, "status": "skipped (not installed)"})
 
         self.is_trained = True
         results["status"] = "success"
