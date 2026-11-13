@@ -55,9 +55,25 @@ def train_all_routes():
             print(f"  ✅ Training successful")
             for model_info in result.get("models_trained", []):
                 if "r2" in model_info:
-                    print(f"    - {model_info['model']}: R² = {model_info['r2']:.3f}")
+                    print(
+                        f"    - {model_info['model']}: R² fuera de muestra = {model_info['r2']:.3f} "
+                        f"(en muestra: {model_info['r2_entrenamiento']:.3f}), MAE = {model_info['mae']:.2f} min"
+                    )
+                elif "r2_entrenamiento" in model_info:
+                    print(
+                        f"    - {model_info['model']}: R² EN MUESTRA = {model_info['r2_entrenamiento']:.3f} "
+                        "(no mide si predice; no se pudo medir fuera de muestra)"
+                    )
                 else:
                     print(f"    - {model_info['model']}: {model_info.get('status', 'trained')}")
+
+            fuera = result.get("holdout", {})
+            if "ensemble" in fuera:
+                referencia = fuera["referencias"]["ultimo_valor"]["mae"]
+                print(
+                    f"    Ensemble: MAE = {fuera['ensemble']['mae']:.2f} min fuera de muestra; "
+                    f"repetir la última medición da {referencia:.2f} min"
+                )
 
             # Save model
             save_result = predictor.save()
