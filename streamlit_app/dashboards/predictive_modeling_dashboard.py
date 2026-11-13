@@ -9,9 +9,12 @@ la misma metodología validada en ese notebook:
 
 Las cifras exactas pueden diferir levemente de las del .Rmd (el dataset vivo
 sigue creciendo y aquí se usa scikit-learn en vez de caret/randomForest/xgboost),
-pero la metodología -features, exclusión de fuga de datos, división train/test,
-umbral de 20 min- es la misma, para que el resultado sea trazable frente al
-entregable académico.
+pero la metodología -features, exclusión de fuga de datos, umbral de 20 min- es
+la misma, para que el resultado sea trazable frente al entregable académico.
+Una diferencia deliberada: el .Rmd divide train/test al azar y aquí la división
+es CRONOLÓGICA (el 80 % más antiguo entrena, el 20 % más reciente evalúa), porque
+al azar se evalúa con mediciones vecinas en el tiempo de las que se entrenó y se
+sobrestima la calidad con datos futuros.
 """
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
 )
-from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import plot_tree
 
@@ -125,6 +128,23 @@ def _complete_cases(d: pd.DataFrame) -> pd.DataFrame:
     return d.dropna(subset=MODEL_FEATURE_COLS)
 
 
+FRACCION_ENTRENAMIENTO = 0.8
+
+
+def _particion_cronologica(d: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
+    """Ordena por fecha y devuelve (d ordenado, máscara de entrenamiento): el 80 % más antiguo entrena y el 20 %
+    más reciente evalúa.
+
+    Una partición aleatoria mezcla en el entrenamiento mediciones de los mismos ciclos y horas que luego se
+    evalúan (en una serie temporal, vecinas en el tiempo y casi iguales): sobrestima lo que el modelo acertaría
+    con datos futuros. El corte es por fecha, de modo que las mediciones de un mismo ciclo (misma marca de
+    tiempo, una por ruta) caen todas en el mismo lado.
+    """
+    d = d.sort_values("timestamp", kind="stable")
+    corte = d["timestamp"].iloc[int(len(d) * FRACCION_ENTRENAMIENTO)]
+    return d, (d["timestamp"] < corte).to_numpy()
+
+
 def _design_matrix(d: pd.DataFrame) -> pd.DataFrame:
     """One-hot encoding (fullRank, como dummyVars en R) + variables numéricas/cíclicas."""
     cat_cols = ["origin", "destination", "data_source", "origin_weather_grp", "destination_weather_grp"]
@@ -147,11 +167,12 @@ _CACHE_MODELO = dict(max_entries=1)
 
 @st.cache_resource(show_spinner="Entrenando clasificador (regresión logística + Random Forest)...", **_CACHE_MODELO)
 def _fit_classification(d: pd.DataFrame):
-    d = _complete_cases(d)
+    d, es_entrenamiento = _particion_cronologica(_complete_cases(d))
     X = _design_matrix(d)
     y = (d["mobility_level"] == "Alta demora").astype(int).values
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
+    X_train, X_test = X[es_entrenamiento], X[~es_entrenamiento]
+    y_train, y_test = y[es_entrenamiento], y[~es_entrenamiento]
 
     scaler = StandardScaler()
     X_train_s, X_test_s = X_train.copy(), X_test.copy()
@@ -167,7 +188,9 @@ def _fit_classification(d: pd.DataFrame):
         rf,
         {"max_features": ["sqrt", "log2", 0.3, 0.5]},
         scoring="roc_auc",
-        cv=StratifiedKFold(5, shuffle=True, random_state=42),
+        cv=TimeSeriesSplit(
+            5
+        ),  # pliegues en orden de filas: validan con filas posteriores (como mucho un ciclo compartido)
         n_jobs=-1,
     )
     grid.fit(X_train_s, y_train)
@@ -233,12 +256,16 @@ def render_classification(d: pd.DataFrame) -> None:
     c1, c2, c3 = st.columns(3)
     c1.metric("Accuracy — Random Forest", f"{m_rf['Accuracy']:.1%}", f"vs {m_logit['Accuracy']:.1%} logística")
     c2.metric("Balanced Accuracy — RF", f"{m_rf['Balanced Accuracy']:.1%}")
-    c3.metric("AUC — RF (CV 5-fold)", f"{res['cv_auc']:.3f}", help=f"max_features óptimo: {res['best_max_features']}")
+    c3.metric(
+        "AUC — RF (CV temporal 5 pliegues)",
+        f"{res['cv_auc']:.3f}",
+        help=f"max_features óptimo: {res['best_max_features']}",
+    )
 
     n_alta = int(y_test.sum())
     n_total = len(y_test)
     st.info(
-        f"Test: {res['n_train']:,} train / {res['n_test']:,} test · "
+        f"Partición cronológica: {res['n_train']:,} train (las más antiguas) / {res['n_test']:,} test (las más recientes) · "
         f"{n_alta}/{n_total} ({n_alta/n_total:.1%}) en 'Alta demora'.",
         icon="ℹ️",
     )
@@ -310,11 +337,12 @@ def render_classification(d: pd.DataFrame) -> None:
 
 @st.cache_resource(show_spinner="Entrenando regresores (lineal + Gradient Boosting)...", **_CACHE_MODELO)
 def _fit_regression(d: pd.DataFrame):
-    d = _complete_cases(d)
+    d, es_entrenamiento = _particion_cronologica(_complete_cases(d))
     X = _design_matrix(d)
     y = d["travel_time_min"].values
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test = X[es_entrenamiento], X[~es_entrenamiento]
+    y_train, y_test = y[es_entrenamiento], y[~es_entrenamiento]
 
     scaler = StandardScaler()
     X_train_s, X_test_s = X_train.copy(), X_test.copy()
