@@ -261,3 +261,85 @@ def test_descargar_respeta_las_rondas_y_la_espera_que_se_le_indican(tmp_path, mo
     assert (
         "2 rondas" in m["fallidos"][0]["error"] and "https://x -> OSError: sin capacidad" in m["fallidos"][0]["error"]
     )
+
+
+# ---- respuestas con HTTP 200 que en realidad son un error de Overpass ------------------------------------------------
+ERROR_DE_TIEMPO = {
+    "osm3s": {"timestamp_osm_base": "2022-01-01T00:00:00Z"},
+    "elements": [],
+    "remark": 'runtime error: Query timed out in "query" at line 3 after 151 seconds.',
+}
+
+
+def test_una_respuesta_http_200_con_remark_de_error_no_se_da_por_buena():
+    """Si Overpass se queda sin tiempo o memoria responde 200 con `remark`, la fecha base ya escrita y `elements` vacío o
+    parcial. Guardarlo como éxito daría un 2022 vacío, que parecería una ola de cierres: se descarta y se prueba otro espejo.
+    """
+    cliente = ClienteFalso({"https://a": ERROR_DE_TIEMPO, "https://b": respuesta("2022-01-01T00:00:00Z", n=3)})
+    datos, espejo = dh.pedir(cliente, "q", "2022-01-01T00:00:00Z", rondas=1, espera_s=0)
+    assert espejo == "https://b" and len(datos["elements"]) == 3
+
+
+def test_si_todos_los_espejos_devuelven_un_error_de_overpass_no_se_escribe_nada(tmp_path):
+    """El trozo queda en `fallidos` con el motivo y no se crea su archivo (ni un JSON vacío que parezca bueno)."""
+    cliente = ClienteFalso({"https://a": ERROR_DE_TIEMPO})
+    m = dh.descargar(cliente, tmp_path, ["2022-01-01"], pausa_s=0, log=lambda *_: None, rondas=1, espera_s=0)
+    assert m["archivos"] == {} and len(m["fallidos"]) == 2
+    assert "Overpass avisa de un error en la consulta" in m["fallidos"][0]["error"]
+    assert not list(tmp_path.glob("2022-01-01_*.json"))
+
+
+@pytest.mark.parametrize(
+    "datos, motivo",
+    [
+        ({"osm3s": {}, "remark": "runtime error: out of memory", "elements": []}, "avisa de un error"),
+        ({"osm3s": {}}, "elements"),  # falta la lista
+        ({"osm3s": {}, "elements": None}, "elements"),  # no es una lista
+        ({"osm3s": {}, "elements": {"a": 1}}, "elements"),
+        ([1, 2, 3], "objeto JSON"),
+    ],
+)
+def test_respuesta_valida_rechaza_lo_que_no_es_una_respuesta_completa(datos, motivo):
+    """Un `remark`, un `elements` ausente o que no es una lista, o un JSON que no es un objeto, son fallos visibles."""
+    assert motivo in dh.respuesta_valida(datos)
+
+
+def test_una_respuesta_correcta_sin_elementos_si_es_valida():
+    """Una lista `elements` vacía sin `remark` es una respuesta legítima (un trozo sin locales), no un error."""
+    assert dh.respuesta_valida({"osm3s": {}, "elements": []}) is None
+
+
+# ---- el manifiesto se fusiona al relanzar -----------------------------------------------------------------------------
+def _descargar(tmp_path, instantes, cliente=None, **kw):
+    cliente = cliente or ClienteFalso({"https://x": respuesta("2022-01-01T00:00:00Z")})
+    return dh.descargar(cliente, tmp_path, instantes, pausa_s=0, log=lambda *_: None, espera_s=0, **kw)
+
+
+def test_relanzar_un_subconjunto_no_borra_lo_ya_descargado_del_manifiesto(tmp_path):
+    """Tras bajar 2022 y luego solo 2024, el manifiesto trae los cuatro archivos con su hash y su fecha base."""
+    _descargar(tmp_path, ["2022-01-01"])
+    m = _descargar(tmp_path, ["2024-01-01"])
+    assert sorted(m["archivos"]) == ["2022-01-01_0.json", "2022-01-01_1.json", "2024-01-01_0.json", "2024-01-01_1.json"]
+    escrito = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert sorted(escrito["archivos"]) == sorted(m["archivos"])
+    assert all(d["sha256"] and d["osm_base"] and d["descargado_utc"] for d in escrito["archivos"].values())
+
+
+def test_si_el_reintento_de_un_trozo_falla_se_conserva_el_archivo_anterior_y_se_avisa(tmp_path):
+    """El JSON de la ejecución anterior sigue siendo válido: se mantiene en el manifiesto, y el fallo queda anotado con
+    que se conserva el anterior (no queda un archivo en disco sin registrar)."""
+    _descargar(tmp_path, ["2022-01-01"])
+    caido = ClienteFalso({"https://x": OSError("sin capacidad")})
+    m = _descargar(tmp_path, ["2022-01-01"], caido, rondas=1)
+    assert sorted(m["archivos"]) == ["2022-01-01_0.json", "2022-01-01_1.json"]
+    assert [f["se_conserva_el_de_una_ejecucion_anterior"] for f in m["fallidos"]] == [True, True]
+    assert (tmp_path / "2022-01-01_0.json").exists()
+
+
+def test_el_manifiesto_se_ignora_si_el_anterior_esta_roto_o_apunta_a_archivos_borrados(tmp_path):
+    """Un manifiesto ilegible no impide descargar, y no se heredan entradas de archivos que ya no existen."""
+    (tmp_path / "manifest.json").write_text("{ no es json", encoding="utf-8")
+    assert sorted(_descargar(tmp_path, ["2022-01-01"])["archivos"]) == ["2022-01-01_0.json", "2022-01-01_1.json"]
+    (tmp_path / "2022-01-01_0.json").unlink()
+    m = _descargar(tmp_path, ["2024-01-01"])
+    assert "2022-01-01_0.json" not in m["archivos"] and "2022-01-01_1.json" in m["archivos"]

@@ -123,6 +123,22 @@ def fecha_aceptada(respuesta: dict, fecha_pedida: Optional[str]) -> bool:
     return isinstance(base, str) and base <= fecha_pedida
 
 
+def respuesta_valida(respuesta) -> Optional[str]:
+    """None si la respuesta de Overpass es una respuesta completa; si no, el motivo para descartarla.
+
+    Cuando Overpass se queda sin tiempo o sin memoria contesta con HTTP 200 y un JSON con `remark` («runtime error: Query
+    timed out...»), con `elements` vacío o PARCIAL y la fecha base ya escrita. Darlo por bueno guardaría un trozo vacío o
+    truncado, que en una comparación 2022-hoy parecería una ola de cierres. Por eso cualquier `remark`, un `elements`
+    ausente o que no sea una lista se trata como fallo (y se ve, en vez de pasar en silencio)."""
+    if not isinstance(respuesta, dict):
+        return "la respuesta no es un objeto JSON"
+    if respuesta.get("remark"):
+        return f"Overpass avisa de un error en la consulta: {str(respuesta['remark'])[:140]}"
+    if not isinstance(respuesta.get("elements"), list):
+        return "la respuesta no trae la lista `elements`"
+    return None
+
+
 def pedir(
     cliente,
     consulta: str,
@@ -148,6 +164,9 @@ def pedir(
                 )
                 r.raise_for_status()
                 datos = r.json()
+                motivo = respuesta_valida(datos)
+                if motivo:
+                    raise ValueError(motivo)
                 if not fecha_aceptada(datos, fecha_pedida):
                     base = (datos.get("osm3s") or {}).get("timestamp_osm_base")
                     raise ValueError(f"el espejo ignoró la fecha: pedí {fecha_pedida} y usó {base}")
@@ -178,11 +197,20 @@ def descargar(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     trabajo = plan(instantes)
+    ruta_manifiesto = out_dir / "manifest.json"
+    # Se FUSIONA con el manifiesto anterior: relanzar un subconjunto (p. ej. `--instantes hoy` para reintentar) no debe
+    # borrar el hash, la fecha base y el espejo de lo ya descargado, cuyos archivos siguen en disco.
+    previos: Dict[str, dict] = {}
+    if ruta_manifiesto.exists():
+        try:
+            previos = json.loads(ruta_manifiesto.read_text(encoding="utf-8")).get("archivos", {})
+        except (OSError, ValueError, AttributeError):
+            previos = {}
     manifiesto = {
         "formato": 1,
         "descargado_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "area": {"sur": grid.SOUTH, "norte": grid.NORTH, "oeste": grid.WEST, "este": grid.EAST},
-        "archivos": {},
+        "archivos": {a: d for a, d in previos.items() if (out_dir / a).exists()},
         "fallidos": [],
     }
     for k, (nombre, franja, fecha, consulta) in enumerate(trabajo):
@@ -210,11 +238,19 @@ def descargar(
                 "fecha_pedida": fecha,
                 "osm_base": (datos.get("osm3s") or {}).get("timestamp_osm_base"),
                 "espejo": endpoint,
+                "descargado_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "sha256": sha256_de(ruta),
             }
             log(f"   {nombre} [{franja}]: {len(elementos):6} elementos ({time.perf_counter() - t0:.0f} s)")
         except RuntimeError as e:
-            manifiesto["fallidos"].append({"archivo": archivo, "error": str(e)})
+            conservado = archivo in manifiesto["archivos"]  # de una ejecución anterior, sigue siendo válido
+            manifiesto["fallidos"].append(
+                {
+                    "archivo": archivo,
+                    "error": str(e),
+                    "se_conserva_el_de_una_ejecucion_anterior": conservado,
+                }
+            )
             log(f"   {nombre} [{franja}]: FALLÓ ({e})")
         if k < len(trabajo) - 1:
             time.sleep(pausa_s)

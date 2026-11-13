@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 862 funciones de test · 956 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 869 funciones de test · 967 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 20 | 24 |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 27 | 35 |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -482,6 +482,13 @@
 - `test_el_error_final_dice_por_que_fallo_cada_espejo` — Antes solo se veía el motivo del ÚLTIMO espejo y se ocultaba el de los demás.
 - `test_el_timeout_de_conexion_es_corto_y_el_de_lectura_largo` — Un espejo que no conecta se salta en segundos; solo la lectura (la consulta pesada) puede tardar.
 - `test_descargar_respeta_las_rondas_y_la_espera_que_se_le_indican` — `descargar` pasa `rondas` y `espera_s` a `pedir`: con 2 rondas y un espejo caído hay 2 intentos por trozo (4 en total para los 2 trozos de 2022) y una espera de 5 s por trozo, entre la ronda 1 y la 2.
+- `test_una_respuesta_http_200_con_remark_de_error_no_se_da_por_buena` — Si Overpass se queda sin tiempo o memoria responde 200 con `remark`, la fecha base ya escrita y `elements` vacío o parcial. Guardarlo como éxito daría un 2022 vacío, que parecería una ola de cierres: se descarta y se prueba otro espejo.
+- `test_si_todos_los_espejos_devuelven_un_error_de_overpass_no_se_escribe_nada` — El trozo queda en `fallidos` con el motivo y no se crea su archivo (ni un JSON vacío que parezca bueno).
+- `test_respuesta_valida_rechaza_lo_que_no_es_una_respuesta_completa` ×5 — Un `remark`, un `elements` ausente o que no es una lista, o un JSON que no es un objeto, son fallos visibles.
+- `test_una_respuesta_correcta_sin_elementos_si_es_valida` — Una lista `elements` vacía sin `remark` es una respuesta legítima (un trozo sin locales), no un error.
+- `test_relanzar_un_subconjunto_no_borra_lo_ya_descargado_del_manifiesto` — Tras bajar 2022 y luego solo 2024, el manifiesto trae los cuatro archivos con su hash y su fecha base.
+- `test_si_el_reintento_de_un_trozo_falla_se_conserva_el_archivo_anterior_y_se_avisa` — El JSON de la ejecución anterior sigue siendo válido: se mantiene en el manifiesto, y el fallo queda anotado con que se conserva el anterior (no queda un archivo en disco sin registrar).
+- `test_el_manifiesto_se_ignora_si_el_anterior_esta_roto_o_apunta_a_archivos_borrados` — Un manifiesto ilegible no impide descargar, y no se heredan entradas de archivos que ya no existen.
 
 ## `tests/test_ensemble_predictor.py`
 
