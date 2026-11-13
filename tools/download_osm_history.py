@@ -7,9 +7,13 @@ Qué hace y qué NO hace:
     elementos con marca de ciclo de vida (`disused:*`, `was:*`, `abandoned:*`, `demolished:*`, `razed:*`), que son los
     cierres «fuertes».
   - Guarda JSON en `--out` (por defecto `data/osm_history/`, ignorado por git) y un `manifest.json` con la fecha de
-    descarga, el espejo usado, la fecha base que Overpass dice haber usado y el sha256 de cada archivo. NO toca la base.
-  - COMPRUEBA que Overpass respondió con la fecha pedida (`osm3s.timestamp_osm_base`): hay espejos que ignoran `[date:]`
-    en silencio y devuelven el mapa actual; esa respuesta se rechaza y se prueba el siguiente espejo.
+    descarga, el espejo usado, la hora base del servidor (solo informativa) y el sha256 de cada archivo. NO toca la base.
+  - COMPRUEBA que cada espejo respeta `[date:]` con un CANARIO: una consulta pequeña de una zona muy editada desde 2022 con
+    `out meta`, en la que ningún elemento puede tener una versión posterior a la fecha pedida. Un espejo que ignora la fecha
+    en silencio devolvería el mapa actual (con versiones recientes): se rechaza y se prueba el siguiente. (No se puede
+    usar `osm3s.timestamp_osm_base`: medido en overpass-api.de, trae la hora ACTUAL del servidor aunque los datos sean de
+    2022, así que rechazaría respuestas históricas válidas.)
+  - Rechaza también una respuesta con HTTP 200 pero un `remark` de error o sin `elements`.
   - Pausa entre peticiones, tiempo máximo de servidor y el área partida en franjas, como `download_osm_context.py`.
   - `--dry-run` muestra las consultas sin hacer NINGUNA llamada de red.
 
@@ -112,15 +116,52 @@ def plan(instantes: Optional[List[str]] = None) -> List[Tuple[str, int, Optional
     return trabajo
 
 
-def fecha_aceptada(respuesta: dict, fecha_pedida: Optional[str]) -> bool:
-    """Para un instante pasado, Overpass debe declarar una fecha base (`osm3s.timestamp_osm_base`) que NO sea posterior a la
-    pedida. Si el espejo ignoró `[date:]` y devolvió el mapa actual, esa fecha sería la de hoy (posterior): se rechaza, y
-    también si falta. Para «hoy» no hay nada que comprobar. Las fechas ISO `AAAA-MM-DDThh:mm:ssZ` se comparan como texto.
-    """
-    if fecha_pedida is None:
-        return True
-    base = (respuesta.get("osm3s") or {}).get("timestamp_osm_base")
-    return isinstance(base, str) and base <= fecha_pedida
+# Canario para saber si un espejo respeta `[date:]`. Zona del centro de Sliema/Gzira (muy editada desde 2022): con el mapa
+# actual hay cientos de elementos con una versión posterior a la fecha; con el de 2022 no puede haber ninguna.
+CANARIO_FECHA = "2022-01-01T00:00:00Z"
+CANARIO_BBOX = (35.895, 14.480, 35.915, 14.510)
+CANARIO_MIN_ELEMENTOS = 20
+
+
+def consulta_canario() -> str:
+    """Consulta pequeña con `out meta` (trae `timestamp` de cada elemento) en la fecha del canario."""
+    b = ",".join(f"{v:.6f}" for v in CANARIO_BBOX)
+    selector = '["amenity"~"^(restaurant|cafe|bar|pub|fast_food)$"]'
+    return (
+        f'[out:json][timeout:{TIMEOUT_SERVIDOR_S}][date:"{CANARIO_FECHA}"];\n'
+        f"(\n  node{selector}({b});\n  way{selector}({b});\n);\nout center meta;"
+    )
+
+
+def canario_respeta_la_fecha(respuesta) -> Optional[str]:
+    """None si la respuesta al canario es de la fecha pedida; si no, el motivo. Un espejo que ignora `[date:]` devuelve el
+    mapa actual: muchos elementos con una versión (`timestamp`) posterior a la fecha. Las fechas ISO
+    `AAAA-MM-DDThh:mm:ssZ` se comparan como texto. Se exige un mínimo de elementos para que una respuesta vacía o
+    recortada no pase por buena."""
+    motivo = respuesta_valida(respuesta)
+    if motivo:
+        return motivo
+    elementos = respuesta["elements"]
+    if len(elementos) < CANARIO_MIN_ELEMENTOS:
+        return f"el canario devolvió solo {len(elementos)} elementos (se esperaban al menos {CANARIO_MIN_ELEMENTOS})"
+    sin_marca = sum(1 for e in elementos if not isinstance(e.get("timestamp"), str))
+    if sin_marca:
+        return f"{sin_marca} de {len(elementos)} elementos del canario no traen `timestamp`"
+    posteriores = [e["timestamp"] for e in elementos if e["timestamp"] > CANARIO_FECHA]
+    if posteriores:
+        return (
+            f"el espejo ignoró la fecha: {len(posteriores)} de {len(elementos)} elementos tienen una versión posterior a "
+            f"{CANARIO_FECHA} (la más reciente, {max(posteriores)})"
+        )
+    return None
+
+
+def verificar_espejo(cliente, endpoint: str) -> Optional[str]:
+    """Pide el canario a un espejo y devuelve None si respeta la fecha o el motivo si no. Si falla la red, la excepción
+    sube (y el espejo no queda marcado: se podrá volver a probar)."""
+    r = cliente.session.post(endpoint, data={"data": consulta_canario()}, timeout=(TIMEOUT_CONEXION_S, TIMEOUT_HTTP_S))
+    r.raise_for_status()
+    return canario_respeta_la_fecha(r.json())
 
 
 def respuesta_valida(respuesta) -> Optional[str]:
@@ -146,19 +187,26 @@ def pedir(
     rondas: Optional[int] = None,
     espera_s: Optional[float] = None,
     dormir=None,
+    verificados: Optional[Dict[str, Optional[str]]] = None,
 ) -> Tuple[dict, str]:
-    """Envía la consulta probando cada espejo en orden; devuelve (JSON, espejo). Un espejo que responde pero con otra fecha
-    base se descarta como si fallara. Si TODOS fallan se espera `espera_s` y se vuelve a empezar, hasta `rondas` rondas
-    (los espejos públicos se saturan y se recuperan). Lanza RuntimeError con el motivo de CADA espejo en la última ronda.
-    """
+    """Envía la consulta probando cada espejo en orden; devuelve (JSON, espejo). Para un instante pasado, antes de usar un
+    espejo se le pasa el canario (una sola vez: el resultado queda en `verificados`) y se descarta el que ignore la fecha.
+    Si TODOS fallan se espera `espera_s` y se vuelve a empezar, hasta `rondas` rondas (los espejos públicos se saturan y se
+    recuperan). Lanza RuntimeError con el motivo de CADA espejo en la última ronda."""
     rondas = RONDAS if rondas is None else rondas
     espera_s = ESPERA_RONDAS_S if espera_s is None else espera_s
     dormir = time.sleep if dormir is None else dormir
+    verificados = {} if verificados is None else verificados
     errores: Dict[str, str] = {}
     for ronda in range(rondas):
         errores = {}
         for endpoint in cliente.endpoints:
             try:
+                if fecha_pedida is not None:
+                    if endpoint not in verificados:  # si falla la red, la excepción sube y no se marca
+                        verificados[endpoint] = verificar_espejo(cliente, endpoint)
+                    if verificados[endpoint]:
+                        raise ValueError(verificados[endpoint])
                 r = cliente.session.post(
                     endpoint, data={"data": consulta}, timeout=(TIMEOUT_CONEXION_S, TIMEOUT_HTTP_S)
                 )
@@ -167,9 +215,6 @@ def pedir(
                 motivo = respuesta_valida(datos)
                 if motivo:
                     raise ValueError(motivo)
-                if not fecha_aceptada(datos, fecha_pedida):
-                    base = (datos.get("osm3s") or {}).get("timestamp_osm_base")
-                    raise ValueError(f"el espejo ignoró la fecha: pedí {fecha_pedida} y usó {base}")
                 return datos, endpoint
             except Exception as e:  # red, HTTP, JSON inválido o fecha ignorada: se prueba el siguiente espejo
                 errores[endpoint] = f"{type(e).__name__}: {str(e)[:160]}"
@@ -213,11 +258,14 @@ def descargar(
         "archivos": {a: d for a, d in previos.items() if (out_dir / a).exists()},
         "fallidos": [],
     }
+    verificados: Dict[str, Optional[str]] = (
+        {}
+    )  # espejo -> None si respeta la fecha, o el motivo si no (se verifica una vez)
     for k, (nombre, franja, fecha, consulta) in enumerate(trabajo):
         t0 = time.perf_counter()
         archivo = f"{nombre}_{franja}.json"
         try:
-            datos, endpoint = pedir(cliente, consulta, fecha, rondas, espera_s)
+            datos, endpoint = pedir(cliente, consulta, fecha, rondas, espera_s, verificados=verificados)
             elementos = datos.get("elements", [])
             ruta = out_dir / archivo
             ruta.write_text(
@@ -226,7 +274,7 @@ def descargar(
                         "instante": nombre,
                         "fecha_pedida": fecha,
                         "franja": franja,
-                        "osm_base": (datos.get("osm3s") or {}).get("timestamp_osm_base"),
+                        "osm_base_servidor": (datos.get("osm3s") or {}).get("timestamp_osm_base"),  # solo informativa
                         "espejo": endpoint,
                         "elements": elementos,
                     }
@@ -236,7 +284,7 @@ def descargar(
             manifiesto["archivos"][archivo] = {
                 "elementos": len(elementos),
                 "fecha_pedida": fecha,
-                "osm_base": (datos.get("osm3s") or {}).get("timestamp_osm_base"),
+                "osm_base_servidor": (datos.get("osm3s") or {}).get("timestamp_osm_base"),  # solo informativa
                 "espejo": endpoint,
                 "descargado_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "sha256": sha256_de(ruta),
@@ -290,7 +338,9 @@ def main(argv: Optional[list] = None) -> int:
     )
     print("\nResumen:")
     for archivo, d in manifiesto["archivos"].items():
-        print(f"   {archivo:24} {d['elementos']:7} elementos | base {d['osm_base']} | {d['espejo']}")
+        print(
+            f"   {archivo:24} {d['elementos']:7} elementos | hora del servidor {d['osm_base_servidor']} | {d['espejo']}"
+        )
     for f in manifiesto["fallidos"]:
         print(f"   FALLÓ {f['archivo']}: {f['error']}")
     return 0 if not manifiesto["fallidos"] else 1

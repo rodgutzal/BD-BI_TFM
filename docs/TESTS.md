@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 869 funciones de test · 967 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 882 funciones de test · 976 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 27 | 35 |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 40 | 44 |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -461,6 +461,10 @@
 >
 > Sin red: se usa un cliente falso. Lo más importante que comprueban: que un espejo de Overpass que IGNORA la fecha pedida
 > (y devuelve el mapa actual) se rechaza, porque si no, el «estado de 2022» sería en realidad el de hoy y no habría cierres.
+>
+> OJO con cómo se detecta: medido contra overpass-api.de, `osm3s.timestamp_osm_base` trae SIEMPRE la hora actual del servidor,
+> también en una respuesta con datos de 2022. Por eso la fecha se comprueba con un canario (`out meta`: el `timestamp` de cada
+> elemento) y NO con esa hora base; una prueba de regresión fija que una respuesta histórica con hora base actual se acepta.
 
 - `test_el_plan_pide_tres_instantes_en_dos_franjas_y_el_ciclo_de_vida_solo_para_hoy` — 2022, 2024 y hoy, cada uno en 2 franjas (6 consultas), más una de ciclo de vida del estado actual: 7.
 - `test_las_consultas_pasadas_llevan_la_fecha_y_las_actuales_no` — Solo 2022 y 2024 llevan `[date:...]`; «hoy» y el ciclo de vida piden el estado actual.
@@ -468,25 +472,38 @@
 - `test_las_siete_categorias_estan_en_la_consulta` — Cada etiqueta de cada categoría aparece en la consulta (nada se queda sin pedir).
 - `test_las_clausulas_de_ciclo_de_vida_cubren_cinco_prefijos_por_cinco_claves` — `disused:`, `was:`, `abandoned:`, `demolished:` y `razed:` sobre amenity, shop, office, leisure y tourism.
 - `test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes` — Las franjas de latitud son contiguas y suman toda la rejilla.
-- `test_la_fecha_base_debe_no_ser_posterior_a_la_pedida` ×5 — Un espejo que devuelve el mapa actual para un instante pasado se detecta por su fecha base.
-- `test_un_espejo_que_ignora_la_fecha_se_rechaza_y_se_prueba_el_siguiente` — El primer espejo devuelve el presente para una consulta de 2022: se descarta y se usa el segundo.
+- `test_la_consulta_del_canario_lleva_la_fecha_y_pide_meta` — El canario es una consulta pequeña en 2022 con `out center meta` (para ver el `timestamp` de cada elemento).
+- `test_el_canario_acepta_un_espejo_que_respeta_la_fecha` — Todas las versiones son anteriores a 2022-01-01: es un estado de 2022.
+- `test_el_canario_acepta_una_version_justo_en_la_fecha` — El límite es inclusivo: una versión con la fecha exacta del canario no es posterior.
+- `test_el_canario_rechaza_un_espejo_que_ignora_la_fecha` — Con el mapa actual hay versiones recientes: se rechaza y el motivo dice cuántas y la más reciente.
+- `test_una_sola_version_posterior_basta_para_rechazar` — Aunque casi todo sea antiguo, una versión posterior a la fecha delata un mapa que no es de 2022.
+- `test_el_canario_exige_un_minimo_de_elementos` — Una respuesta vacía o recortada no se da por buena (no hay nada que comprobar).
+- `test_el_canario_rechaza_elementos_sin_timestamp` — Si el espejo no devuelve `timestamp` (no admite `meta`), no se puede comprobar: se rechaza.
+- `test_el_canario_rechaza_una_respuesta_con_remark_de_error` — Un error de Overpass con HTTP 200 no es un canario válido.
+- `test_la_hora_base_del_servidor_es_la_actual_y_aun_asi_una_respuesta_historica_valida_se_acepta` — REGRESIÓN del hallazgo real: overpass-api.de pone la hora ACTUAL en `osm3s.timestamp_osm_base` aunque los datos sean de 2022. La versión anterior de la herramienta comparaba esa hora con la fecha pedida y habría rechazado TODAS las respuestas históricas válidas.
+- `test_un_espejo_que_ignora_la_fecha_se_rechaza_y_se_prueba_el_siguiente` — El primer espejo devuelve el mapa actual para una consulta de 2022: se descarta tras el canario y se usa el segundo. Al espejo malo no se le pide ningún dato real.
 - `test_si_todos_los_espejos_ignoran_la_fecha_falla_en_vez_de_devolver_el_presente` — Nunca se devuelve en silencio el mapa actual como si fuera el de 2022.
+- `test_el_canario_se_pide_una_sola_vez_por_espejo_y_se_recuerda` — Con el mismo diccionario de verificados, varias consultas al mismo espejo solo gastan un canario.
+- `test_un_espejo_marcado_como_que_ignora_la_fecha_no_se_vuelve_a_consultar` — Tras fallar el canario por ignorar la fecha, el espejo queda descartado: no se repite el canario en cada consulta.
+- `test_si_falla_la_red_en_el_canario_el_espejo_no_queda_marcado_y_se_puede_reintentar` — Un error de red durante el canario no es «ignora la fecha»: se reintenta en la ronda siguiente y entonces se acepta.
+- `test_una_consulta_actual_no_pide_canario` — Para «hoy» (sin fecha) no hay nada que comprobar: no se gasta una consulta de canario.
 - `test_un_error_de_red_en_un_espejo_pasa_al_siguiente` — Un fallo HTTP no detiene la descarga mientras otro espejo responda.
-- `test_descargar_escribe_los_json_y_un_manifiesto_con_fecha_base_y_hash` — Cada trozo queda en su archivo con la fecha base que dijo Overpass y el manifiesto guarda recuento y sha256.
-- `test_un_trozo_que_falla_se_anota_y_los_demas_siguen` — Si ningún espejo da la fecha pedida, ese trozo queda en `fallidos` y no se escribe su archivo.
+- `test_descargar_escribe_los_json_y_un_manifiesto_con_hora_del_servidor_y_hash` — Cada trozo queda en su archivo; el manifiesto guarda recuento, sha256 y la hora del servidor solo como informativa.
+- `test_descargar_solo_pide_un_canario_por_espejo_en_toda_la_descarga` — Con 2022 y 2024 (4 consultas fechadas) hay 1 canario y 4 consultas reales, no un canario por consulta.
+- `test_un_trozo_que_falla_se_anota_y_los_demas_siguen` — Si ningún espejo respeta la fecha, esos trozos quedan en `fallidos` y no se escribe su archivo.
 - `test_descargar_solo_escribe_dentro_del_directorio_de_salida` — No toca nada fuera de `out_dir` (ni la base de datos).
 - `test_el_dry_run_no_hace_ninguna_llamada_de_red` — `--dry-run` imprime las consultas y no crea ni usa el cliente de Overpass.
 - `test_los_datos_descargados_estan_ignorados_por_git` — El estado histórico se regenera y no se versiona: `data/osm_history/` está en .gitignore.
 - `test_si_todos_fallan_en_la_primera_ronda_se_espera_y_se_reintenta` — Los espejos públicos se saturan y se recuperan: tras una ronda en la que todos fallan se espera y se vuelve a empezar; aquí el primero está «al límite de capacidad» en la ronda 1 y responde en la 2.
 - `test_se_rinde_tras_las_rondas_indicadas_y_solo_espera_entre_ellas` — Con 3 rondas fallidas hay 2 esperas (no una tras la última) y 3 intentos por espejo.
 - `test_el_error_final_dice_por_que_fallo_cada_espejo` — Antes solo se veía el motivo del ÚLTIMO espejo y se ocultaba el de los demás.
-- `test_el_timeout_de_conexion_es_corto_y_el_de_lectura_largo` — Un espejo que no conecta se salta en segundos; solo la lectura (la consulta pesada) puede tardar.
+- `test_el_timeout_de_conexion_es_corto_y_el_de_lectura_largo_tambien_en_el_canario` — Un espejo que no conecta se salta en segundos; solo la lectura (la consulta pesada) puede tardar. Vale para la consulta real y para el canario.
 - `test_descargar_respeta_las_rondas_y_la_espera_que_se_le_indican` — `descargar` pasa `rondas` y `espera_s` a `pedir`: con 2 rondas y un espejo caído hay 2 intentos por trozo (4 en total para los 2 trozos de 2022) y una espera de 5 s por trozo, entre la ronda 1 y la 2.
-- `test_una_respuesta_http_200_con_remark_de_error_no_se_da_por_buena` — Si Overpass se queda sin tiempo o memoria responde 200 con `remark`, la fecha base ya escrita y `elements` vacío o parcial. Guardarlo como éxito daría un 2022 vacío, que parecería una ola de cierres: se descarta y se prueba otro espejo.
+- `test_una_respuesta_http_200_con_remark_de_error_no_se_da_por_buena` — Si Overpass se queda sin tiempo o memoria responde 200 con `remark` y `elements` vacío o parcial. Guardarlo como éxito daría un 2022 vacío, que parecería una ola de cierres: se descarta y se prueba otro espejo.
 - `test_si_todos_los_espejos_devuelven_un_error_de_overpass_no_se_escribe_nada` — El trozo queda en `fallidos` con el motivo y no se crea su archivo (ni un JSON vacío que parezca bueno).
 - `test_respuesta_valida_rechaza_lo_que_no_es_una_respuesta_completa` ×5 — Un `remark`, un `elements` ausente o que no es una lista, o un JSON que no es un objeto, son fallos visibles.
 - `test_una_respuesta_correcta_sin_elementos_si_es_valida` — Una lista `elements` vacía sin `remark` es una respuesta legítima (un trozo sin locales), no un error.
-- `test_relanzar_un_subconjunto_no_borra_lo_ya_descargado_del_manifiesto` — Tras bajar 2022 y luego solo 2024, el manifiesto trae los cuatro archivos con su hash y su fecha base.
+- `test_relanzar_un_subconjunto_no_borra_lo_ya_descargado_del_manifiesto` — Tras bajar 2022 y luego solo 2024, el manifiesto trae los cuatro archivos con su hash y su fecha de descarga.
 - `test_si_el_reintento_de_un_trozo_falla_se_conserva_el_archivo_anterior_y_se_avisa` — El JSON de la ejecución anterior sigue siendo válido: se mantiene en el manifiesto, y el fallo queda anotado con que se conserva el anterior (no queda un archivo en disco sin registrar).
 - `test_el_manifiesto_se_ignora_si_el_anterior_esta_roto_o_apunta_a_archivos_borrados` — Un manifiesto ilegible no impide descargar, y no se heredan entradas de archivos que ya no existen.
 
