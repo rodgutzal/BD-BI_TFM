@@ -98,6 +98,12 @@ def servidor(respeta_fecha=True, n=3, remark=None):
 FECHA = "2022-01-01T00:00:00Z"
 
 
+@pytest.fixture(autouse=True)
+def sin_pausas_reales(monkeypatch):
+    """La pausa tras el canario (12 s) no debe ralentizar los tests; el que comprueba que existe la fija a su valor."""
+    monkeypatch.setattr(dh, "PAUSA_S", 0)
+
+
 # ---- las consultas ------------------------------------------------------------------------------------------------
 def test_el_plan_pide_tres_instantes_en_dos_franjas_y_el_ciclo_de_vida_solo_para_hoy():
     """2022, 2024 y hoy, cada uno en 2 franjas (6 consultas), más una de ciclo de vida del estado actual: 7."""
@@ -188,10 +194,13 @@ def test_una_sola_version_posterior_basta_para_rechazar():
     assert "ignoró la fecha" in dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 29 + ["2022-01-01T00:00:01Z"]))
 
 
-def test_el_canario_exige_un_minimo_de_elementos():
-    """Una respuesta vacía o recortada no se da por buena (no hay nada que comprobar)."""
-    assert "solo 5 elementos" in dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 5))
-    assert "solo 0 elementos" in dh.canario_respeta_la_fecha(_canario([]))
+def test_el_canario_exige_un_minimo_de_elementos_y_lo_trata_como_pasajero():
+    """Una respuesta vacía o recortada no se da por buena (no hay nada que comprobar), pero NO es un motivo definitivo:
+    lanza una excepción, que no se recuerda y se puede reintentar."""
+    with pytest.raises(ValueError, match="solo 5 elementos"):
+        dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 5))
+    with pytest.raises(ValueError, match="solo 0 elementos"):
+        dh.canario_respeta_la_fecha(_canario([]))
 
 
 def test_el_canario_rechaza_elementos_sin_timestamp():
@@ -200,11 +209,13 @@ def test_el_canario_rechaza_elementos_sin_timestamp():
     assert "no traen `timestamp`" in dh.canario_respeta_la_fecha(r)
 
 
-def test_el_canario_rechaza_una_respuesta_con_remark_de_error():
-    """Un error de Overpass con HTTP 200 no es un canario válido."""
+def test_el_canario_con_remark_de_error_es_un_problema_pasajero():
+    """Un error de Overpass con HTTP 200 (servidor saturado) no es un canario válido, pero tampoco prueba que el espejo
+    ignore la fecha: lanza una excepción en vez de devolver un motivo definitivo."""
     r = _canario([ANTIGUO] * 30)
     r["remark"] = "runtime error: out of memory"
-    assert "avisa de un error" in dh.canario_respeta_la_fecha(r)
+    with pytest.raises(ValueError, match="avisa de un error"):
+        dh.canario_respeta_la_fecha(r)
 
 
 def test_la_hora_base_del_servidor_es_la_actual_y_aun_asi_una_respuesta_historica_valida_se_acepta():
@@ -258,6 +269,73 @@ def test_si_falla_la_red_en_el_canario_el_espejo_no_queda_marcado_y_se_puede_rei
     verificados = {}
     datos, espejo = dh.pedir(cliente, "q", FECHA, rondas=2, espera_s=0, dormir=lambda s: None, verificados=verificados)
     assert espejo == "https://a" and verificados == {"https://a": None}
+
+
+def _canario_saturado(consulta):
+    """Un servidor saturado que contesta al canario con HTTP 200 y un `remark` de tiempo agotado."""
+    return {
+        "osm3s": {},
+        "elements": [],
+        "remark": 'runtime error: Query timed out in "query" at line 3 after 151 seconds.',
+    }
+
+
+def _canario_recortado(consulta):
+    """Un servidor que contesta al canario con solo 5 elementos (respuesta recortada)."""
+    return {"osm3s": {}, "elements": [{"type": "node", "id": i, "timestamp": ANTIGUO} for i in range(5)]}
+
+
+@pytest.mark.parametrize("canario_pasajero", [_canario_saturado, _canario_recortado])
+def test_un_canario_pasajero_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recupera(canario_pasajero):
+    """El único espejo con historia está saturado justo en el canario (remark o respuesta recortada) y responde bien en la
+    ronda 2: no se le debe marcar como «ignora la fecha» de por vida. Es el caso que las rondas existen para cubrir."""
+    cliente = ClienteFalso({"https://a": [canario_pasajero, servidor(n=6)]})
+    verificados, esperas = {}, []
+    datos, espejo = dh.pedir(cliente, "q", FECHA, rondas=3, espera_s=90, dormir=esperas.append, verificados=verificados)
+    assert espejo == "https://a" and len(datos["elements"]) == 6
+    assert verificados == {"https://a": None} and esperas == [90]
+
+
+def test_un_canario_pasajero_no_deja_marcado_el_espejo_mientras_dure_el_fallo():
+    """Mientras el canario siga fallando de forma pasajera, `verificados` queda vacío (nada se recuerda)."""
+    cliente = ClienteFalso({"https://a": _canario_saturado})
+    verificados = {}
+    with pytest.raises(RuntimeError, match="avisa de un error"):
+        dh.pedir(cliente, "q", FECHA, rondas=2, espera_s=0, dormir=lambda s: None, verificados=verificados)
+    assert verificados == {} and cliente.canarios() == 2 and cliente.consultas_reales() == 0
+
+
+def test_tras_un_canario_nuevo_se_hace_una_pausa_y_con_el_espejo_ya_verificado_no(monkeypatch):
+    """El canario es una petición más: se espera `PAUSA_S` antes de la consulta pesada, una sola vez por espejo."""
+    monkeypatch.setattr(dh, "PAUSA_S", 5)
+    cliente = ClienteFalso({"https://a": servidor()})
+    verificados, pausas = {}, []
+    for _ in range(3):
+        dh.pedir(cliente, "q", FECHA, espera_s=0, dormir=pausas.append, verificados=verificados)
+    assert pausas == [5]
+
+
+def test_el_canario_es_de_la_fecha_mas_antigua_que_se_pide():
+    """Lo que vale para 2022 vale para 2024, no al revés: si algún día se pide un instante anterior al del canario, hay que
+    adelantar la fecha del canario (si no, un espejo sin historia suficiente pasaría la prueba)."""
+    fechas = [f for f in dh.INSTANTES.values() if f]
+    assert dh.CANARIO_FECHA <= min(fechas)
+
+
+def test_el_resumen_final_no_falla_con_un_manifiesto_de_la_version_anterior(monkeypatch, tmp_path, capsys):
+    """Un `manifest.json` heredado con la clave antigua `osm_base` (sin `osm_base_servidor`) no hace reventar el resumen."""
+    manifiesto = {
+        "archivos": {
+            "hoy_0.json": {"elementos": 7, "osm_base": "2026-11-13T21:00:00Z", "espejo": "https://x"},
+            "2022-01-01_0.json": {"elementos": 9, "osm_base_servidor": "2026-11-13T21:01:00Z", "espejo": "https://x"},
+        },
+        "fallidos": [],
+    }
+    monkeypatch.setattr(dh, "OverpassClient", lambda **kw: object())
+    monkeypatch.setattr(dh, "descargar", lambda *a, **kw: manifiesto)
+    assert dh.main(["--out", str(tmp_path)]) == 0
+    salida = capsys.readouterr().out
+    assert "2026-11-13T21:00:00Z" in salida and "2026-11-13T21:01:00Z" in salida
 
 
 def test_una_consulta_actual_no_pide_canario():

@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 882 funciones de test · 976 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 887 funciones de test · 981 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 40 | 44 |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 45 | 49+ |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -477,15 +477,20 @@
 - `test_el_canario_acepta_una_version_justo_en_la_fecha` — El límite es inclusivo: una versión con la fecha exacta del canario no es posterior.
 - `test_el_canario_rechaza_un_espejo_que_ignora_la_fecha` — Con el mapa actual hay versiones recientes: se rechaza y el motivo dice cuántas y la más reciente.
 - `test_una_sola_version_posterior_basta_para_rechazar` — Aunque casi todo sea antiguo, una versión posterior a la fecha delata un mapa que no es de 2022.
-- `test_el_canario_exige_un_minimo_de_elementos` — Una respuesta vacía o recortada no se da por buena (no hay nada que comprobar).
+- `test_el_canario_exige_un_minimo_de_elementos_y_lo_trata_como_pasajero` — Una respuesta vacía o recortada no se da por buena (no hay nada que comprobar), pero NO es un motivo definitivo: lanza una excepción, que no se recuerda y se puede reintentar.
 - `test_el_canario_rechaza_elementos_sin_timestamp` — Si el espejo no devuelve `timestamp` (no admite `meta`), no se puede comprobar: se rechaza.
-- `test_el_canario_rechaza_una_respuesta_con_remark_de_error` — Un error de Overpass con HTTP 200 no es un canario válido.
+- `test_el_canario_con_remark_de_error_es_un_problema_pasajero` — Un error de Overpass con HTTP 200 (servidor saturado) no es un canario válido, pero tampoco prueba que el espejo ignore la fecha: lanza una excepción en vez de devolver un motivo definitivo.
 - `test_la_hora_base_del_servidor_es_la_actual_y_aun_asi_una_respuesta_historica_valida_se_acepta` — REGRESIÓN del hallazgo real: overpass-api.de pone la hora ACTUAL en `osm3s.timestamp_osm_base` aunque los datos sean de 2022. La versión anterior de la herramienta comparaba esa hora con la fecha pedida y habría rechazado TODAS las respuestas históricas válidas.
 - `test_un_espejo_que_ignora_la_fecha_se_rechaza_y_se_prueba_el_siguiente` — El primer espejo devuelve el mapa actual para una consulta de 2022: se descarta tras el canario y se usa el segundo. Al espejo malo no se le pide ningún dato real.
 - `test_si_todos_los_espejos_ignoran_la_fecha_falla_en_vez_de_devolver_el_presente` — Nunca se devuelve en silencio el mapa actual como si fuera el de 2022.
 - `test_el_canario_se_pide_una_sola_vez_por_espejo_y_se_recuerda` — Con el mismo diccionario de verificados, varias consultas al mismo espejo solo gastan un canario.
 - `test_un_espejo_marcado_como_que_ignora_la_fecha_no_se_vuelve_a_consultar` — Tras fallar el canario por ignorar la fecha, el espejo queda descartado: no se repite el canario en cada consulta.
 - `test_si_falla_la_red_en_el_canario_el_espejo_no_queda_marcado_y_se_puede_reintentar` — Un error de red durante el canario no es «ignora la fecha»: se reintenta en la ronda siguiente y entonces se acepta.
+- `test_un_canario_pasajero_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recupera` — El único espejo con historia está saturado justo en el canario (remark o respuesta recortada) y responde bien en la ronda 2: no se le debe marcar como «ignora la fecha» de por vida. Es el caso que las rondas existen para cubrir.
+- `test_un_canario_pasajero_no_deja_marcado_el_espejo_mientras_dure_el_fallo` — Mientras el canario siga fallando de forma pasajera, `verificados` queda vacío (nada se recuerda).
+- `test_tras_un_canario_nuevo_se_hace_una_pausa_y_con_el_espejo_ya_verificado_no` — El canario es una petición más: se espera `PAUSA_S` antes de la consulta pesada, una sola vez por espejo.
+- `test_el_canario_es_de_la_fecha_mas_antigua_que_se_pide` — Lo que vale para 2022 vale para 2024, no al revés: si algún día se pide un instante anterior al del canario, hay que adelantar la fecha del canario (si no, un espejo sin historia suficiente pasaría la prueba).
+- `test_el_resumen_final_no_falla_con_un_manifiesto_de_la_version_anterior` — Un `manifest.json` heredado con la clave antigua `osm_base` (sin `osm_base_servidor`) no hace reventar el resumen.
 - `test_una_consulta_actual_no_pide_canario` — Para «hoy» (sin fecha) no hay nada que comprobar: no se gasta una consulta de canario.
 - `test_un_error_de_red_en_un_espejo_pasa_al_siguiente` — Un fallo HTTP no detiene la descarga mientras otro espejo responda.
 - `test_descargar_escribe_los_json_y_un_manifiesto_con_hora_del_servidor_y_hash` — Cada trozo queda en su archivo; el manifiesto guarda recuento, sha256 y la hora del servidor solo como informativa.

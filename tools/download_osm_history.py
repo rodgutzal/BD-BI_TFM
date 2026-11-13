@@ -9,7 +9,8 @@ Qué hace y qué NO hace:
   - Guarda JSON en `--out` (por defecto `data/osm_history/`, ignorado por git) y un `manifest.json` con la fecha de
     descarga, el espejo usado, la hora base del servidor (solo informativa) y el sha256 de cada archivo. NO toca la base.
   - COMPRUEBA que cada espejo respeta `[date:]` con un CANARIO: una consulta pequeña de una zona muy editada desde 2022 con
-    `out meta`, en la que ningún elemento puede tener una versión posterior a la fecha pedida. Un espejo que ignora la fecha
+    `out meta`, en la que ningún elemento puede tener una versión posterior a la fecha del canario (2022-01-01, la más
+    antigua de los instantes pedidos: lo que vale para ella vale para los posteriores). Un espejo que ignora la fecha
     en silencio devolvería el mapa actual (con versiones recientes): se rechaza y se prueba el siguiente. (No se puede
     usar `osm3s.timestamp_osm_base`: medido en overpass-api.de, trae la hora ACTUAL del servidor aunque los datos sean de
     2022, así que rechazaría respuestas históricas válidas.)
@@ -134,16 +135,22 @@ def consulta_canario() -> str:
 
 
 def canario_respeta_la_fecha(respuesta) -> Optional[str]:
-    """None si la respuesta al canario es de la fecha pedida; si no, el motivo. Un espejo que ignora `[date:]` devuelve el
-    mapa actual: muchos elementos con una versión (`timestamp`) posterior a la fecha. Las fechas ISO
-    `AAAA-MM-DDThh:mm:ssZ` se comparan como texto. Se exige un mínimo de elementos para que una respuesta vacía o
-    recortada no pase por buena."""
+    """None si la respuesta al canario es de la fecha del canario; si no, el motivo DEFINITIVO. Un espejo que ignora
+    `[date:]` devuelve el mapa actual: muchos elementos con una versión (`timestamp`) posterior a la fecha. Las fechas ISO
+    `AAAA-MM-DDThh:mm:ssZ` se comparan como texto.
+
+    Distingue dos clases de problema: los DEFINITIVOS (ignora la fecha, no admite `meta`) se devuelven como motivo y el
+    espejo queda descartado; los PASAJEROS (HTTP 200 con `remark` de saturación, respuesta recortada o con menos elementos
+    de los esperados) se lanzan como `ValueError`, que no se recuerda: un servidor saturado puede responder bien en la
+    ronda siguiente, y para eso existen las rondas."""
     motivo = respuesta_valida(respuesta)
     if motivo:
-        return motivo
+        raise ValueError(motivo)
     elementos = respuesta["elements"]
     if len(elementos) < CANARIO_MIN_ELEMENTOS:
-        return f"el canario devolvió solo {len(elementos)} elementos (se esperaban al menos {CANARIO_MIN_ELEMENTOS})"
+        raise ValueError(
+            f"el canario devolvió solo {len(elementos)} elementos (se esperaban al menos {CANARIO_MIN_ELEMENTOS})"
+        )
     sin_marca = sum(1 for e in elementos if not isinstance(e.get("timestamp"), str))
     if sin_marca:
         return f"{sin_marca} de {len(elementos)} elementos del canario no traen `timestamp`"
@@ -157,8 +164,9 @@ def canario_respeta_la_fecha(respuesta) -> Optional[str]:
 
 
 def verificar_espejo(cliente, endpoint: str) -> Optional[str]:
-    """Pide el canario a un espejo y devuelve None si respeta la fecha o el motivo si no. Si falla la red, la excepción
-    sube (y el espejo no queda marcado: se podrá volver a probar)."""
+    """Pide el canario a un espejo y devuelve None si respeta la fecha o el motivo DEFINITIVO si no. Cualquier problema
+    pasajero (red, HTTP, JSON, `remark`, respuesta recortada) sube como excepción y el espejo no queda marcado: se podrá
+    volver a probar en la ronda siguiente."""
     r = cliente.session.post(endpoint, data={"data": consulta_canario()}, timeout=(TIMEOUT_CONEXION_S, TIMEOUT_HTTP_S))
     r.raise_for_status()
     return canario_respeta_la_fecha(r.json())
@@ -203,8 +211,10 @@ def pedir(
         for endpoint in cliente.endpoints:
             try:
                 if fecha_pedida is not None:
-                    if endpoint not in verificados:  # si falla la red, la excepción sube y no se marca
+                    if endpoint not in verificados:  # un problema pasajero sube como excepción y no se marca
                         verificados[endpoint] = verificar_espejo(cliente, endpoint)
+                        if PAUSA_S:  # el canario es una petición más: pausa antes de la consulta pesada
+                            dormir(PAUSA_S)
                     if verificados[endpoint]:
                         raise ValueError(verificados[endpoint])
                 r = cliente.session.post(
@@ -339,7 +349,7 @@ def main(argv: Optional[list] = None) -> int:
     print("\nResumen:")
     for archivo, d in manifiesto["archivos"].items():
         print(
-            f"   {archivo:24} {d['elementos']:7} elementos | hora del servidor {d['osm_base_servidor']} | {d['espejo']}"
+            f"   {archivo:24} {d['elementos']:7} elementos | hora del servidor {d.get('osm_base_servidor', d.get('osm_base'))} | {d['espejo']}"
         )
     for f in manifiesto["fallidos"]:
         print(f"   FALLÓ {f['archivo']}: {f['error']}")
