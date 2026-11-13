@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**52 archivos · 842 funciones de test · 932 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 857 funciones de test · 951 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,6 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 15 | 19 |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -453,6 +454,29 @@
 - `test_historial_de_poblacion_es_upsert` — El historial de población se guarda con upsert: repetir una observación la actualiza en vez de duplicarla.
 - `test_clean_normaliza_nulos` — `_clean` convierte `None` y NaN en cadena vacía, recorta espacios y pasa números a texto.
 - `test_el_cliente_exige_api_key` — El cliente de demografía lanza `ValueError` con una clave vacía o solo de comillas.
+
+## `tests/test_download_osm_history.py`
+
+> Pruebas de la descarga del estado histórico de OpenStreetMap (tools/download_osm_history.py, fase 4 §3.M).
+>
+> Sin red: se usa un cliente falso. Lo más importante que comprueban: que un espejo de Overpass que IGNORA la fecha pedida
+> (y devuelve el mapa actual) se rechaza, porque si no, el «estado de 2022» sería en realidad el de hoy y no habría cierres.
+
+- `test_el_plan_pide_tres_instantes_en_dos_franjas_y_el_ciclo_de_vida_solo_para_hoy` — 2022, 2024 y hoy, cada uno en 2 franjas (6 consultas), más una de ciclo de vida del estado actual: 7.
+- `test_las_consultas_pasadas_llevan_la_fecha_y_las_actuales_no` — Solo 2022 y 2024 llevan `[date:...]`; «hoy» y el ciclo de vida piden el estado actual.
+- `test_las_clausulas_de_categorias_son_las_mismas_que_las_del_cliente_de_overpass` — Si CATEGORY_TAGS o el cliente cambian, este archivo no se queda pidiendo otra cosa que el resto del proyecto.
+- `test_las_siete_categorias_estan_en_la_consulta` — Cada etiqueta de cada categoría aparece en la consulta (nada se queda sin pedir).
+- `test_las_clausulas_de_ciclo_de_vida_cubren_cinco_prefijos_por_cinco_claves` — `disused:`, `was:`, `abandoned:`, `demolished:` y `razed:` sobre amenity, shop, office, leisure y tourism.
+- `test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes` — Las franjas de latitud son contiguas y suman toda la rejilla.
+- `test_la_fecha_base_debe_no_ser_posterior_a_la_pedida` ×5 — Un espejo que devuelve el mapa actual para un instante pasado se detecta por su fecha base.
+- `test_un_espejo_que_ignora_la_fecha_se_rechaza_y_se_prueba_el_siguiente` — El primer espejo devuelve el presente para una consulta de 2022: se descarta y se usa el segundo.
+- `test_si_todos_los_espejos_ignoran_la_fecha_falla_en_vez_de_devolver_el_presente` — Nunca se devuelve en silencio el mapa actual como si fuera el de 2022.
+- `test_un_error_de_red_en_un_espejo_pasa_al_siguiente` — Un fallo HTTP no detiene la descarga mientras otro espejo responda.
+- `test_descargar_escribe_los_json_y_un_manifiesto_con_fecha_base_y_hash` — Cada trozo queda en su archivo con la fecha base que dijo Overpass y el manifiesto guarda recuento y sha256.
+- `test_un_trozo_que_falla_se_anota_y_los_demas_siguen` — Si ningún espejo da la fecha pedida, ese trozo queda en `fallidos` y no se escribe su archivo.
+- `test_descargar_solo_escribe_dentro_del_directorio_de_salida` — No toca nada fuera de `out_dir` (ni la base de datos).
+- `test_el_dry_run_no_hace_ninguna_llamada_de_red` — `--dry-run` imprime las consultas y no crea ni usa el cliente de Overpass.
+- `test_los_datos_descargados_estan_ignorados_por_git` — El estado histórico se regenera y no se versiona: `data/osm_history/` está en .gitignore.
 
 ## `tests/test_ensemble_predictor.py`
 
