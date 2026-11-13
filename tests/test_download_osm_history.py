@@ -25,15 +25,21 @@ ANTIGUO = "2021-06-01T10:00:00Z"  # versión de un elemento anterior al canario 
 RECIENTE = "2026-05-01T10:00:00Z"  # versión posterior: la de un mapa actual
 
 
+class CuerpoTruncado(Exception):
+    """Marca: el servidor responde HTTP 200 pero el cuerpo es un JSON cortado a la mitad (se rompe al leerlo)."""
+
+
 class Respuesta:
-    def __init__(self, datos, error=None):
-        self.datos, self.error = datos, error
+    def __init__(self, datos, error=None, json_roto=False):
+        self.datos, self.error, self.json_roto = datos, error, json_roto
 
     def raise_for_status(self):
         if self.error:
             raise self.error
 
     def json(self):
+        if self.json_roto:
+            raise ValueError("Expecting ',' delimiter: line 1 column 4096 (char 4095)")
         return self.datos
 
 
@@ -52,6 +58,8 @@ class SesionFalsa:
             r = r.pop(0) if len(r) > 1 else r[0]
         if callable(r):
             r = r(data["data"])
+        if isinstance(r, CuerpoTruncado):
+            return Respuesta(None, json_roto=True)
         return Respuesta(None, r) if isinstance(r, Exception) else Respuesta(r)
 
 
@@ -79,13 +87,25 @@ def respuesta(n=2, remark=None):
     return r
 
 
-def servidor(respeta_fecha=True, n=3, remark=None):
-    """Un espejo de mentira: ante el canario (`meta`) responde con 30 elementos de versión antigua si respeta la fecha o
-    reciente si la ignora; ante cualquier otra consulta, `n` elementos (con `remark` si se indica)."""
+def _fecha_de(consulta):
+    """La fecha `[date:"..."]` de una consulta."""
+    return consulta.split('[date:"')[1].split('"')[0]
+
+
+def servidor(respeta_fecha=True, n=3, remark=None, atrasado=False):
+    """Un espejo de mentira. Ante el canario (`meta`) responde con 30 elementos cuyas versiones dependen de la fecha pedida:
+    de unos meses ANTES de la fecha si respeta la fecha; de 2026 si la ignora (mapa actual); de hace 5 años si va atrasado
+    (copia antigua de la base). Ante cualquier otra consulta, `n` elementos (con `remark` si se indica)."""
 
     def responder(consulta):
         if "meta" in consulta:
-            ts = ANTIGUO if respeta_fecha else RECIENTE
+            fecha = _fecha_de(consulta)
+            if not respeta_fecha:
+                ts = RECIENTE
+            elif atrasado:
+                ts = "%04d%s" % (int(fecha[:4]) - 5, fecha[4:])
+            else:
+                ts = "%04d%s" % (int(fecha[:4]) - 1, "-09-01T10:00:00Z")  # unos meses antes de la fecha
             return {
                 "osm3s": {"timestamp_osm_base": HORA_ACTUAL_DEL_SERVIDOR},
                 "elements": [{"type": "node", "id": i, "timestamp": ts} for i in range(30)],
@@ -161,52 +181,77 @@ def test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes():
 
 
 # ---- la fecha de Overpass: el canario -----------------------------------------------------------------------------
-def _canario(timestamps, n=None):
+FECHA_2024 = "2024-01-01T00:00:00Z"
+
+
+def _canario(timestamps):
     return {"elements": [{"type": "node", "id": i, "timestamp": t} for i, t in enumerate(timestamps)]}
 
 
-def test_la_consulta_del_canario_lleva_la_fecha_y_pide_meta():
-    """El canario es una consulta pequeña en 2022 con `out center meta` (para ver el `timestamp` de cada elemento)."""
-    q = dh.consulta_canario()
-    assert f'[date:"{dh.CANARIO_FECHA}"]' in q and q.rstrip().endswith("out center meta;")
+def test_la_consulta_del_canario_lleva_la_fecha_que_se_va_a_pedir_y_pide_meta():
+    """El canario es una consulta pequeña en LA FECHA PEDIDA con `out center meta` (para ver el `timestamp` de cada
+    elemento); hay uno por fecha, no uno fijo."""
+    for fecha in (FECHA, FECHA_2024):
+        q = dh.consulta_canario(fecha)
+        assert f'[date:"{fecha}"]' in q and q.rstrip().endswith("out center meta;")
     s, w, n, e = dh.CANARIO_BBOX
-    assert f"{s:.6f},{w:.6f},{n:.6f},{e:.6f}" in q
+    assert f"{s:.6f},{w:.6f},{n:.6f},{e:.6f}" in dh.consulta_canario(FECHA)
 
 
 def test_el_canario_acepta_un_espejo_que_respeta_la_fecha():
-    """Todas las versiones son anteriores a 2022-01-01: es un estado de 2022."""
-    assert dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 30)) is None
+    """Todas las versiones son anteriores a la fecha y alguna es de los 2 años previos: es un estado de esa fecha."""
+    assert dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 30), FECHA) is None
 
 
 def test_el_canario_acepta_una_version_justo_en_la_fecha():
-    """El límite es inclusivo: una versión con la fecha exacta del canario no es posterior."""
-    assert dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 29 + [dh.CANARIO_FECHA])) is None
+    """El límite superior es inclusivo: una versión con la fecha exacta no es posterior."""
+    assert dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 29 + [FECHA]), FECHA) is None
 
 
 def test_el_canario_rechaza_un_espejo_que_ignora_la_fecha():
     """Con el mapa actual hay versiones recientes: se rechaza y el motivo dice cuántas y la más reciente."""
-    motivo = dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 20 + [RECIENTE] * 10))
+    motivo = dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 20 + [RECIENTE] * 10), FECHA)
     assert "ignoró la fecha" in motivo and "10 de 30" in motivo and RECIENTE in motivo
 
 
 def test_una_sola_version_posterior_basta_para_rechazar():
-    """Aunque casi todo sea antiguo, una versión posterior a la fecha delata un mapa que no es de 2022."""
-    assert "ignoró la fecha" in dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 29 + ["2022-01-01T00:00:01Z"]))
+    """Aunque casi todo sea antiguo, una versión posterior a la fecha delata un mapa que no es de esa fecha."""
+    assert "ignoró la fecha" in dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 29 + ["2022-01-01T00:00:01Z"]), FECHA)
+
+
+def test_el_canario_rechaza_un_espejo_con_una_copia_antigua_de_la_base():
+    """COTA INFERIOR: un espejo atrasado (última versión de hace 5 años) pasaría la cota superior para una fecha reciente
+    y serviría datos viejos como si fueran de 2024 u hoy. Se detecta porque no hay ninguna versión de los 2 años previos.
+    """
+    motivo = dh.canario_respeta_la_fecha(_canario(["2018-05-01T00:00:00Z"] * 30), FECHA_2024)
+    assert "va atrasado" in motivo and "730 días" in motivo and "2018-05-01" in motivo
+
+
+def test_la_cota_inferior_del_canario_es_inclusiva_en_el_borde_de_la_ventana():
+    """Una versión justo 730 días antes de la fecha cuenta como «reciente»; un segundo antes, no."""
+    from datetime import datetime, timedelta
+
+    borde = (datetime.strptime(FECHA_2024, dh.FORMATO_FECHA) - timedelta(days=dh.CANARIO_VENTANA_DIAS)).strftime(
+        dh.FORMATO_FECHA
+    )
+    assert dh.canario_respeta_la_fecha(_canario(["2010-01-01T00:00:00Z"] * 29 + [borde]), FECHA_2024) is None
+    fuera = (datetime.strptime(borde, dh.FORMATO_FECHA) - timedelta(seconds=1)).strftime(dh.FORMATO_FECHA)
+    assert "va atrasado" in dh.canario_respeta_la_fecha(_canario([fuera] * 30), FECHA_2024)
 
 
 def test_el_canario_exige_un_minimo_de_elementos_y_lo_trata_como_pasajero():
     """Una respuesta vacía o recortada no se da por buena (no hay nada que comprobar), pero NO es un motivo definitivo:
     lanza una excepción, que no se recuerda y se puede reintentar."""
     with pytest.raises(ValueError, match="solo 5 elementos"):
-        dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 5))
+        dh.canario_respeta_la_fecha(_canario([ANTIGUO] * 5), FECHA)
     with pytest.raises(ValueError, match="solo 0 elementos"):
-        dh.canario_respeta_la_fecha(_canario([]))
+        dh.canario_respeta_la_fecha(_canario([]), FECHA)
 
 
 def test_el_canario_rechaza_elementos_sin_timestamp():
     """Si el espejo no devuelve `timestamp` (no admite `meta`), no se puede comprobar: se rechaza."""
     r = {"elements": [{"type": "node", "id": i} for i in range(30)]}
-    assert "no traen `timestamp`" in dh.canario_respeta_la_fecha(r)
+    assert "no traen `timestamp`" in dh.canario_respeta_la_fecha(r, FECHA)
 
 
 def test_el_canario_con_remark_de_error_es_un_problema_pasajero():
@@ -215,7 +260,7 @@ def test_el_canario_con_remark_de_error_es_un_problema_pasajero():
     r = _canario([ANTIGUO] * 30)
     r["remark"] = "runtime error: out of memory"
     with pytest.raises(ValueError, match="avisa de un error"):
-        dh.canario_respeta_la_fecha(r)
+        dh.canario_respeta_la_fecha(r, FECHA)
 
 
 def test_la_hora_base_del_servidor_es_la_actual_y_aun_asi_una_respuesta_historica_valida_se_acepta():
@@ -251,7 +296,7 @@ def test_el_canario_se_pide_una_sola_vez_por_espejo_y_se_recuerda():
     verificados = {}
     for _ in range(3):
         dh.pedir(cliente, "consulta", FECHA, espera_s=0, verificados=verificados)
-    assert cliente.canarios() == 1 and cliente.consultas_reales() == 3 and verificados == {"https://a": None}
+    assert cliente.canarios() == 1 and cliente.consultas_reales() == 3 and verificados == {("https://a", FECHA): None}
 
 
 def test_un_espejo_marcado_como_que_ignora_la_fecha_no_se_vuelve_a_consultar():
@@ -260,7 +305,7 @@ def test_un_espejo_marcado_como_que_ignora_la_fecha_no_se_vuelve_a_consultar():
     verificados = {}
     for _ in range(3):
         dh.pedir(cliente, "consulta", FECHA, espera_s=0, verificados=verificados)
-    assert cliente.canarios("https://malo") == 1 and "ignoró la fecha" in verificados["https://malo"]
+    assert cliente.canarios("https://malo") == 1 and "ignoró la fecha" in verificados[("https://malo", FECHA)]
 
 
 def test_si_falla_la_red_en_el_canario_el_espejo_no_queda_marcado_y_se_puede_reintentar():
@@ -268,7 +313,7 @@ def test_si_falla_la_red_en_el_canario_el_espejo_no_queda_marcado_y_se_puede_rei
     cliente = ClienteFalso({"https://a": [OSError("sin capacidad"), servidor()]})
     verificados = {}
     datos, espejo = dh.pedir(cliente, "q", FECHA, rondas=2, espera_s=0, dormir=lambda s: None, verificados=verificados)
-    assert espejo == "https://a" and verificados == {"https://a": None}
+    assert espejo == "https://a" and verificados == {("https://a", FECHA): None}
 
 
 def _canario_saturado(consulta):
@@ -293,7 +338,7 @@ def test_un_canario_pasajero_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recup
     verificados, esperas = {}, []
     datos, espejo = dh.pedir(cliente, "q", FECHA, rondas=3, espera_s=90, dormir=esperas.append, verificados=verificados)
     assert espejo == "https://a" and len(datos["elements"]) == 6
-    assert verificados == {"https://a": None} and esperas == [90]
+    assert verificados == {("https://a", FECHA): None} and esperas == [90]
 
 
 def test_un_canario_pasajero_no_deja_marcado_el_espejo_mientras_dure_el_fallo():
@@ -315,11 +360,36 @@ def test_tras_un_canario_nuevo_se_hace_una_pausa_y_con_el_espejo_ya_verificado_n
     assert pausas == [5]
 
 
-def test_el_canario_es_de_la_fecha_mas_antigua_que_se_pide():
-    """Lo que vale para 2022 vale para 2024, no al revés: si algún día se pide un instante anterior al del canario, hay que
-    adelantar la fecha del canario (si no, un espejo sin historia suficiente pasaría la prueba)."""
-    fechas = [f for f in dh.INSTANTES.values() if f]
-    assert dh.CANARIO_FECHA <= min(fechas)
+def test_hay_un_canario_por_cada_fecha_que_se_pide_y_se_recuerda_por_separado():
+    """Pedir 2022 y 2024 al mismo espejo gasta DOS canarios (uno por fecha), y cada uno se recuerda aparte; con la misma
+    fecha varias veces solo se gasta uno."""
+    cliente = ClienteFalso({"https://a": servidor()})
+    verificados = {}
+    for fecha in (FECHA, FECHA_2024, FECHA, FECHA_2024):
+        dh.pedir(cliente, "q", fecha, espera_s=0, verificados=verificados)
+    assert cliente.canarios() == 2 and cliente.consultas_reales() == 4
+    assert verificados == {("https://a", FECHA): None, ("https://a", FECHA_2024): None}
+    fechas_de_los_canarios = [_fecha_de(q) for _, q in cliente.session.llamadas if "meta" in q]
+    assert fechas_de_los_canarios == [FECHA, FECHA_2024]
+
+
+def test_un_espejo_atrasado_se_rechaza_para_2024_aunque_hubiera_pasado_el_canario_de_2022():
+    """Un espejo con una copia vieja pasa el canario de 2022 pero no el de 2024: no se le piden los datos de 2024."""
+
+    def solo_hasta_2022(consulta):
+        # respeta 2022 (versiones de 2021) y, para 2024, sigue devolviendo lo mismo: sin versiones de 2022-2023
+        if "meta" in consulta:
+            return {"osm3s": {}, "elements": [{"type": "node", "id": i, "timestamp": ANTIGUO} for i in range(30)]}
+        return respuesta(5)
+
+    cliente = ClienteFalso({"https://viejo": solo_hasta_2022})
+    verificados = {}
+    datos, _ = dh.pedir(cliente, "q", FECHA, espera_s=0, verificados=verificados)  # 2022: bien
+    assert len(datos["elements"]) == 5
+    with pytest.raises(RuntimeError, match="va atrasado"):
+        dh.pedir(cliente, "q", FECHA_2024, rondas=1, espera_s=0, verificados=verificados)
+    assert verificados[("https://viejo", FECHA)] is None and "va atrasado" in verificados[("https://viejo", FECHA_2024)]
+    assert cliente.consultas_reales() == 1  # los datos de 2024 nunca se le pidieron
 
 
 def test_el_resumen_final_no_falla_con_un_manifiesto_de_la_version_anterior(monkeypatch, tmp_path, capsys):
@@ -365,11 +435,11 @@ def test_descargar_escribe_los_json_y_un_manifiesto_con_hora_del_servidor_y_hash
     assert json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))["descargado_utc"].endswith("Z")
 
 
-def test_descargar_solo_pide_un_canario_por_espejo_en_toda_la_descarga(tmp_path):
-    """Con 2022 y 2024 (4 consultas fechadas) hay 1 canario y 4 consultas reales, no un canario por consulta."""
+def test_descargar_pide_un_canario_por_espejo_y_por_fecha_en_toda_la_descarga(tmp_path):
+    """Con 2022 y 2024 (4 consultas fechadas) hay 2 canarios (uno por fecha) y 4 consultas reales, no uno por consulta."""
     cliente = ClienteFalso({"https://x": servidor()})
     dh.descargar(cliente, tmp_path, ["2022-01-01", "2024-01-01"], pausa_s=0, log=lambda *_: None)
-    assert cliente.canarios() == 1 and cliente.consultas_reales() == 4
+    assert cliente.canarios() == 2 and cliente.consultas_reales() == 4
 
 
 def test_un_trozo_que_falla_se_anota_y_los_demas_siguen(tmp_path):
@@ -532,3 +602,23 @@ def test_el_manifiesto_se_ignora_si_el_anterior_esta_roto_o_apunta_a_archivos_bo
     (tmp_path / "2022-01-01_0.json").unlink()
     m = _descargar(tmp_path, ["2024-01-01"])
     assert "2022-01-01_0.json" not in m["archivos"] and "2022-01-01_1.json" in m["archivos"]
+
+
+# ---- cuerpo cortado a la mitad (HTTP 200 pero JSON incompleto) -------------------------------------------------------
+def test_un_cuerpo_json_cortado_a_la_mitad_es_un_fallo_y_se_prueba_otro_espejo():
+    """Un corte de red deja el JSON a medias y `r.json()` falla: es un fallo del espejo, no una respuesta parcial que se
+    guarde. (Es la forma realista de «respuesta truncada»; con un `remark` o sin `elements` ya se rechazaba.)"""
+    cliente = ClienteFalso({"https://a": CuerpoTruncado(), "https://b": servidor(n=3)})
+    datos, espejo = dh.pedir(cliente, "q", None, rondas=1, espera_s=0)
+    assert espejo == "https://b" and len(datos["elements"]) == 3
+
+
+def test_si_el_cuerpo_llega_cortado_en_todos_los_espejos_no_se_escribe_nada(tmp_path):
+    """El trozo queda en `fallidos` con el motivo y no se crea su archivo (nunca un JSON a medias o vacío)."""
+    cliente = ClienteFalso({"https://a": [servidor(), CuerpoTruncado()]})
+    m = dh.descargar(cliente, tmp_path, ["hoy"], pausa_s=0, log=lambda *_: None, rondas=1, espera_s=0)
+    # «hoy» son 3 trozos (2 franjas y el ciclo de vida): el primero llega entero y los otros dos, cortados
+    assert sorted(m["archivos"]) == ["hoy_0.json"]
+    assert [f["archivo"] for f in m["fallidos"]] == ["hoy_1.json", "ciclo_de_vida_0.json"]
+    assert all("ValueError" in f["error"] for f in m["fallidos"])
+    assert not (tmp_path / "hoy_1.json").exists() and not (tmp_path / "ciclo_de_vida_0.json").exists()

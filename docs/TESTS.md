@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 887 funciones de test · 981 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 892 funciones de test · 986 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 45 | 49+ |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 50 | 54+ |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -472,11 +472,13 @@
 - `test_las_siete_categorias_estan_en_la_consulta` — Cada etiqueta de cada categoría aparece en la consulta (nada se queda sin pedir).
 - `test_las_clausulas_de_ciclo_de_vida_cubren_cinco_prefijos_por_cinco_claves` — `disused:`, `was:`, `abandoned:`, `demolished:` y `razed:` sobre amenity, shop, office, leisure y tourism.
 - `test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes` — Las franjas de latitud son contiguas y suman toda la rejilla.
-- `test_la_consulta_del_canario_lleva_la_fecha_y_pide_meta` — El canario es una consulta pequeña en 2022 con `out center meta` (para ver el `timestamp` de cada elemento).
-- `test_el_canario_acepta_un_espejo_que_respeta_la_fecha` — Todas las versiones son anteriores a 2022-01-01: es un estado de 2022.
-- `test_el_canario_acepta_una_version_justo_en_la_fecha` — El límite es inclusivo: una versión con la fecha exacta del canario no es posterior.
+- `test_la_consulta_del_canario_lleva_la_fecha_que_se_va_a_pedir_y_pide_meta` — El canario es una consulta pequeña en LA FECHA PEDIDA con `out center meta` (para ver el `timestamp` de cada elemento); hay uno por fecha, no uno fijo.
+- `test_el_canario_acepta_un_espejo_que_respeta_la_fecha` — Todas las versiones son anteriores a la fecha y alguna es de los 2 años previos: es un estado de esa fecha.
+- `test_el_canario_acepta_una_version_justo_en_la_fecha` — El límite superior es inclusivo: una versión con la fecha exacta no es posterior.
 - `test_el_canario_rechaza_un_espejo_que_ignora_la_fecha` — Con el mapa actual hay versiones recientes: se rechaza y el motivo dice cuántas y la más reciente.
-- `test_una_sola_version_posterior_basta_para_rechazar` — Aunque casi todo sea antiguo, una versión posterior a la fecha delata un mapa que no es de 2022.
+- `test_una_sola_version_posterior_basta_para_rechazar` — Aunque casi todo sea antiguo, una versión posterior a la fecha delata un mapa que no es de esa fecha.
+- `test_el_canario_rechaza_un_espejo_con_una_copia_antigua_de_la_base` — COTA INFERIOR: un espejo atrasado (última versión de hace 5 años) pasaría la cota superior para una fecha reciente y serviría datos viejos como si fueran de 2024 u hoy. Se detecta porque no hay ninguna versión de los 2 años previos.
+- `test_la_cota_inferior_del_canario_es_inclusiva_en_el_borde_de_la_ventana` — Una versión justo 730 días antes de la fecha cuenta como «reciente»; un segundo antes, no.
 - `test_el_canario_exige_un_minimo_de_elementos_y_lo_trata_como_pasajero` — Una respuesta vacía o recortada no se da por buena (no hay nada que comprobar), pero NO es un motivo definitivo: lanza una excepción, que no se recuerda y se puede reintentar.
 - `test_el_canario_rechaza_elementos_sin_timestamp` — Si el espejo no devuelve `timestamp` (no admite `meta`), no se puede comprobar: se rechaza.
 - `test_el_canario_con_remark_de_error_es_un_problema_pasajero` — Un error de Overpass con HTTP 200 (servidor saturado) no es un canario válido, pero tampoco prueba que el espejo ignore la fecha: lanza una excepción en vez de devolver un motivo definitivo.
@@ -489,12 +491,13 @@
 - `test_un_canario_pasajero_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recupera` — El único espejo con historia está saturado justo en el canario (remark o respuesta recortada) y responde bien en la ronda 2: no se le debe marcar como «ignora la fecha» de por vida. Es el caso que las rondas existen para cubrir.
 - `test_un_canario_pasajero_no_deja_marcado_el_espejo_mientras_dure_el_fallo` — Mientras el canario siga fallando de forma pasajera, `verificados` queda vacío (nada se recuerda).
 - `test_tras_un_canario_nuevo_se_hace_una_pausa_y_con_el_espejo_ya_verificado_no` — El canario es una petición más: se espera `PAUSA_S` antes de la consulta pesada, una sola vez por espejo.
-- `test_el_canario_es_de_la_fecha_mas_antigua_que_se_pide` — Lo que vale para 2022 vale para 2024, no al revés: si algún día se pide un instante anterior al del canario, hay que adelantar la fecha del canario (si no, un espejo sin historia suficiente pasaría la prueba).
+- `test_hay_un_canario_por_cada_fecha_que_se_pide_y_se_recuerda_por_separado` — Pedir 2022 y 2024 al mismo espejo gasta DOS canarios (uno por fecha), y cada uno se recuerda aparte; con la misma fecha varias veces solo se gasta uno.
+- `test_un_espejo_atrasado_se_rechaza_para_2024_aunque_hubiera_pasado_el_canario_de_2022` — Un espejo con una copia vieja pasa el canario de 2022 pero no el de 2024: no se le piden los datos de 2024.
 - `test_el_resumen_final_no_falla_con_un_manifiesto_de_la_version_anterior` — Un `manifest.json` heredado con la clave antigua `osm_base` (sin `osm_base_servidor`) no hace reventar el resumen.
 - `test_una_consulta_actual_no_pide_canario` — Para «hoy» (sin fecha) no hay nada que comprobar: no se gasta una consulta de canario.
 - `test_un_error_de_red_en_un_espejo_pasa_al_siguiente` — Un fallo HTTP no detiene la descarga mientras otro espejo responda.
 - `test_descargar_escribe_los_json_y_un_manifiesto_con_hora_del_servidor_y_hash` — Cada trozo queda en su archivo; el manifiesto guarda recuento, sha256 y la hora del servidor solo como informativa.
-- `test_descargar_solo_pide_un_canario_por_espejo_en_toda_la_descarga` — Con 2022 y 2024 (4 consultas fechadas) hay 1 canario y 4 consultas reales, no un canario por consulta.
+- `test_descargar_pide_un_canario_por_espejo_y_por_fecha_en_toda_la_descarga` — Con 2022 y 2024 (4 consultas fechadas) hay 2 canarios (uno por fecha) y 4 consultas reales, no uno por consulta.
 - `test_un_trozo_que_falla_se_anota_y_los_demas_siguen` — Si ningún espejo respeta la fecha, esos trozos quedan en `fallidos` y no se escribe su archivo.
 - `test_descargar_solo_escribe_dentro_del_directorio_de_salida` — No toca nada fuera de `out_dir` (ni la base de datos).
 - `test_el_dry_run_no_hace_ninguna_llamada_de_red` — `--dry-run` imprime las consultas y no crea ni usa el cliente de Overpass.
@@ -511,6 +514,8 @@
 - `test_relanzar_un_subconjunto_no_borra_lo_ya_descargado_del_manifiesto` — Tras bajar 2022 y luego solo 2024, el manifiesto trae los cuatro archivos con su hash y su fecha de descarga.
 - `test_si_el_reintento_de_un_trozo_falla_se_conserva_el_archivo_anterior_y_se_avisa` — El JSON de la ejecución anterior sigue siendo válido: se mantiene en el manifiesto, y el fallo queda anotado con que se conserva el anterior (no queda un archivo en disco sin registrar).
 - `test_el_manifiesto_se_ignora_si_el_anterior_esta_roto_o_apunta_a_archivos_borrados` — Un manifiesto ilegible no impide descargar, y no se heredan entradas de archivos que ya no existen.
+- `test_un_cuerpo_json_cortado_a_la_mitad_es_un_fallo_y_se_prueba_otro_espejo` — Un corte de red deja el JSON a medias y `r.json()` falla: es un fallo del espejo, no una respuesta parcial que se guarde. (Es la forma realista de «respuesta truncada»; con un `remark` o sin `elements` ya se rechazaba.)
+- `test_si_el_cuerpo_llega_cortado_en_todos_los_espejos_no_se_escribe_nada` — El trozo queda en `fallidos` con el motivo y no se crea su archivo (nunca un JSON a medias o vacío).
 
 ## `tests/test_ensemble_predictor.py`
 

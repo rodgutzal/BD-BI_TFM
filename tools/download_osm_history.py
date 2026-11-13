@@ -8,13 +8,17 @@ Qué hace y qué NO hace:
     cierres «fuertes».
   - Guarda JSON en `--out` (por defecto `data/osm_history/`, ignorado por git) y un `manifest.json` con la fecha de
     descarga, el espejo usado, la hora base del servidor (solo informativa) y el sha256 de cada archivo. NO toca la base.
-  - COMPRUEBA que cada espejo respeta `[date:]` con un CANARIO: una consulta pequeña de una zona muy editada desde 2022 con
-    `out meta`, en la que ningún elemento puede tener una versión posterior a la fecha del canario (2022-01-01, la más
-    antigua de los instantes pedidos: lo que vale para ella vale para los posteriores). Un espejo que ignora la fecha
-    en silencio devolvería el mapa actual (con versiones recientes): se rechaza y se prueba el siguiente. (No se puede
-    usar `osm3s.timestamp_osm_base`: medido en overpass-api.de, trae la hora ACTUAL del servidor aunque los datos sean de
-    2022, así que rechazaría respuestas históricas válidas.)
-  - Rechaza también una respuesta con HTTP 200 pero un `remark` de error o sin `elements`.
+  - COMPRUEBA que cada espejo respeta cada fecha `[date:]` que se le pide, con un CANARIO por espejo y por fecha: una
+    consulta pequeña de una zona muy editada con `out meta` (el `timestamp` de cada elemento), comprobada por las dos caras:
+    ningún elemento puede tener una versión posterior a la fecha (un espejo que ignora la fecha devuelve el mapa actual) y
+    debe haber alguna de los 2 años anteriores (un espejo con una copia ANTIGUA de la base daría datos viejos como si fueran
+    de 2024 u hoy). El espejo que falla se rechaza y se prueba el siguiente. (No se puede usar `osm3s.timestamp_osm_base`:
+    medido en overpass-api.de, trae la hora ACTUAL del servidor aunque los datos sean de 2022, así que rechazaría
+    respuestas históricas válidas.)
+  - Rechaza también una respuesta con HTTP 200 pero un `remark` de error, sin `elements`, o un cuerpo que no sea un JSON
+    completo (un corte de red deja el JSON a medias y falla al leerlo). Una respuesta parcial pero JSON válido y sin `remark`
+    no es un modo de fallo conocido de Overpass, y no se puede distinguir de una legítima con certeza: por eso el análisis
+    comprobará la coherencia entre instantes antes de usar los datos.
   - Pausa entre peticiones, tiempo máximo de servidor y el área partida en franjas, como `download_osm_context.py`.
   - `--dry-run` muestra las consultas sin hacer NINGUNA llamada de red.
 
@@ -28,7 +32,7 @@ import hashlib
 import json
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -117,32 +121,39 @@ def plan(instantes: Optional[List[str]] = None) -> List[Tuple[str, int, Optional
     return trabajo
 
 
-# Canario para saber si un espejo respeta `[date:]`. Zona del centro de Sliema/Gzira (muy editada desde 2022): con el mapa
-# actual hay cientos de elementos con una versión posterior a la fecha; con el de 2022 no puede haber ninguna.
-CANARIO_FECHA = "2022-01-01T00:00:00Z"
+# Canario para saber si un espejo respeta `[date:]`. Zona del centro de Sliema/Gzira, editada sin parar: se pide UNA VEZ POR
+# FECHA que se vaya a pedir y se comprueba por las dos caras (medido en overpass-api.de: con el mapa actual, 243 de 283
+# elementos de esta zona tienen una versión posterior a 2022).
 CANARIO_BBOX = (35.895, 14.480, 35.915, 14.510)
 CANARIO_MIN_ELEMENTOS = 20
+# Debe haber alguna versión de los 2 años anteriores a la fecha; si no, el espejo va atrasado.
+CANARIO_VENTANA_DIAS = 730
+FORMATO_FECHA = "%Y-%m-%dT%H:%M:%SZ"
 
 
-def consulta_canario() -> str:
-    """Consulta pequeña con `out meta` (trae `timestamp` de cada elemento) en la fecha del canario."""
+def consulta_canario(fecha: str) -> str:
+    """Consulta pequeña con `out meta` (trae `timestamp` de cada elemento) en la fecha que se va a pedir."""
     b = ",".join(f"{v:.6f}" for v in CANARIO_BBOX)
     selector = '["amenity"~"^(restaurant|cafe|bar|pub|fast_food)$"]'
     return (
-        f'[out:json][timeout:{TIMEOUT_SERVIDOR_S}][date:"{CANARIO_FECHA}"];\n'
+        f'[out:json][timeout:{TIMEOUT_SERVIDOR_S}][date:"{fecha}"];\n'
         f"(\n  node{selector}({b});\n  way{selector}({b});\n);\nout center meta;"
     )
 
 
-def canario_respeta_la_fecha(respuesta) -> Optional[str]:
-    """None si la respuesta al canario es de la fecha del canario; si no, el motivo DEFINITIVO. Un espejo que ignora
-    `[date:]` devuelve el mapa actual: muchos elementos con una versión (`timestamp`) posterior a la fecha. Las fechas ISO
-    `AAAA-MM-DDThh:mm:ssZ` se comparan como texto.
+def canario_respeta_la_fecha(respuesta, fecha: str) -> Optional[str]:
+    """None si la respuesta al canario es del estado de `fecha`; si no, el motivo DEFINITIVO. Se comprueba por las dos caras:
 
-    Distingue dos clases de problema: los DEFINITIVOS (ignora la fecha, no admite `meta`) se devuelven como motivo y el
-    espejo queda descartado; los PASAJEROS (HTTP 200 con `remark` de saturación, respuesta recortada o con menos elementos
-    de los esperados) se lanzan como `ValueError`, que no se recuerda: un servidor saturado puede responder bien en la
-    ronda siguiente, y para eso existen las rondas."""
+    - COTA SUPERIOR: ningún elemento puede tener una versión (`timestamp`) posterior a `fecha`. Un espejo que ignora `[date:]`
+      devuelve el mapa actual, con muchas versiones recientes.
+    - COTA INFERIOR: debe haber alguna versión de los `CANARIO_VENTANA_DIAS` días anteriores. Un espejo con una copia
+      ANTIGUA de la base (que ignora la fecha o no llega a ella) devolvería versiones viejas y pasaría la cota superior
+      para una fecha reciente (2024 u hoy).
+
+    Las fechas ISO `AAAA-MM-DDThh:mm:ssZ` se comparan como texto. Distingue dos clases de problema: los DEFINITIVOS (ignora la
+    fecha, va atrasado, no admite `meta`) se devuelven como motivo y el espejo queda descartado; los PASAJEROS (HTTP 200 con
+    `remark` de saturación, respuesta recortada o con menos elementos de los esperados) se lanzan como `ValueError`, que no
+    se recuerda: un servidor saturado puede responder bien en la ronda siguiente, y para eso existen las rondas."""
     motivo = respuesta_valida(respuesta)
     if motivo:
         raise ValueError(motivo)
@@ -154,22 +165,31 @@ def canario_respeta_la_fecha(respuesta) -> Optional[str]:
     sin_marca = sum(1 for e in elementos if not isinstance(e.get("timestamp"), str))
     if sin_marca:
         return f"{sin_marca} de {len(elementos)} elementos del canario no traen `timestamp`"
-    posteriores = [e["timestamp"] for e in elementos if e["timestamp"] > CANARIO_FECHA]
+    marcas = [e["timestamp"] for e in elementos]
+    posteriores = [t for t in marcas if t > fecha]
     if posteriores:
         return (
             f"el espejo ignoró la fecha: {len(posteriores)} de {len(elementos)} elementos tienen una versión posterior a "
-            f"{CANARIO_FECHA} (la más reciente, {max(posteriores)})"
+            f"{fecha} (la más reciente, {max(posteriores)})"
+        )
+    desde = (datetime.strptime(fecha, FORMATO_FECHA) - timedelta(days=CANARIO_VENTANA_DIAS)).strftime(FORMATO_FECHA)
+    if max(marcas) < desde:
+        return (
+            f"el espejo va atrasado: ninguna versión de los {CANARIO_VENTANA_DIAS} días anteriores a {fecha} "
+            f"(la más reciente, {max(marcas)})"
         )
     return None
 
 
-def verificar_espejo(cliente, endpoint: str) -> Optional[str]:
-    """Pide el canario a un espejo y devuelve None si respeta la fecha o el motivo DEFINITIVO si no. Cualquier problema
-    pasajero (red, HTTP, JSON, `remark`, respuesta recortada) sube como excepción y el espejo no queda marcado: se podrá
-    volver a probar en la ronda siguiente."""
-    r = cliente.session.post(endpoint, data={"data": consulta_canario()}, timeout=(TIMEOUT_CONEXION_S, TIMEOUT_HTTP_S))
+def verificar_espejo(cliente, endpoint: str, fecha: str) -> Optional[str]:
+    """Pide el canario de `fecha` a un espejo y devuelve None si respeta la fecha o el motivo DEFINITIVO si no. Cualquier
+    problema pasajero (red, HTTP, JSON, `remark`, respuesta recortada) sube como excepción y el espejo no queda marcado: se
+    podrá volver a probar en la ronda siguiente."""
+    r = cliente.session.post(
+        endpoint, data={"data": consulta_canario(fecha)}, timeout=(TIMEOUT_CONEXION_S, TIMEOUT_HTTP_S)
+    )
     r.raise_for_status()
-    return canario_respeta_la_fecha(r.json())
+    return canario_respeta_la_fecha(r.json(), fecha)
 
 
 def respuesta_valida(respuesta) -> Optional[str]:
@@ -195,10 +215,10 @@ def pedir(
     rondas: Optional[int] = None,
     espera_s: Optional[float] = None,
     dormir=None,
-    verificados: Optional[Dict[str, Optional[str]]] = None,
+    verificados: Optional[Dict[Tuple[str, str], Optional[str]]] = None,
 ) -> Tuple[dict, str]:
     """Envía la consulta probando cada espejo en orden; devuelve (JSON, espejo). Para un instante pasado, antes de usar un
-    espejo se le pasa el canario (una sola vez: el resultado queda en `verificados`) y se descarta el que ignore la fecha.
+    espejo se le pasa el canario de esa fecha (una sola vez: el resultado queda en `verificados`) y se descarta el que ignore la fecha.
     Si TODOS fallan se espera `espera_s` y se vuelve a empezar, hasta `rondas` rondas (los espejos públicos se saturan y se
     recuperan). Lanza RuntimeError con el motivo de CADA espejo en la última ronda."""
     rondas = RONDAS if rondas is None else rondas
@@ -211,12 +231,13 @@ def pedir(
         for endpoint in cliente.endpoints:
             try:
                 if fecha_pedida is not None:
-                    if endpoint not in verificados:  # un problema pasajero sube como excepción y no se marca
-                        verificados[endpoint] = verificar_espejo(cliente, endpoint)
+                    clave = (endpoint, fecha_pedida)  # un canario por espejo y por fecha
+                    if clave not in verificados:  # un problema pasajero sube como excepción y no se marca
+                        verificados[clave] = verificar_espejo(cliente, endpoint, fecha_pedida)
                         if PAUSA_S:  # el canario es una petición más: pausa antes de la consulta pesada
                             dormir(PAUSA_S)
-                    if verificados[endpoint]:
-                        raise ValueError(verificados[endpoint])
+                    if verificados[clave]:
+                        raise ValueError(verificados[clave])
                 r = cliente.session.post(
                     endpoint, data={"data": consulta}, timeout=(TIMEOUT_CONEXION_S, TIMEOUT_HTTP_S)
                 )
@@ -268,9 +289,8 @@ def descargar(
         "archivos": {a: d for a, d in previos.items() if (out_dir / a).exists()},
         "fallidos": [],
     }
-    verificados: Dict[str, Optional[str]] = (
-        {}
-    )  # espejo -> None si respeta la fecha, o el motivo si no (se verifica una vez)
+    # (espejo, fecha) -> None si el espejo respeta esa fecha, o el motivo definitivo si no (se verifica una vez por par)
+    verificados: Dict[Tuple[str, str], Optional[str]] = {}
     for k, (nombre, franja, fecha, consulta) in enumerate(trabajo):
         t0 = time.perf_counter()
         archivo = f"{nombre}_{franja}.json"
