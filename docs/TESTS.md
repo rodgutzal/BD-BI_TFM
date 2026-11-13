@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 894 funciones de test · 989 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 901 funciones de test · 1004 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 52 | 57+ |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 59 | 72+ |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -518,6 +518,13 @@
 - `test_el_manifiesto_se_ignora_si_el_anterior_esta_roto_o_apunta_a_archivos_borrados` — Un manifiesto ilegible no impide descargar, y no se heredan entradas de archivos que ya no existen.
 - `test_un_cuerpo_json_cortado_a_la_mitad_es_un_fallo_y_se_prueba_otro_espejo` — Un corte de red deja el JSON a medias y `r.json()` falla: es un fallo del espejo, no una respuesta parcial que se guarde. (Es la forma realista de «respuesta truncada»; con un `remark` o sin `elements` ya se rechazaba.)
 - `test_si_el_cuerpo_llega_cortado_en_todos_los_espejos_no_se_escribe_nada` — El trozo queda en `fallidos` con el motivo y no se crea su archivo (nunca un JSON a medias o vacío).
+- `test_un_timestamp_malformado_en_el_canario_es_un_problema_pasajero` ×9 — Comparar como texto un valor que no es una fecha ISO válida daría un veredicto sin sentido (aceptar o rechazar un espejo por una cadena rara): se trata como respuesta defectuosa, pasajera, igual que la falta de `timestamp`.
+- `test_un_timestamp_malformado_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recupera` — A nivel de `pedir`: una respuesta defectuosa con un timestamp raro no deja marcado el espejo; la ronda siguiente (con el canario bien) lo acepta.
+- `test_una_marca_valida_se_acepta_y_una_inventada_con_la_forma_correcta_no` — `_marca_valida` exige una fecha real, no solo el aspecto `AAAA-MM-DDThh:mm:ssZ`.
+- `test_elements_con_algo_que_no_es_un_objeto_es_una_respuesta_invalida` — Si `elements` trae números o cadenas en vez de objetos no se puede guardar ni interpretar: fallo visible.
+- `test_limpiar_elemento_conserva_solo_los_campos_de_la_lista_blanca` — Se quedan tipo, id, posición y etiquetas; se van versión, fecha, conjunto de cambios, uid y nombre de usuario.
+- `test_los_datos_guardados_no_contienen_datos_de_colaboradores_aunque_el_espejo_los_envie` — Aunque un espejo devolviera `user`/`uid` en una respuesta normal, no llegan al JSON del disco, ni al manifiesto, ni a lo que se imprime. Es una garantía explícita, no un efecto de usar `out center tags`.
+- `test_el_canario_no_guarda_nada_en_disco` — El canario (el único con `out meta`, con usuarios y uid) solo se comprueba en memoria: ningún archivo lo contiene.
 
 ## `tests/test_ensemble_predictor.py`
 

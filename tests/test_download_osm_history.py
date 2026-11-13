@@ -256,7 +256,7 @@ def test_elementos_sin_timestamp_en_el_canario_son_un_problema_pasajero_no_defin
     elementos = [{"type": "node", "id": i, "timestamp": ANTIGUO} for i in range(30)]
     for e in elementos[:sin_marca]:
         del e["timestamp"]
-    with pytest.raises(ValueError, match=f"{sin_marca} de 30 elementos del canario no traen `timestamp`"):
+    with pytest.raises(ValueError, match=f"{sin_marca} de 30 elementos del canario no traen un `timestamp` ISO válido"):
         dh.canario_respeta_la_fecha({"elements": elementos}, FECHA)
 
 
@@ -281,7 +281,7 @@ def test_un_espejo_que_nunca_admite_meta_falla_a_la_vista_tras_agotar_las_rondas
         return {"osm3s": {}, "elements": [{"type": "node", "id": i} for i in range(30)]}
 
     cliente = ClienteFalso({"https://a": sin_timestamp})
-    with pytest.raises(RuntimeError, match="no traen `timestamp`"):
+    with pytest.raises(RuntimeError, match="no traen un `timestamp` ISO válido"):
         dh.pedir(cliente, "q", FECHA, rondas=2, espera_s=0, dormir=lambda s: None)
     assert cliente.consultas_reales() == 0 and cliente.canarios() == 2
 
@@ -654,3 +654,153 @@ def test_si_el_cuerpo_llega_cortado_en_todos_los_espejos_no_se_escribe_nada(tmp_
     assert [f["archivo"] for f in m["fallidos"]] == ["hoy_1.json", "ciclo_de_vida_0.json"]
     assert all("ValueError" in f["error"] for f in m["fallidos"])
     assert not (tmp_path / "hoy_1.json").exists() and not (tmp_path / "ciclo_de_vida_0.json").exists()
+
+
+# ---- timestamps malformados: pasajeros, no definitivos --------------------------------------------------------------
+@pytest.mark.parametrize(
+    "marca",
+    [
+        "hace dos años",  # texto cualquiera
+        "2021-06-01 10:00:00",  # sin T ni Z
+        "2021-06-01T10:00:00",  # sin Z
+        "2021-06-01T10:00:00.123Z",  # con milisegundos (no es el formato de Overpass)
+        "2021-13-45T99:99:99Z",  # con la forma pero no es una fecha real
+        "2021-6-1T10:0:0Z",  # `strptime` la acepta, pero sin ceros no se ordena bien como texto
+        "",
+        None,
+        20210601,
+    ],
+)
+def test_un_timestamp_malformado_en_el_canario_es_un_problema_pasajero(marca):
+    """Comparar como texto un valor que no es una fecha ISO válida daría un veredicto sin sentido (aceptar o rechazar un
+    espejo por una cadena rara): se trata como respuesta defectuosa, pasajera, igual que la falta de `timestamp`."""
+    elementos = [{"type": "node", "id": i, "timestamp": ANTIGUO} for i in range(29)] + [
+        {"type": "node", "id": 99, "timestamp": marca}
+    ]
+    with pytest.raises(ValueError, match="1 de 30 elementos del canario no traen un `timestamp` ISO válido"):
+        dh.canario_respeta_la_fecha({"elements": elementos}, FECHA)
+
+
+def test_un_timestamp_malformado_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recupera():
+    """A nivel de `pedir`: una respuesta defectuosa con un timestamp raro no deja marcado el espejo; la ronda siguiente
+    (con el canario bien) lo acepta."""
+
+    def con_marca_rara(consulta):
+        return {
+            "osm3s": {},
+            "elements": [{"type": "node", "id": i, "timestamp": "no es una fecha"} for i in range(30)],
+        }
+
+    cliente = ClienteFalso({"https://a": [con_marca_rara, servidor(n=2)]})
+    verificados, esperas = {}, []
+    datos, espejo = dh.pedir(cliente, "q", FECHA, rondas=3, espera_s=90, dormir=esperas.append, verificados=verificados)
+    assert espejo == "https://a" and len(datos["elements"]) == 2
+    assert verificados == {("https://a", FECHA): None} and esperas == [90]
+
+
+def test_una_marca_valida_se_acepta_y_una_inventada_con_la_forma_correcta_no():
+    """`_marca_valida` exige una fecha real, no solo el aspecto `AAAA-MM-DDThh:mm:ssZ`."""
+    assert dh._marca_valida("2021-12-28T07:25:11Z") and not dh._marca_valida("2021-02-30T07:25:11Z")
+
+
+# ---- elementos que no son objetos ------------------------------------------------------------------------------------
+def test_elements_con_algo_que_no_es_un_objeto_es_una_respuesta_invalida():
+    """Si `elements` trae números o cadenas en vez de objetos no se puede guardar ni interpretar: fallo visible."""
+    assert "no es un objeto" in dh.respuesta_valida({"osm3s": {}, "elements": [{"type": "node", "id": 1}, 7]})
+    assert dh.respuesta_valida({"osm3s": {}, "elements": [{"type": "node", "id": 1}]}) is None
+
+
+# ---- privacidad: lista blanca de campos al escribir ------------------------------------------------------------------
+CON_METADATOS = {
+    "osm3s": {"timestamp_osm_base": HORA_ACTUAL_DEL_SERVIDOR},
+    "elements": [
+        {
+            "type": "node",
+            "id": 7,
+            "lat": 35.9,
+            "lon": 14.5,
+            "tags": {"amenity": "cafe", "name": "Café Prueba"},
+            "version": 3,
+            "timestamp": "2021-06-01T10:00:00Z",
+            "changeset": 123456,
+            "uid": 424242,
+            "user": "colaborador_secreto",
+        },
+        {
+            "type": "way",
+            "id": 8,
+            "center": {"lat": 35.91, "lon": 14.51},
+            "tags": {"amenity": "bar"},
+            "user": "otro_colaborador",
+            "uid": 99,
+        },
+    ],
+}
+
+
+def test_limpiar_elemento_conserva_solo_los_campos_de_la_lista_blanca():
+    """Se quedan tipo, id, posición y etiquetas; se van versión, fecha, conjunto de cambios, uid y nombre de usuario."""
+    limpio = dh.limpiar_elemento(CON_METADATOS["elements"][0])
+    assert limpio == {
+        "type": "node",
+        "id": 7,
+        "lat": 35.9,
+        "lon": 14.5,
+        "tags": {"amenity": "cafe", "name": "Café Prueba"},
+    }
+    assert dh.limpiar_elemento(CON_METADATOS["elements"][1]) == {
+        "type": "way",
+        "id": 8,
+        "center": {"lat": 35.91, "lon": 14.51},
+        "tags": {"amenity": "bar"},
+    }
+
+
+def test_los_datos_guardados_no_contienen_datos_de_colaboradores_aunque_el_espejo_los_envie(tmp_path, capsys):
+    """Aunque un espejo devolviera `user`/`uid` en una respuesta normal, no llegan al JSON del disco, ni al manifiesto, ni
+    a lo que se imprime. Es una garantía explícita, no un efecto de usar `out center tags`."""
+    cliente = ClienteFalso(
+        {"https://x": lambda consulta: CON_METADATOS if "meta" not in consulta else servidor()(consulta)}
+    )
+    m = dh.descargar(cliente, tmp_path, ["2022-01-01"], pausa_s=0, log=print)
+    salida = capsys.readouterr().out
+    assert m["fallidos"] == []
+    textos = [p.read_text(encoding="utf-8") for p in tmp_path.glob("*.json")] + [salida]
+    for texto in textos:
+        for prohibido in (
+            "colaborador_secreto",
+            "otro_colaborador",
+            "424242",
+            "changeset",
+            '"uid"',
+            '"user"',
+            "version",
+        ):
+            assert prohibido not in texto, prohibido
+    guardado = json.loads((tmp_path / "2022-01-01_0.json").read_text(encoding="utf-8"))
+    assert [sorted(e) for e in guardado["elements"]] == [
+        ["id", "lat", "lon", "tags", "type"],
+        ["center", "id", "tags", "type"],
+    ]
+    assert m["archivos"]["2022-01-01_0.json"]["elementos"] == 2  # el recuento no cambia por limpiar
+
+
+def test_el_canario_no_guarda_nada_en_disco(tmp_path):
+    """El canario (el único con `out meta`, con usuarios y uid) solo se comprueba en memoria: ningún archivo lo contiene."""
+    pedido = {"n": 0}
+
+    def con_usuarios(consulta):
+        if "meta" in consulta:
+            pedido["n"] += 1
+            return {
+                "osm3s": {},
+                "elements": [
+                    {"type": "node", "id": i, "timestamp": ANTIGUO, "user": "colaborador_secreto", "uid": 1}
+                    for i in range(30)
+                ],
+            }
+        return respuesta(2)
+
+    dh.descargar(ClienteFalso({"https://x": con_usuarios}), tmp_path, ["2022-01-01"], pausa_s=0, log=lambda *_: None)
+    assert pedido["n"] == 1
+    assert all("colaborador_secreto" not in p.read_text(encoding="utf-8") for p in tmp_path.iterdir())

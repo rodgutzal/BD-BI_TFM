@@ -15,6 +15,8 @@ Qué hace y qué NO hace:
     de 2024 u hoy). El espejo que falla se rechaza y se prueba el siguiente. (No se puede usar `osm3s.timestamp_osm_base`:
     medido en overpass-api.de, trae la hora ACTUAL del servidor aunque los datos sean de 2022, así que rechazaría
     respuestas históricas válidas.)
+  - Solo se GUARDAN type, id, lat, lon, center y tags de cada elemento (lista blanca): aunque un espejo devolviera `user`,
+    `uid`, `changeset`, `version` o `timestamp` (datos de colaboradores de OSM), no se escriben a disco ni al manifiesto.
   - Rechaza también una respuesta con HTTP 200 pero un `remark` de error, sin `elements`, o un cuerpo que no sea un JSON
     completo (un corte de red deja el JSON a medias y falla al leerlo). Una respuesta parcial pero JSON válido y sin `remark`
     no es un modo de fallo conocido de Overpass, y no se puede distinguir de una legítima con certeza: por eso el análisis
@@ -30,6 +32,7 @@ Uso (desde la raíz del proyecto):
 import argparse
 import hashlib
 import json
+import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -129,6 +132,11 @@ CANARIO_MIN_ELEMENTOS = 20
 # Debe haber alguna versión de los 2 años anteriores a la fecha; si no, el espejo va atrasado.
 CANARIO_VENTANA_DIAS = 730
 FORMATO_FECHA = "%Y-%m-%dT%H:%M:%SZ"
+_PATRON_MARCA = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+# Campos de cada elemento que SE GUARDAN. `out meta` (solo el canario) devuelve además `user`, `uid`, `changeset`,
+# `timestamp` y `version`, que son datos de colaboradores de OSM y no hacen falta: aunque un espejo los incluyera en una
+# respuesta normal, no se escriben a disco.
+CLAVES_ELEMENTO = ("type", "id", "lat", "lon", "center", "tags")
 
 
 def consulta_canario(fecha: str) -> str:
@@ -139,6 +147,17 @@ def consulta_canario(fecha: str) -> str:
         f'[out:json][timeout:{TIMEOUT_SERVIDOR_S}][date:"{fecha}"];\n'
         f"(\n  node{selector}({b});\n  way{selector}({b});\n);\nout center meta;"
     )
+
+
+def _marca_valida(marca) -> bool:
+    """True si `marca` es una fecha ISO `AAAA-MM-DDThh:mm:ssZ` real (no solo con la forma: «2021-13-45T99:99:99Z» no vale)."""
+    if not isinstance(marca, str) or not _PATRON_MARCA.match(marca):
+        return False
+    try:
+        datetime.strptime(marca, FORMATO_FECHA)
+    except ValueError:
+        return False
+    return True
 
 
 def canario_respeta_la_fecha(respuesta, fecha: str) -> Optional[str]:
@@ -165,9 +184,12 @@ def canario_respeta_la_fecha(respuesta, fecha: str) -> Optional[str]:
         raise ValueError(
             f"el canario devolvió solo {len(elementos)} elementos (se esperaban al menos {CANARIO_MIN_ELEMENTOS})"
         )
-    sin_marca = sum(1 for e in elementos if not isinstance(e.get("timestamp"), str))
-    if sin_marca:  # no admite `meta`, o respuesta defectuosa: no se sabe cuál, así que NO se descarta de por vida
-        raise ValueError(f"{sin_marca} de {len(elementos)} elementos del canario no traen `timestamp`")
+    # Sin `timestamp`, o con uno que no es una fecha ISO `AAAA-MM-DDThh:mm:ssZ` válida (comparar como texto un valor malformado
+    # daría un veredicto sin sentido): no admite `meta`, o respuesta defectuosa. No se sabe cuál de las dos, así que NO se
+    # descarta de por vida.
+    sin_marca = sum(1 for e in elementos if not _marca_valida(e.get("timestamp")))
+    if sin_marca:
+        raise ValueError(f"{sin_marca} de {len(elementos)} elementos del canario no traen un `timestamp` ISO válido")
     marcas = [e["timestamp"] for e in elementos]
     posteriores = [t for t in marcas if t > fecha]
     if posteriores:
@@ -208,7 +230,14 @@ def respuesta_valida(respuesta) -> Optional[str]:
         return f"Overpass avisa de un error en la consulta: {str(respuesta['remark'])[:140]}"
     if not isinstance(respuesta.get("elements"), list):
         return "la respuesta no trae la lista `elements`"
+    if not all(isinstance(e, dict) for e in respuesta["elements"]):
+        return "`elements` contiene algo que no es un objeto"
     return None
+
+
+def limpiar_elemento(elemento: dict) -> dict:
+    """El elemento con solo los campos de `CLAVES_ELEMENTO` (lista blanca): sin `user`, `uid`, `changeset`..."""
+    return {k: elemento[k] for k in CLAVES_ELEMENTO if k in elemento}
 
 
 def pedir(
@@ -299,7 +328,7 @@ def descargar(
         archivo = f"{nombre}_{franja}.json"
         try:
             datos, endpoint = pedir(cliente, consulta, fecha, rondas, espera_s, verificados=verificados)
-            elementos = datos.get("elements", [])
+            elementos = [limpiar_elemento(e) for e in datos["elements"]]  # solo los campos de la lista blanca
             ruta = out_dir / archivo
             ruta.write_text(
                 json.dumps(
