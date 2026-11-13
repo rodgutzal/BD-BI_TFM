@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**49 archivos · 810 funciones de test · 900 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**50 archivos · 811 funciones de test · 901 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -35,6 +35,7 @@
 | [`tests/test_location_scoring.py`](#teststest_location_scoringpy) | 22 | 22 |
 | [`tests/test_locations.py`](#teststest_locationspy) | 5 | 5 |
 | [`tests/test_medallion.py`](#teststest_medallionpy) | 20 | 20 |
+| [`tests/test_merge_legacy_data.py`](#teststest_merge_legacy_datapy) | 1 | 1 |
 | [`tests/test_migrations.py`](#teststest_migrationspy) | 18 | 18 |
 | [`tests/test_ml_context.py`](#teststest_ml_contextpy) | 33 | 33+ |
 | [`tests/test_ml_grid.py`](#teststest_ml_gridpy) | 19 | 22 |
@@ -600,6 +601,12 @@
 - `test_gold_resumen_ejecutivo_en_base_vacia_devuelve_ceros_no_error` — Regresión: AVG()/SUM() sin filas dan NULL y float(NaN) reventaba, así que en un clon limpio (sin histórico) Executive mostraba "Error loading summary data".
 - `test_gold_resumen_ejecutivo_con_datos` — El resumen ejecutivo de Gold cuenta rutas y mediciones y da el tiempo de viaje promedio del sistema.
 - `test_pipeline_completo_es_idempotente` — El pipeline completo (Bronze, Silver y Gold) es idempotente: ejecutarlo de nuevo no cambia los recuentos de cada capa.
+
+## `tests/test_merge_legacy_data.py`
+
+> Pruebas de la herramienta de fusión heredada (`tools/merge_legacy_data.py`).
+
+- `test_sin_el_csv_de_tomtom_se_detiene_sin_tocar_la_base` — El CSV de TomTom ya no se publica. La herramienta borra la base unificada antes de regenerarla, así que sin ese archivo debe salir con un mensaje claro y dejar la base intacta (no sustituirla por una a medias).
 
 ## `tests/test_migrations.py`
 

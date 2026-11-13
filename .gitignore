@@ -60,3 +60,11 @@ models/*.pkl
 
 # Paquete de entrada del ML para entrenar en otra maquina (tools/export_ml_inputs.py): se regenera
 data/ml_inputs*.sqlite
+
+# Datos de TomTom: sus terminos prohiben almacenar y redistribuir los resultados (ver docs/DATOS_Y_LICENCIAS.md).
+# Que no vuelvan al repo publico por accidente.
+data/raw/legacy_tomtom_*.csv
+notebooks/mobility_data_full_*.csv
+
+# Salida HTML ya generada del .Rmd: trae filas de TomTom en sus tablas. Se regenera con R (knit); no se versiona.
+notebooks/Asignatura7_Modelado_Predictivo.html

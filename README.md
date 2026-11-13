@@ -79,7 +79,6 @@ BD_BI_TFM/
 │   ├── raw/
 │   │   ├── route_weather_data.csv              ← histórico fusionado (esquema unificado), ~78.500 filas al 6-nov-2026 y creciendo
 │   │   ├── legacy_ors_traffic_weather_data.csv  ← CSV original de BD_BI_TFM, sin tocar
-│   │   ├── legacy_tomtom_route_weather_data.csv ← CSV original de urban-mobility, sin tocar
 │   │   └── traffic_weather_data.csv             ← ⚠️ huérfano: solo lo generaba api_extraction.py (no usado, ver abajo)
 │   ├── processed/                               ← ⚠️ huérfano: solo lo generaba cleaning.py (no usado, ver abajo); 2 archivos de bytes, no reflejan el histórico real
 │   └── mobility.db                              ← SQLite: route_measurements + pois + bronze/silver/gold
@@ -562,6 +561,7 @@ Convenciones: un archivo por módulo o tema; **ningún test toca `data/mobility.
 | `test_ensemble_predictor.py` | `EnsemblePredictor`: features, entrenamiento, predicción con intervalos de confianza, anomalías, guardar y cargar, y la medición **fuera de muestra** de `train()` (corte cronológico aunque las filas lleguen de la más reciente a la más antigua, referencias de media y de último valor de la misma fuente, cambio de nivel al final, el modelo definitivo reajustado con todos los datos, pocas filas o sin fecha: solo R² en muestra, y el promedio ponderado del ensemble) |
 | `test_foursquare_client.py` | Categorización con nombres reales de Foursquare, `build_search_points` (7 zonas + 20 intermedios = 27 llamadas) y los dos formatos de respuesta |
 | `test_formatter_pins.py` | Las versiones fijadas de black e isort coinciden en el workflow, `requirements-dev.txt` y el README, y el CI comprueba el formato (sin neutralizar el paso con `|| true`) de todos los archivos de código, que existen, con la configuración de `pyproject.toml` |
+| `test_merge_legacy_data.py` | La fusión heredada se detiene, sin tocar la base, si falta el CSV de TomTom (que ya no se publica) |
 | `test_hybrid_scheduler.py` | `HybridScheduler`: cada fuente con su propio reloj, primer ciclo inmediato y cierre por señal. **Ojo:** simula la lógica con una función auxiliar en vez de ejecutar `run()`; el bucle real lo prueba `test_collector.py` |
 | `test_collector.py` | `DataCollector` de punta a punta con clientes falsos y sin esperas: un ciclo guarda las 12 rutas en CSV y SQLite, clima por lugar, umbral de "Alta demora" (>20 min, estricto), tolerancia a fallos de clima/ruta/guardado, TimescaleDB solo con configuración, heartbeat (redirigido, no toca `logs/`), medallón incremental (cada ciclo procesa solo sus filas), el bucle real de `HybridScheduler` y la parada por Ctrl+C o SIGTERM (el ciclo en curso termina y se guarda, los clientes se cierran al salir, una segunda señal sale ya y el compose da 90 s de gracia) |
 | `test_ml_grid.py` | Rejilla de 250 m (fija, 45×51 celdas, bordes, identificadores, vecindad por anillos sin dar la vuelta) y conteos por celda × subcategoría (`Selector`, POIs fuera de la rejilla, tabla precalculada) |
@@ -980,11 +980,12 @@ El **código** de este repositorio se distribuye bajo la licencia **MIT** (ver [
 - **TomTom, OpenRouteService (HeiGIT), OpenWeather, Foursquare y Google Data Commons**: cada proveedor tiene sus condiciones de uso y de almacenamiento y redistribución de resultados.
 
 **Datos de terceros que SÍ están en este repositorio** (la base `data/mobility.db` y los CSV recientes no se versionan, ver `.gitignore`):
-- `data/raw/legacy_tomtom_route_weather_data.csv` (~22 MB, 2.665 filas de rutas de TomTom con clima de OpenWeather y la geometría de la ruta) y `data/raw/legacy_ors_traffic_weather_data.csv` / `traffic_weather_data.csv` (ORS y OpenWeather): histórico heredado.
-- `data/ml/` (conteos por celda y panorama): derivados de OpenStreetMap y de las mediciones de rutas.
+- `notebooks/mobility_data_sample_ors_openweather.csv` (muestra de mediciones de ORS con clima de OpenWeather) y `data/raw/legacy_ors_traffic_weather_data.csv` / `traffic_weather_data.csv` (ORS y OpenWeather): ORS se licencia CC BY-SA 4.0 y OpenWeather guardado y publicado queda bajo ODbL; ambos exigen atribución.
+- `data/ml/` (conteos por celda y panorama): derivados de OpenStreetMap, bajo ODbL con atribución. **Punto abierto:** las columnas de brecha de `panorama.csv` salen de un modelo que usa como variables la población por zona (Google Data Commons) y el tiempo de viaje medio de las rutas, que incluye mediciones de TomTom; ver [docs/DATOS_Y_LICENCIAS.md](docs/DATOS_Y_LICENCIAS.md).
 
-La licencia MIT **no relicencia** esos datos. Mientras el repositorio sea público, conviene revisar si las condiciones de cada proveedor permiten publicarlos. Los textos de `data/text/` (frases de entrenamiento y evaluación del clasificador) los escribió el autor y quedan bajo MIT. Si publicas resultados o datos derivados (por ejemplo, en el TFM), cita las fuentes.
+**Datos de TomTom: NO se publican.** Sus términos prohíben almacenar y redistribuir los resultados de su API y combinarlos con datos de licencia *copyleft*, así que se retiraron de la rama principal (siguen en la historia anterior hasta que se reescriba) y `.gitignore` impide volver a añadirlos; también se dejó de versionar la salida HTML del `.Rmd`, que traía filas de TomTom. Consecuencia: los *notebooks* usan solo la muestra de ORS + OpenWeather (sin componente de tráfico), el `.ipynb` va sin salidas y sus cifras no coinciden con las de antes.
 
+La licencia MIT **no relicencia** los datos. Las condiciones, atribuciones y el detalle de cada archivo están en [`docs/DATOS_Y_LICENCIAS.md`](docs/DATOS_Y_LICENCIAS.md). Los textos de `data/text/` (frases de entrenamiento y evaluación del clasificador) los escribió el autor y quedan bajo MIT. Si publicas resultados o datos derivados (por ejemplo, en el TFM), cita las fuentes.
 ---
 
 ## Documentación adicional
