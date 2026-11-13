@@ -178,14 +178,40 @@ def test_respuesta_aplica_la_abstencion():
     assert tt.respuesta(clases, np.array([[0.5, 0.3, 0.2]]), 0.5) == ["hospital"]  # justo en el umbral: responde
 
 
-def test_elegir_umbral_toma_el_de_mayor_exactitud_y_en_empate_el_mas_alto():
-    """Con probabilidades que no discriminan entre umbrales el empate lo gana el más alto (más prudente)."""
+def test_elegir_umbral_toma_el_mas_bajo_que_no_pasa_de_las_equivocadas_de_las_palabras_mas_la_tolerancia():
+    """El umbral es el más bajo cuyo híbrido no comete más respuestas equivocadas que las palabras clave (+2 puntos).
+    Aquí las palabras no responden nunca (0 equivocadas): a 0,6 o menos el clasificador contesta «hospital» a dos
+    frases fuera de alcance (2 de 3 equivocadas); a 0,65 se abstiene y deja de equivocarse."""
     clases = ["hospital", "ninguna"]
-    p = np.array([[0.99, 0.01], [0.98, 0.02]])
-    assert tt.elegir_umbral(clases, p, ["hospital", "hospital"]) == tt.UMBRALES[-1]
-    p2 = np.array([[0.6, 0.4], [0.6, 0.4], [0.9, 0.1]])  # a 0,6 y 0,9: dos «hospital» falsos para ninguna
-    assert tt.elegir_umbral(clases, p2, ["ninguna", "ninguna", "hospital"]) > 0.6
+    p = np.array([[0.6, 0.4], [0.6, 0.4], [0.9, 0.1]])
+    assert tt.elegir_umbral(clases, p, ["ninguna", "ninguna", "hospital"], [None, None, None]) == 0.65
 
+
+def test_elegir_umbral_la_tolerancia_incluye_el_borde_y_se_pasa_a_la_siguiente_rejilla():
+    """Con 98 frases de hospital bien respondidas y 2 fuera de alcance respondidas mal (2 %), el borde de la tolerancia
+    (palabras 0 % + 2 puntos) se cumple y sale el umbral más bajo; con 3 mal (3 %) ya no y hay que subirlo."""
+    clases = ["hospital", "ninguna"]
+    p = np.array([[0.9, 0.1]] * 98 + [[0.5, 0.5]] * 2)
+    sin_palabras = [None] * 100
+    assert tt.elegir_umbral(clases, p, ["hospital"] * 98 + ["ninguna"] * 2, sin_palabras) == tt.UMBRALES[0]
+    p3 = np.array([[0.9, 0.1]] * 97 + [[0.5, 0.5]] * 3)
+    assert tt.elegir_umbral(clases, p3, ["hospital"] * 97 + ["ninguna"] * 3, sin_palabras) == 0.55
+
+
+def test_elegir_umbral_si_ninguno_cumple_toma_el_mas_alto():
+    """Una frase fuera de alcance a la que el clasificador responde con 0,99 se contesta mal con cualquier umbral: sin
+    umbral válido se elige el más alto (el más prudente), no el más bajo."""
+    clases = ["hospital", "ninguna"]
+    p = np.array([[0.99, 0.01], [0.99, 0.01]])
+    assert tt.elegir_umbral(clases, p, ["ninguna", "hospital"], [None, None]) == tt.UMBRALES[-1]
+
+
+def test_elegir_umbral_mide_el_hibrido_no_el_clasificador_solo():
+    """Si las palabras clave ya responden bien una frase, lo que el clasificador diría de ella no cuenta: el híbrido solo
+    lo consulta cuando las palabras se abstienen. Aquí el clasificador solo se equivocaría siempre, el híbrido nunca."""
+    clases = ["hospital", "school"]
+    p = np.array([[0.1, 0.9], [0.1, 0.9]])
+    assert tt.elegir_umbral(clases, p, ["hospital", "hospital"], ["hospital", "hospital"]) == tt.UMBRALES[0]
 
 def test_bootstrap_pareado_con_diferencia_constante_y_con_diferencia_nula():
     """Si a acierta siempre y b nunca, el IC es [1, 1]; si son iguales, la diferencia es 0."""

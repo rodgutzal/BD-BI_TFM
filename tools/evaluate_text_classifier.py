@@ -73,12 +73,13 @@ def evaluar(
     c_lr, p_lr = tt.probabilidades_oof(
         X, y, lambda a, b, c: tt.probabilidades_sklearn(a, b, c, seed=seed), n_folds, seed
     )
-    umbral_lr, umbral_mlp = tt.elegir_umbral(c_lr, p_lr, y), None
+    palabras_tr = tt.palabras_clave(X)  # las palabras clave no se entrenan: sirven de referencia para el umbral
+    umbral_lr, umbral_mlp = tt.elegir_umbral(c_lr, p_lr, y, palabras_tr), None
     if con_mlp:
         c_mlp, p_mlp = tt.probabilidades_oof(
             X, y, lambda a, b, c: tt.probabilidades_mlp(a, b, c, seed=seed), n_folds, seed
         )
-        umbral_mlp = tt.elegir_umbral(c_mlp, p_mlp, y)
+        umbral_mlp = tt.elegir_umbral(c_mlp, p_mlp, y, palabras_tr)
 
     modelo = tt.entrenar_logistica(X, y, seed=seed)
     modelo.umbral = umbral_lr

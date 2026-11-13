@@ -328,6 +328,33 @@ El panorama aparece en **Recomendación**, debajo del resultado por zona (`strea
 
 **Qué haría falta para adoptarlo:** (i) un criterio de umbral coherente con la regla, fijado antes —p. ej. el umbral más bajo cuyas respuestas equivocadas fuera de muestra no superen las de las palabras clave más la tolerancia—; (ii) un conjunto de evaluación nuevo, idealmente con consultas reales o escritas por otras personas. Con eso, la herramienta ya está lista: `python tools/evaluate_text_classifier.py` (`--exportar data/ml` guarda el modelo y su manifiesto; `--sin-mlp` omite la red).
 
+### L2. Repetición de la fase 3: protocolo fijado antes de generar los datos (13-nov-2026)
+
+Este apartado se escribe y se sube al repositorio **antes** de generar el segundo conjunto de evaluación; el historial de git lo prueba. Corrige los dos defectos que dejó la sección L.
+
+**Qué cambia respecto a la primera evaluación**
+1. **El umbral de confianza se elige con un criterio coherente con la regla (b):** el más bajo cuyo híbrido no comete, fuera de muestra sobre el entrenamiento, más respuestas equivocadas que las palabras clave más 2 puntos (`elegir_umbral`). Antes se elegía el de mayor exactitud, que trata igual una respuesta equivocada que una pregunta sin respuesta.
+2. **Conjunto de evaluación nuevo, escrito por otro autor.** Las frases de evaluación de la sección L (200) quedan **consumidas** y no vuelven a usarse para decidir. El conjunto nuevo lo escribe **Codex** (un modelo de OpenAI), sin ver las 347 frases de entrenamiento ni las 200 de la primera evaluación: solo recibe las siete categorías con su definición, los cinco tipos de frase y las cuotas de abajo. No se le envía ningún dato del proyecto.
+
+**Lo que NO cambia:** las 347 frases de entrenamiento, el vectorizador, la regresión logística, la red MLP, las palabras clave, la rejilla de umbrales y la regla de decisión: (a) la exactitud del híbrido supera a la de las palabras clave con el IC por bootstrap pareado por encima de 0 y (b) sus respuestas equivocadas no pasan de las de las palabras clave más 2 puntos. **Después de ver los resultados no se cambia nada de lo anterior**; si se encuentra un error, se documenta y se repite la evaluación completa declarando que hubo una repetición.
+
+**Composición fijada de antemano (200 frases):**
+
+| Tipo | Frases | Qué es |
+|---|---|---|
+| directa | 40 | nombra el negocio, sin rodeos |
+| sinónimo | 40 | lo describe con otras palabras o con un término poco habitual |
+| errata | 30 | con faltas de ortografía o letras cambiadas |
+| larga | 50 | una frase con contexto, como la escribiría una persona al explicar su idea |
+| fuera de alcance | 40 | no describe un negocio (otro tema, ruido, algo vago o sin sentido) |
+
+Las 160 frases que sí describen un negocio se reparten así por categoría: `food_drink` 30, `business` 30, `hospital` 20, `school` 20, `sport` 20, `leisure` 20, `mall` 20 (las 40 fuera de alcance son la clase `ninguna`). Se pide además variedad de redacción (varios registros, español de distintos países, localidades de Malta cuando encaje) y que las frases parezcan consultas reales, no ejemplos escolares.
+
+**Etiquetado doble y ciego.** Una segunda sesión de Codex recibe solo las frases, **barajadas y sin etiqueta ni tipo**, más las definiciones de categoría, y las etiqueta. Las frases en las que su etiqueta **no coincide** con la del autor se consideran ambiguas: se **excluyen de la evaluación principal** y se evalúan aparte, informando cuántas son y cómo salen los sistemas en ellas. Esto ataca el límite 3 de la sección L (etiquetas discutibles) a costa de favorecer las frases claras, y se declara así. La regla de decisión se aplica al conjunto principal; el resultado sobre las 200 completas se informa también.
+
+**Control de calidad de los datos (mecánico, definido ya):** se descartan las frases vacías, las repetidas y las que coinciden (sin distinguir mayúsculas) con una de entrenamiento; se informa cuántas se descartaron. Si tras descartar quedan menos de las cuotas, se piden las que faltan a Codex con las mismas instrucciones, sin ver los resultados de ningún sistema.
+
+**Límites que siguen valiendo:** las frases las escribe un modelo de lenguaje, no usuarios reales (otro tipo de sesgo: puede ser más correcto y más variado que un usuario real, y su estilo no es el del entrenamiento escrito a mano); la composición la fijamos nosotros; 200 frases dan intervalos anchos; y el etiquetador ciego es también un modelo, así que su acuerdo con el autor mide consistencia, no verdad.
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
 
@@ -367,6 +394,6 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 1. **Resuelta para la fase 1b** (edificios, alojamiento, transporte e industria, a archivos temporales). Sigue pendiente la autorización del **estado histórico de toda el área** para la fase 4 (riesgo de cierre); la sonda inicial cubrió solo una zona.
 2. ¿Se añade **`torch`** (solo para entrenar, no en el dashboard)? El MLP de scikit-learn rindió peor y de forma inestable, en parte por no tener pérdida de Poisson (sección 3.G); una red con esa pérdida es la comparación justa que falta, pero es una dependencia pesada para un resultado que probablemente siga sin superar a la densidad.
 3. **Aplicado:** el criterio de éxito de la sección 4 se aplicó tal como estaba fijado y dio un resultado negativo (no se publica puntaje de ML). Queda por decidir qué hacer con la brecha de oferta en la fase 2: (a) no mostrarla, (b) mostrarla etiquetada como **exploratoria** junto a las lentes explícitas, o (c) esperar a la fase 1b.
-4. ¿Quién escribe las **~200 frases de evaluación** del clasificador de texto? Idealmente alguien que conozca el lenguaje real de los usuarios; yo puedo proponer un borrador.
+4. **En marcha (sección 3.L2):** las ~200 frases de evaluación las escribe Codex con etiquetado ciego. ¿Quién escribe las **~200 frases de evaluación** del clasificador de texto? Idealmente alguien que conozca el lenguaje real de los usuarios; yo puedo proponer un borrador.
 5. ¿Quién **revisa los valores por defecto de los perfiles de negocio** (sección E)? Ya no es crítico, porque el usuario puede corregirlos; basta con que alguien con criterio de negocio los repase una vez: el propio autor, su tutor o una persona con experiencia en el sector. Yo preparo el borrador completo. Si no hay revisión externa, el TFM debe decir que son criterio del autor.
 6. ¿Qué **umbral** de desviación del perfil por defecto activa el aviso al usuario (por ejemplo, quitar más de la mitad de los elementos de competencia)? Propongo empezar en la mitad y ajustarlo con las primeras pruebas.
