@@ -406,3 +406,75 @@ def test_el_softmax_es_estable_con_logits_enormes():
     m = tc.ModeloTexto(["a", "b"], {" x ": 0}, np.array([1.0]), np.array([[1000.0], [-1000.0]]), np.zeros(2), (3, 3))
     p = m.probabilidades("x")
     assert p["a"] == pytest.approx(1.0) and p["b"] == pytest.approx(0.0) and np.isfinite(list(p.values())).all()
+
+
+EVALUACION_V2 = etc.DATA / "frases_evaluacion_v2.psv"
+
+
+def test_la_evaluacion_v2_cumple_las_cuotas_fijadas_y_no_solapa_con_el_entrenamiento():
+    """El conjunto escrito por Codex tiene la composición fijada en el protocolo (§3.L2): 200 frases con las cuotas por
+    tipo y por categoría, sin repetidas ni coincidencias con el entrenamiento, y con la etiqueta ciega de cada una."""
+    tr, ev = etc.cargar(evaluacion=EVALUACION_V2)
+    assert len(ev) == 200 and etc.validar_datos(tr, ev) == []
+    assert ev["tipo"].value_counts().to_dict() == {
+        "larga": 50,
+        "directa": 40,
+        "sinonimo": 40,
+        "fuera": 40,
+        "errata": 30,
+    }
+    assert ev["categoria"].value_counts().to_dict() == {
+        "food_drink": 30,
+        "business": 30,
+        "ninguna": 40,
+        "hospital": 20,
+        "school": 20,
+        "sport": 20,
+        "leisure": 20,
+        "mall": 20,
+    }
+    assert set(ev.loc[ev["tipo"] == "fuera", "categoria"]) == {"ninguna"}
+    assert ev["ciego"].notna().all() and (ev["ciego"] != "").all()
+
+
+def test_solo_coincidentes_deja_las_frases_donde_autor_y_etiquetador_ciego_coinciden():
+    """Las ambiguas (etiqueta distinta) se quitan de la evaluación principal; no se tocan ni se reetiquetan las demás."""
+    ev = pd.DataFrame(
+        {
+            "tipo": ["directa", "directa", "errata"],
+            "categoria": ["hospital", "school", "ninguna"],
+            "frase": ["a", "b", "c"],
+            "ciego": ["hospital", "leisure", "ninguna"],
+        }
+    )
+    s = etc.solo_coincidentes(ev)
+    assert list(s["frase"]) == ["a", "c"] and list(s.index) == [0, 1]
+
+
+def test_validar_datos_rechaza_una_etiqueta_ciega_desconocida():
+    """Una etiqueta del etiquetador que no es una categoría (p. ej. una errata suya) invalida la evaluación."""
+    tr, ev = etc.cargar(evaluacion=EVALUACION_V2)
+    ev.loc[0, "ciego"] = "restaurante"
+    assert any("ciego" in p and "restaurante" in p for p in etc.validar_datos(tr, ev))
+
+
+def test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_escribio_las_frases(tmp_path, capsys):
+    """Con --solo-coincidentes se evalúan solo las frases con la misma etiqueta del autor y del etiquetador ciego, se
+    informa de cuántas se dejan fuera, y la advertencia del manifiesto ya no dice «mismo autor»."""
+    ruta = str(EVALUACION_V2)
+    assert (
+        etc.main(
+            ["--evaluacion", ruta, "--solo-coincidentes", "--boot", "100", "--sin-mlp", "--exportar", str(tmp_path)]
+        )
+        == 0
+    )
+    salida = capsys.readouterr().out
+    assert "Se evalúan 192 de 200 frases" in salida and "evaluación reservada: 192 frases" in salida
+    m = json.loads((tmp_path / "text_classifier_manifest.json").read_text(encoding="utf-8"))
+    assert m["datos"]["evaluacion"]["frases"] == 192 and "Codex" in m["advertencia"]
+
+
+def test_main_solo_coincidentes_sin_columna_ciego_se_niega(tmp_path, capsys):
+    """El archivo de evaluación antiguo no tiene la columna `ciego`: la opción lo dice en vez de fallar a medias."""
+    assert etc.main(["--solo-coincidentes"]) == 1
+    assert "columna `ciego`" in capsys.readouterr().out

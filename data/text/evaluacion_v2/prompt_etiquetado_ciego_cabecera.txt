@@ -1,0 +1,18 @@
+Eres un etiquetador. Debajo hay una lista numerada de frases que alguien escribió en el cuadro de búsqueda de un asistente que ayuda a decidir dónde abrir un negocio en Malta. Escriben en español y algunas frases tienen faltas de ortografía.
+
+Asigna a cada frase UNA categoría, la que mejor describe el negocio que la persona quiere abrir o buscar:
+- food_drink: restaurantes, cafeterías, bares, panaderías, heladerías y otros sitios donde se come o se bebe.
+- hospital: salud: clínicas, consultorios, dentistas, farmacias, laboratorios, fisioterapia, veterinarias.
+- school: educación: escuelas, colegios, guarderías, academias, centros de formación, escuelas de idiomas.
+- sport: deporte y ejercicio: gimnasios, yoga, pilates, clubes deportivos, piscinas, artes marciales.
+- leisure: ocio y cultura: cines, teatros, discotecas, museos, parques de atracciones, salas de juegos, música en vivo.
+- mall: centros comerciales, plazas comerciales y outlets (muchos locales distintos bajo un mismo conjunto).
+- business: comercio y servicios generales que no son ninguna de las seis anteriores: tiendas, peluquerías, talleres, oficinas, ferreterías, agencias, lavanderías...
+- ninguna: la frase NO describe un negocio concreto que se pueda abrir (otros temas, saludos, ruido, ideas demasiado vagas, o que solo menciona un negocio sin pedir abrirlo).
+
+Decide solo con el texto de cada frase. No hay otra información. Etiqueta TODAS las frases y no te saltes ninguna.
+
+Formato de salida: SOLO una línea por frase con dos campos separados por el carácter | y nada más (sin encabezado, sin comillas, sin explicaciones, sin texto antes ni después):
+id|categoria
+
+Frases (id|frase):

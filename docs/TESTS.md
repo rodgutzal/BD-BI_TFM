@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**50 archivos · 814 funciones de test · 904 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**50 archivos · 819 funciones de test · 909 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -43,7 +43,7 @@
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
 | [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 23 | 23 |
-| [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 37 | 50 |
+| [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 42 | 55 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_dashboard.py`](#teststest_operations_dashboardpy) | 7 | 7+ |
@@ -897,6 +897,11 @@
 - `test_la_regla_exige_que_el_intervalo_quede_por_encima_de_cero_no_solo_la_media` — Una mejora pequeña (2 aciertos más de 40) tiene media positiva pero un IC que llega a 0: no cumple la exactitud.
 - `test_el_bootstrap_da_un_intervalo_con_anchura_que_contiene_la_media` — Con diferencias variables el IC tiene anchura positiva y rodea a la media.
 - `test_el_softmax_es_estable_con_logits_enormes` — Con coeficientes gigantes no hay desbordamiento: las probabilidades siguen siendo válidas.
+- `test_la_evaluacion_v2_cumple_las_cuotas_fijadas_y_no_solapa_con_el_entrenamiento` — El conjunto escrito por Codex tiene la composición fijada en el protocolo (§3.L2): 200 frases con las cuotas por tipo y por categoría, sin repetidas ni coincidencias con el entrenamiento, y con la etiqueta ciega de cada una.
+- `test_solo_coincidentes_deja_las_frases_donde_autor_y_etiquetador_ciego_coinciden` — Las ambiguas (etiqueta distinta) se quitan de la evaluación principal; no se tocan ni se reetiquetan las demás.
+- `test_validar_datos_rechaza_una_etiqueta_ciega_desconocida` — Una etiqueta del etiquetador que no es una categoría (p. ej. una errata suya) invalida la evaluación.
+- `test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_escribio_las_frases` — Con --solo-coincidentes se evalúan solo las frases con la misma etiqueta del autor y del etiquetador ciego, se informa de cuántas se dejan fuera, y la advertencia del manifiesto ya no dice «mismo autor».
+- `test_main_solo_coincidentes_sin_columna_ciego_se_niega` — El archivo de evaluación antiguo no tiene la columna `ciego`: la opción lo dice en vez de fallar a medias.
 
 ## `tests/test_ml_validation.py`
 

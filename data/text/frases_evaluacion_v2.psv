@@ -1,0 +1,201 @@
+tipo|categoria|frase|ciego
+directa|food_drink|Cafetería pequeña por Sliema, con mesas para trabajar|food_drink
+directa|food_drink|¿Un sitio de tacos mexicanos en St Julian's?|food_drink
+directa|food_drink|Restaurante argentino en Valletta|food_drink
+directa|food_drink|Busco una panadería artesanal en Birkirkara|ninguna
+directa|food_drink|Heladería en Marsaskala, cerca del paseo|food_drink
+directa|food_drink|Bar de vinos en Gzira|food_drink
+directa|food_drink|Taquería de comida para llevar en Msida|food_drink
+directa|business|Peluquería canina en Mosta|business
+directa|business|Taller de motos por Birkirkara|business
+directa|business|Una lavandería autoservicio cerca de Msida|business
+directa|business|Agencia inmobiliaria en Sliema|business
+directa|business|Tienda de ropa infantil en Valletta|business
+directa|business|Ferretería en Marsaskala|business
+directa|business|Oficina de gestoría en Gzira|business
+directa|hospital|Clínica dental en St Julian's|hospital
+directa|hospital|Farmacia de guardia en Sliema|ninguna
+directa|hospital|Consultorio de fisioterapia por Msida|hospital
+directa|hospital|Laboratorio de análisis clínicos en Birkirkara|hospital
+directa|hospital|Veterinaria en Marsaskala|ninguna
+directa|school|Guardería bilingüe en Gzira|school
+directa|school|Academia de inglés en Valletta|school
+directa|school|Escuela de cocina en Sliema|school
+directa|school|Colegio privado en Birkirkara|school
+directa|school|Centro de formación profesional en Msida|school
+directa|sport|Gimnasio de barrio por Marsaskala|sport
+directa|sport|Estudio de pilates en Sliema|sport
+directa|sport|Club de natación en Gzira|sport
+directa|sport|Escuela de boxeo en Birkirkara|sport
+directa|sport|Clases de yoga en Valletta|sport
+directa|leisure|Cine en St Julian's|ninguna
+directa|leisure|Sala de juegos arcade en Msida|leisure
+directa|leisure|Teatro pequeño en Valletta|leisure
+directa|leisure|Discoteca con música latina en Paceville|leisure
+directa|leisure|Museo interactivo en Birkirkara|leisure
+directa|mall|Centro comercial en Sliema|mall
+directa|mall|Plaza comercial con varios locales en Gzira|mall
+directa|mall|Outlet de marcas en Valletta|mall
+directa|mall|Un mall familiar cerca de St Julian's|mall
+directa|mall|Centro comercial con tiendas y restaurantes en Birkirkara|mall
+directa|mall|Complejo de tiendas tipo outlet en Marsaskala|mall
+sinonimo|food_drink|Busco un sitio para tomar un café y unas medialunas por Sliema.|ninguna
+sinonimo|food_drink|¿Dónde pondrían una casa de comidas caseras en Marsaskala?|food_drink
+sinonimo|food_drink|Local para montar una cervecería artesanal en St Julian’s, ¿qué zona tira más?|food_drink
+sinonimo|food_drink|Estoy mirando locales para una pastelería francesa en Birkirkara.|food_drink
+sinonimo|food_drink|Un rinconcito de tacos y micheladas en Gżira: ¿viable?|food_drink
+sinonimo|food_drink|Me gustaría abrir una trattoria familiar cerca de Valletta.|food_drink
+sinonimo|food_drink|¿Qué tal funcionaría una horchatería con helados en Msida?|food_drink
+sinonimo|business|Necesito ubicar un lavaseco cerca de oficinas y residencias, ¿Sliema o Gżira?|business
+sinonimo|business|Estoy pensando en un taller de bicis en Birkirkara; ¿hay demanda?|business
+sinonimo|business|¿En qué barrio tendría sentido una barbería de toda la vida?|business
+sinonimo|business|Busco zona para montar un bazar de artículos para el hogar en Malta.|business
+sinonimo|business|Un estudio de uñas en St Julian’s, ¿mejor cerca del paseo o más hacia el interior?|business
+sinonimo|business|¿Dónde abrirían una agencia inmobiliaria con clientela internacional?|business
+sinonimo|business|Quiero instalar una copistería y centro de impresión por Msida, ¿cómo lo ven?|business
+sinonimo|hospital|Mi vieja necesita un podólogo; andamos viendo dónde montar una consulta en Malta.|hospital
+sinonimo|hospital|¿Qué localidad conviene para un centro de análisis clínicos?|hospital
+sinonimo|hospital|Busco un punto para una ortopedia canina y atención veterinaria en Marsaskala.|hospital
+sinonimo|hospital|Tenemos planes de poner una botica de barrio en Birkirkara.|hospital
+sinonimo|hospital|¿Gżira sería buen lugar para un gabinete de fisio y rehabilitación?|hospital
+sinonimo|school|Nos interesa poner un espacio de cuidado infantil por la zona de Msida.|school
+sinonimo|school|¿Dónde tendría más sentido una academia de inglés para adultos, en Sliema o Valletta?|school
+sinonimo|school|Se busca ubicación para un centro de refuerzo escolar en Birkirkara.|school
+sinonimo|school|Quisiera montar una ludoteca educativa para peques en Marsaskala.|school
+sinonimo|school|Un instituto de formación en cocina profesional, ¿en qué parte de Malta tendría salida?|school
+sinonimo|sport|Ando buscando dónde poner un box de crossfit en St Julian’s.|sport
+sinonimo|sport|¿Hay mercado para un dojo de judo en Birkirkara?|sport
+sinonimo|sport|Un estudio de reformer y estiramientos por Sliema, ¿buena idea?|sport
+sinonimo|sport|¿Qué zona les parece para abrir una escuela de natación con piscina cubierta?|sport
+sinonimo|sport|Busco local para entrenamientos de pádel en las afueras de Valletta.|sport
+sinonimo|leisure|Nos gustaría abrir una sala de escape en Gżira; ¿qué zona atrae más grupos?|leisure
+sinonimo|leisure|¿Dónde encajaría un cine de autor en Malta?|leisure
+sinonimo|leisure|Quiero montar un tablao con música en vivo por Valletta.|leisure
+sinonimo|leisure|¿St Julian’s da para una discoteca pequeña de música latina?|leisure
+sinonimo|leisure|Zona recomendada para una galería de realidad virtual y juegos arcade.|leisure
+sinonimo|mall|Estamos valorando un complejo con muchas tiendas y restaurantes bajo el mismo techo en Malta.|mall
+sinonimo|mall|¿En qué localidad tendría futuro un outlet con marcas de moda y artículos deportivos?|mall
+sinonimo|mall|Me interesa desarrollar una plaza comercial con varios negocios en Birkirkara.|mall
+sinonimo|mall|¿Sliema o Valletta para un conjunto de tiendas, cafés y servicios en un mismo recinto?|mall
+sinonimo|mall|Busco dónde instalar una galería comercial con distintos operadores en Malta.|mall
+sinonimo|mall|Un parque de tiendas outlet, ¿funcionaría mejor cerca de Msida o de St Julian’s?|mall
+errata|food_drink|Una cafetería pequeñita por Sliema, ¿qué tal?|food_drink
+errata|food_drink|Busco local para montar una panaderia en Birkirkara|food_drink
+errata|food_drink|¿Da para abrir un bar de tapas en St Julians?|food_drink
+errata|food_drink|Quiero poner una heladeria cerca del paseo de Marsaskala|food_drink
+errata|food_drink|Restaurante mexicáno en Gzira: ¿hay clientela?|food_drink
+errata|food_drink|Un puestito de café y bollos en La Valeta|food_drink
+errata|business|¿Hay demanda para una peluqueria en Msida?|business
+errata|business|Local para taller de bicis por Birkirkara|business
+errata|business|Me gustaría poner una lavandería autoservicio en Gzira|business
+errata|business|Agencia de viajes en Sliema, ¿funcionaría?|business
+errata|business|Ando buscando sitio para una ferretería chiquita en Marsaskala|business
+errata|business|¿Qué zona conviene para abrir una tienda de ropa en St Julian's?|business
+errata|hospital|Dentista infantil en Birkirkara, ¿hay hueco?|hospital
+errata|hospital|Una clínica de fisioterápia por Msida|hospital
+errata|hospital|¿Dónde podría montar una farmasia en Sliema?|hospital
+errata|school|Academia de inglés para adultos, pensaba en Gzira|school
+errata|school|Guardería de peques en Marsaskala, ¿se necesita?|school
+errata|school|Quiero abrir un cole de música cerca de Valletta|school
+errata|sport|¿Un gimnasio de barrio iría bien en Birkirkara?|sport
+errata|sport|Estudio de pilates en Sliema: ¿qué tal la zona?|sport
+errata|sport|Club de artes maricales por Msida|sport
+errata|leisure|¿Tendría público una sala de videojuegos en St Julian's?|leisure
+errata|leisure|Montar un cine pequeñito en Marsaskala, ¿viable?|leisure
+errata|leisure|Un bar con música en vivo por Gzira, ¿funcionará?|food_drink
+errata|mall|¿Hay espacio para un centro comercal en Sliema?|mall
+errata|mall|Un outlet de varias marcas en Birkirkara|mall
+errata|mall|¿Conviene una plaza comercial cerca de Valletta?|mall
+errata|mall|Centro comercial con tienditas y cafeterías por Msida|mall
+errata|mall|Estoy pensando en un pequeño centro de tiendas en Marsaskala|mall
+errata|mall|Un complejo comercal con varios locales en Gzira|mall
+larga|food_drink|Soy de Valencia y me gustaría montar una cafetería tranquila en Sliema, con desayunos sencillos y mesas donde la gente pueda trabajar un rato.|food_drink
+larga|food_drink|Mi hermana y yo vivimos en Malta desde hace poco; estamos pensando en abrir un restaurante argentino en St Julian’s, con empanadas y parrilla.|food_drink
+larga|food_drink|Busco un local en Valletta para vender pan de masa madre y bollería artesanal, porque en mi barrio echo de menos una panadería de verdad.|food_drink
+larga|food_drink|¿Qué tal sería poner una heladería familiar en Marsaskala? Hay muchas familias paseando por el paseo marítimo los fines de semana.|food_drink
+larga|food_drink|En Gzira quisiera empezar algo pequeño de comida mexicana para llevar, sobre todo tacos y tortas para la hora del almuerzo.|food_drink
+larga|food_drink|Soy colombiano y tengo experiencia como barista; quiero encontrar una zona adecuada para servir café de especialidad y arepas en Msida.|food_drink
+larga|food_drink|Mi pareja prepara pasteles por encargo y queremos dar el siguiente paso con un obrador que también tenga unas pocas mesas en Birkirkara.|food_drink
+larga|food_drink|Estoy valorando abrir un bar de vinos en Valletta, con tapas para compartir y música suave por la noche; ¿qué zonas podrían funcionar?|food_drink
+larga|food_drink|Me gustaría llevar a St Julian’s un sitio de comida saludable, con ensaladas y zumos para quienes salen de la oficina o del gimnasio.|food_drink
+larga|food_drink|Tenemos una pequeña cervecería artesanal y buscamos una localidad maltesa donde abrir un taproom con algo de picoteo.|food_drink
+larga|business|Soy peluquera y quiero montar mi propio salón en Birkirkara, cerca de zonas residenciales y con espacio para atender a varias clientas.|business
+larga|business|¿Dónde tendría sentido abrir una lavandería de autoservicio en Msida? Muchos estudiantes de la zona viven en pisos compartidos.|business
+larga|business|Trabajo reparando motos y me gustaría instalar un taller en las afueras de Gzira, con acceso cómodo para dejar los vehículos.|business
+larga|business|Después de varios años en una inmobiliaria de Madrid, quiero abrir una agencia pequeña en Valletta para atender también a clientes extranjeros.|business
+larga|business|Estoy pensando en poner una tienda de ropa infantil en Marsaskala, dirigida a familias que prefieren comprar cerca de casa.|business
+larga|business|Mi primo es electricista y yo llevo la administración; buscamos un local en Malta para ofrecer servicios de instalaciones y reparaciones a domicilio.|business
+larga|business|Quiero abrir una ferretería de barrio en Sliema, con herramientas y materiales básicos para residentes y pequeños contratistas.|business
+larga|business|Soy de Córdoba, Argentina, y estoy explorando dónde instalar una oficina de diseño gráfico en St Julian’s; trabajamos sobre todo para empresas.|business
+larga|business|En Valletta veo oportunidad para una tienda de regalos hechos por artistas locales. ¿Qué calles podrían atraer a visitantes y residentes?|business
+larga|business|Llevamos una empresa de limpieza de oficinas y necesitamos un espacio pequeño en Birkirkara desde el que guardar equipos y organizar al personal.|business
+larga|hospital|Soy odontóloga mexicana y busco una localidad con buena demanda para abrir un consultorio dental familiar en Malta.|hospital
+larga|hospital|Con mi socio queremos montar una clínica de fisioterapia en St Julian’s para atender a personas con lesiones deportivas y dolores de espalda.|hospital
+larga|hospital|¿Conviene más Sliema o Msida para una farmacia pequeña? Nos interesa estar cerca de viviendas y de transporte público.|hospital
+larga|hospital|Mi hija es veterinaria y quiere abrir una consulta para mascotas en Marsaskala, donde ya conoce a bastantes dueños de perros.|hospital
+larga|hospital|Tras trabajar en laboratorios clínicos en Bogotá, me gustaría poner un centro de análisis médicos en Birkirkara.|hospital
+larga|hospital|Soy psicóloga y estoy buscando un espacio en Valletta para atender a adultos y adolescentes en sesiones privadas.|hospital
+larga|hospital|¿Qué barrios de Malta podrían funcionar para una clínica de podología? Quiero atender a gente mayor y a personas que trabajan muchas horas de pie.|hospital
+larga|school|Somos una pareja española y queremos crear una guardería en Gzira para niños pequeños de familias que trabajan en la zona.|school
+larga|school|Doy clases de inglés desde hace años; me gustaría abrir una academia en St Julian’s para preparar a adultos para entrevistas de trabajo.|school
+larga|school|Mi esposa es maestra y estamos mirando locales en Birkirkara para montar un colegio pequeño con grupos reducidos.|school
+larga|school|¿Tendría sentido poner una escuela de español en Valletta? Muchos residentes extranjeros me preguntan por clases presenciales.|school
+larga|school|Quiero dejar el trabajo corporativo y abrir un centro de formación profesional en Msida, enfocado en cursos de diseño digital.|school
+larga|school|Mi madre fue educadora infantil en Colombia y sueña con montar un espacio de actividades y aprendizaje para niños en Marsaskala.|school
+larga|school|Buscamos en Sliema un local para dar clases de música a adolescentes y adultos, con varias aulas insonorizadas.|leisure
+larga|sport|Soy entrenador personal y quiero instalar un gimnasio de barrio en Birkirkara, con cuotas accesibles para residentes.|sport
+larga|sport|Con dos amigas profesoras de yoga estamos buscando dónde abrir un estudio pequeño en Sliema, con clases para principiantes y embarazadas.|sport
+larga|sport|¿Qué zona de Malta sería buena para un centro de pilates? Queremos atraer tanto a gente mayor como a quienes trabajan sentados todo el día.|sport
+larga|sport|Mi hijo juega al fútbol y veo que faltan espacios cubiertos para entrenar; me gustaría montar una escuela deportiva en Msida.|school
+larga|sport|Después de vivir en Monterrey, quiero abrir un centro de artes marciales en St Julian’s para jóvenes y adultos.|sport
+larga|sport|Estamos considerando una piscina cubierta en Marsaskala para clases de natación infantil y entrenamiento de adultos.|sport
+larga|sport|Soy ciclista aficionado y planeo montar un club con sala de entrenamiento y clases de spinning en Gzira; ¿dónde habría más interés?|sport
+larga|leisure|Me dedico al cine independiente y me gustaría abrir una sala pequeña en Valletta para proyectar películas que no llegan a los grandes circuitos.|leisure
+larga|leisure|¿Dónde podría funcionar una discoteca latina en St Julian’s? Quiero que la gente pueda bailar salsa y bachata hasta tarde.|leisure
+larga|leisure|Mi familia busca invertir en una sala de juegos en Birkirkara, con máquinas recreativas y actividades para niños los fines de semana.|leisure
+larga|leisure|Soy músico colombiano y quisiera montar un espacio de conciertos íntimo en Gzira para bandas locales y artistas que vienen de gira.|leisure
+larga|leisure|Estamos pensando en crear un museo interactivo sobre la historia marítima de Malta en Valletta, pensado para visitantes y colegios.|leisure
+larga|leisure|¿Sería viable un teatro pequeño en Sliema? Me interesa ofrecer obras en español e inglés para una comunidad diversa.|leisure
+larga|leisure|Quiero llevar una propuesta distinta a Marsaskala: un parque de aventuras familiar con actividades al aire libre para niños.|leisure
+larga|mall|Un grupo de comerciantes mexicanos y malteses queremos reunir varias tiendas y servicios bajo un mismo techo en Msida, con estacionamiento para los clientes.|mall
+larga|mall|Estamos buscando una zona para desarrollar un outlet con locales de distintas marcas y cafeterías en las afueras de Birkirkara.|mall
+fuera|ninguna|¿Qué tiempo va a hacer en Malta este fin de semana?|ninguna
+fuera|ninguna|¿A qué hora juega hoy el Malta–Italia?|ninguna
+fuera|ninguna|Busco un vuelo barato desde Madrid para diciembre.|ninguna
+fuera|ninguna|¿Se puede ir en ferry de Malta a Sicilia?|ninguna
+fuera|ninguna|Necesito renovar el pasaporte, ¿dónde saco cita?|ninguna
+fuera|ninguna|¿Cuánto cuesta el permiso de residencia para un estudiante?|ninguna
+fuera|ninguna|¿Me recomiendan una zona tranquila para alquilar un piso en Msida?|ninguna
+fuera|ninguna|Estoy mirando departamentos para comprar por Sliema, ¿qué tal está la zona?|ninguna
+fuera|ninguna|¿Cómo llego de Valletta a Marsaskala en transporte público?|ninguna
+fuera|ninguna|¿Hay algún evento de música en vivo este viernes?|ninguna
+fuera|ninguna|Qué playas están buenas para ir con chicos|ninguna
+fuera|ninguna|¿Se puede llevar perro en el autobús?|ninguna
+fuera|ninguna|Pasame una receta fácil de pastizzi, porfa.|ninguna
+fuera|ninguna|¿Cómo se dice «gracias» en maltés?|ninguna
+fuera|ninguna|Hola, buenas. Solo quería saludar.|ninguna
+fuera|ninguna|Muchas gracias por la ayuda de ayer.|ninguna
+fuera|ninguna|¿Alguien sabe dónde puedo ver el partido?|ninguna
+fuera|ninguna|Mi tía trabaja en una farmacia de Birkirkara.|ninguna
+fuera|ninguna|Ayer cené en un restaurante buenísimo en Gzira.|ninguna
+fuera|ninguna|Mi primo va a una escuela de inglés en Malta.|ninguna
+fuera|ninguna|El gimnasio de mi barrio cierra demasiado temprano.|ninguna
+fuera|ninguna|Mi hermano tiene una cita en el dentista mañana.|ninguna
+fuera|ninguna|Estoy buscando trabajo de camarero por St Julian's.|ninguna
+fuera|ninguna|¿Qué documentos hacen falta para traer a mi gato a Malta?|ninguna
+fuera|ninguna|Quiero emprender, pero todavía no sé de qué.|ninguna
+fuera|ninguna|Tengo ganas de hacer algo por mi cuenta, a ver qué sale.|ninguna
+fuera|ninguna|Me interesa montar algo algún día, pero no tengo nada pensado.|ninguna
+fuera|ninguna|Estoy pensando en cambiar de vida y empezar de cero.|ninguna
+fuera|ninguna|Ruido ruido ruido, no sé qué poner acá.|ninguna
+fuera|ninguna|asdf ghjkl no entiendo nada jaja|ninguna
+fuera|ninguna|¿Cuánto tarda el bus desde Sliema hasta el aeropuerto?|ninguna
+fuera|ninguna|¿Qué barrios de Malta son más seguros para vivir?|ninguna
+fuera|ninguna|Mi mamá quiere vender su casa en Valletta.|ninguna
+fuera|ninguna|¿Dónde se paga la multa de aparcamiento?|ninguna
+fuera|ninguna|Estoy de vacaciones en Malta hasta el lunes, ¿qué me sugieren visitar?|ninguna
+fuera|ninguna|¿Cómo preparo un buen café con leche en casa?|ninguna
+fuera|ninguna|¿Va a llover mañana en Marsaskala?|ninguna
+fuera|ninguna|Qué caro está todo últimamente, no puede ser|ninguna
+fuera|ninguna|Perdón, ¿me podrían repetir la dirección de la oficina de correos?|ninguna
+fuera|ninguna|No sé si quedarme en Malta o volver a Colombia.|ninguna
