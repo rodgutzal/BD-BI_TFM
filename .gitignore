@@ -68,3 +68,6 @@ notebooks/mobility_data_full_*.csv
 
 # Salida HTML ya generada del .Rmd: trae filas de TomTom en sus tablas. Se regenera con R (knit); no se versiona.
 notebooks/Asignatura7_Modelado_Predictivo.html
+
+# Estado historico de OpenStreetMap descargado para la fase 4 (tools/download_osm_history.py): se regenera, no se versiona.
+data/osm_history/
