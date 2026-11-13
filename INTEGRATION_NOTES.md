@@ -29,7 +29,7 @@ Ejecutada por `tools/merge_legacy_data.py` (ya corrida; los resultados están en
 | Fuente | Archivo original | Filas |
 |---|---|---|
 | BD_BI_TFM (ORS) | `data/raw/legacy_ors_traffic_weather_data.csv` | 97 |
-| urban-mobility-analytics1 (TomTom) | `data/raw/legacy_tomtom_route_weather_data.csv` | 2.664 |
+| urban-mobility-analytics1 (TomTom) | `data/raw/legacy_tomtom_route_weather_data.csv` (retirado de la rama principal; ver `docs/DATOS_Y_LICENCIAS.md`) | 2.664 |
 | **Total fusionado** | `data/raw/route_weather_data.csv` | **2.761** |
 
 ### Mapeo a esquema unificado

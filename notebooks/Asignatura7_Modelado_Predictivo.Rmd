@@ -66,7 +66,7 @@ theme_set(theme_minimal(base_size = 12))
 ```{r load-data}
 # Ajustar la ruta al lugar donde se guarde el CSV exportado del pipeline del TFM
 # (mismo dataset que alimenta la hypertable traffic_trips / trips en TimescaleDB).
-ruta_csv <- "mobility_data_full_20260830_000146.csv"
+ruta_csv <- "mobility_data_sample_ors_openweather.csv"  # muestra publicable: solo filas ORS + OpenWeather (ver docs/DATOS_Y_LICENCIAS.md)
 
 df_raw <- read_csv(ruta_csv, show_col_types = FALSE)
 
@@ -282,8 +282,8 @@ naturaleza cíclica (23h y 00h están próximas, no en extremos opuestos).
 # no_traffic_time_min, traffic_delay_min, traffic_length_km, departure_time,
 # arrival_time son estructuralmente nulos para el origen ORS (no las calcula).
 # No se usan como predictores del modelo principal para no perder ~54% de
-# los registros (ORS); traffic_delay_min se reutiliza más adelante en un
-# análisis específico sobre el subconjunto TomTom.
+# los registros (ORS). (La muestra publicada solo contiene filas ORS, así que
+# aquí son nulos en todas.)
 #
 # average_speed_kmh se descarta por FUGA DE INFORMACIÓN: es algebraicamente
 # equivalente a distance_km / (travel_time_min / 60) (verificado: la
@@ -332,9 +332,15 @@ df_model <- df_model %>%
                    origin_weather, destination_weather), as.factor))
 
 # One-hot encoding de las categóricas mediante caret::dummyVars
-dummies <- dummyVars(~ origin + destination + data_source +
-                        origin_weather + destination_weather,
-                      data = df_model, fullRank = TRUE)
+# La muestra publicada solo tiene filas ORS: con un único nivel, dummyVars(fullRank = TRUE)
+# falla ("contrasts can be applied only to factors with 2 or more levels"), así que
+# data_source solo entra si tiene al menos dos niveles. (Sin ejecutar: no hay R en el equipo.)
+formula_dummies <- if (nlevels(droplevels(df_model$data_source)) > 1) {
+  ~ origin + destination + data_source + origin_weather + destination_weather
+} else {
+  ~ origin + destination + origin_weather + destination_weather
+}
+dummies <- dummyVars(formula_dummies, data = df_model, fullRank = TRUE)
 
 df_dummies <- predict(dummies, newdata = df_model) %>% as.data.frame()
 

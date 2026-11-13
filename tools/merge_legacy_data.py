@@ -8,7 +8,8 @@ data/mobility.db).
 
 Se documenta y se deja en el repo por transparencia/reproducibilidad, pero
 NO hace falta volver a ejecutarlo: BD_BI_TFM ya se entrega con los datos
-fusionados.
+fusionados. Además, el CSV de TomTom ya no está en el repositorio público (ver
+docs/DATOS_Y_LICENCIAS.md), así que sin una copia local el script se detiene sin tocar nada.
 
 Decisiones de mapeo (ver INTEGRATION_NOTES.md para el detalle completo):
   - ORS no reporta tráfico en tiempo real -> no_traffic_time_min,
@@ -126,6 +127,13 @@ def load_tomtom_legacy() -> pd.DataFrame:
 
 
 def main():
+    # El CSV de TomTom ya no está en el repo público (sus términos prohíben redistribuir los resultados). Sin él no se
+    # puede reproducir la fusión, y este script BORRA la base unificada antes de regenerarla: no debe seguir adelante.
+    if not LEGACY_TOMTOM_CSV.exists():
+        sys.exit(
+            f"No existe {LEGACY_TOMTOM_CSV.name}: los datos de TomTom ya no se publican en el repositorio (ver "
+            "docs/DATOS_Y_LICENCIAS.md). La fusión era de un solo uso y ya está hecha; no se ha tocado ninguna base."
+        )
     print("Fusionando histórico ORS (BD_BI_TFM) + TomTom (urban-mobility-analytics1)...")
     ors_df = load_ors_legacy()
     print(f"  ORS:    {len(ors_df)} filas")
