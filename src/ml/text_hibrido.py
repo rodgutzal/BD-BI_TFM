@@ -76,6 +76,12 @@ def cargar_modelo_adoptado(directorio=DIRECTORIO_MODELO) -> Optional[ModeloTexto
             logger.warning("El hash de %s no coincide con su manifiesto: no se usa el modelo.", ARCHIVO_MODELO)
             return None
         return ModeloTexto.load(ruta)
-    except (OSError, ValueError, KeyError) as e:  # JSON roto, formato desconocido, manifiesto incompleto...
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+    ) as e:  # JSON roto, formato desconocido, manifiesto incompleto o de otra forma
         logger.warning("No se pudo cargar el modelo de texto (%s): se usan solo las palabras clave.", e)
         return None

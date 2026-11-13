@@ -1125,16 +1125,16 @@
 ## `tests/test_recommendation_interpretacion_ui.py`
 
 > Tests de pantalla (Streamlit AppTest) de cómo Recomendación interpreta el texto: palabras clave primero, el modelo
-> entrenado solo donde ellas no reconocen el negocio (con una lectura marcada como menos segura) y la posibilidad de
+> entrenado solo donde ellas no reconocen el negocio (con su lectura marcada como decidida por el modelo) y la posibilidad de
 > corregir la categoría (docs/DISENO_ML_RECOMENDACION.md §3.L2).
 
 - `test_una_palabra_clave_se_interpreta_sin_aviso_del_modelo_y_se_puede_corregir` — Con una palabra clave se muestra la interpretación de siempre, sin aviso, y el selector de categoría está disponible pero plegado.
-- `test_un_texto_que_solo_entiende_el_modelo_se_marca_como_menos_seguro` — Si las palabras clave no reconocen el negocio y responde el modelo, la pantalla lo dice, da su confianza y deja el selector abierto para revisarlo.
+- `test_un_texto_que_solo_entiende_el_modelo_se_marca_como_decidido_por_el_modelo` — Si las palabras clave no reconocen el negocio y responde el modelo, la pantalla lo dice, da su confianza y deja el selector abierto para revisarlo.
 - `test_corregir_la_categoria_es_la_que_llega_al_puntaje` — La categoría que elige el usuario sustituye a la interpretada: es la que se usa para calcular el puntaje, y la pantalla dice que se usa la elegida.
 - `test_la_correccion_no_se_arrastra_a_la_siguiente_busqueda` — Una corrección vale para esa búsqueda: con otro texto, la categoría vuelve a ser la interpretada.
 - `test_un_texto_que_nadie_entiende_da_el_error_de_siempre` — Si ni las palabras clave ni el modelo responden, se muestra el mensaje de siempre y no se calcula nada.
 - `test_sin_modelo_la_pantalla_funciona_como_antes` — Si el artefacto falta o no se verifica (`get_text_model` devuelve None), solo responden las palabras clave: una errata que antes no se entendía sigue sin entenderse y no hay aviso del modelo.
-- `test_con_el_modelo_real_una_errata_se_entiende_y_se_marca` — Con el artefacto versionado en data/ml/: «una pizeria» (errata) la entiende el modelo como restauración, con aviso de lectura menos segura, y se calcula el puntaje de esa categoría.
+- `test_con_el_modelo_real_una_errata_se_entiende_y_se_marca` — Con el artefacto versionado en data/ml/: «una pizeria» (errata) la entiende el modelo como restauración, con aviso de que lo decidió el modelo, y se calcula el puntaje de esa categoría.
 
 ## `tests/test_recommendation_panorama_ui.py`
 

@@ -265,6 +265,10 @@ def exportar(r: dict, destino: Path, entrenamiento=ENTRENAMIENTO, evaluacion=EVA
             "evaluacion": {
                 "archivo": Path(evaluacion).name,
                 "frases": r["n_evaluacion"],
+                # el archivo puede tener más frases que las evaluadas (p. ej. las ambiguas con --solo-coincidentes): se
+                # registra para que el número de frases evaluadas se pueda reproducir solo con el manifiesto
+                "frases_en_archivo": r.get("n_archivo_evaluacion", r["n_evaluacion"]),
+                "filtro": r.get("filtro"),
                 "sha256": file_hash(evaluacion),
             },
         },
@@ -322,6 +326,7 @@ def main(argv=None) -> int:
     if problemas:
         print("Los datos no son válidos para evaluar:\n  " + "\n  ".join(problemas))
         return 1
+    n_archivo = len(ev)
     if args.solo_coincidentes:
         n_antes = len(ev)
         dudosas = ambiguas(ev)
@@ -330,6 +335,8 @@ def main(argv=None) -> int:
             f"Se evalúan {len(ev)} de {n_antes} frases: las otras {n_antes - len(ev)} son ambiguas (no coinciden con el etiquetador ciego).\n"
         )
     r = evaluar(tr, ev, args.seed, args.boot, con_mlp=not args.sin_mlp)
+    r["n_archivo_evaluacion"] = n_archivo
+    r["filtro"] = "solo_coincidentes" if args.solo_coincidentes else None
     imprimir(r)
     if args.solo_coincidentes and len(dudosas):
         imprimir_ambiguas(tr, dudosas, args.seed)

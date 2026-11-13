@@ -353,6 +353,7 @@ def test_main_imprime_la_decision_y_exporta_modelo_y_manifiesto(tmp_path, capsys
     m = json.loads((tmp_path / "text_classifier_manifest.json").read_text(encoding="utf-8"))
     assert m["modelo"]["sha256"] == etc.file_hash(tmp_path / "text_classifier.json")
     assert m["datos"]["entrenamiento"]["sha256"] == etc.file_hash(etc.ENTRENAMIENTO) and "optimista" in m["advertencia"]
+    assert m["datos"]["evaluacion"]["filtro"] is None  # sin --solo-coincidentes no hay filtro
     assert m["adoptado"] == ("NO se adopta" not in salida)  # el manifiesto dice lo mismo que la decisión impresa
     assert m["umbral"] in tt.UMBRALES
     assert tc.ModeloTexto.load(tmp_path / "text_classifier.json").clasificar("una farmacia")[0] == "hospital"
@@ -478,6 +479,9 @@ def test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_es
     )
     m = json.loads((tmp_path / "text_classifier_manifest.json").read_text(encoding="utf-8"))
     assert m["datos"]["evaluacion"]["frases"] == 192 and "Codex" in m["advertencia"]
+    # el manifiesto permite reproducir el 192: dice que el archivo tiene 200 y que se filtró por coincidentes
+    assert m["datos"]["evaluacion"]["frases_en_archivo"] == 200
+    assert m["datos"]["evaluacion"]["filtro"] == "solo_coincidentes"
 
 
 def test_main_solo_coincidentes_sin_columna_ciego_se_niega(tmp_path, capsys):

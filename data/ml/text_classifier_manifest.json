@@ -9,7 +9,9 @@
     },
     "evaluacion": {
       "archivo": "frases_evaluacion_v2.psv",
+      "filtro": "solo_coincidentes",
       "frases": 192,
+      "frases_en_archivo": 200,
       "sha256": "300bc2747fe41efb939e7ec8b5527e3fca6c48880f6e3255cc566c76bb70ef20"
     }
   },
@@ -44,7 +46,7 @@
     "sha256": "d18f93db34202d835070d899ff84b31c152f74bba5998ec3a3eea1f06cbe0291"
   },
   "procedencia": {
-    "commit": "13721fd",
+    "commit": "d0462dd+",
     "version.numpy": "2.4.6",
     "version.pandas": "3.0.3",
     "version.python": "3.13.14",

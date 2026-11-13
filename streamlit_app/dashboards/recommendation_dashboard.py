@@ -55,15 +55,17 @@ def etiqueta_categoria(categoria: str) -> str:
 def render_interpretacion(texto: str, interpretacion: Interpretacion) -> str:
     """Dice cómo se entendió el texto y quién lo decidió, y deja cambiar la categoría. Devuelve la categoría a usar.
 
-    Las palabras clave, cuando responden, casi siempre aciertan; el modelo entrenado entra solo donde ellas no
-    reconocen el negocio y se equivoca más (ver docs/DISENO_ML_RECOMENDACION.md §3.L2), así que su lectura se marca como
-    menos segura. En ambos casos el usuario puede corregir la categoría."""
+    El modelo entrenado entra solo donde las palabras clave no reconocen el negocio. Su lectura se marca como decidida por
+    el modelo, con su confianza, y se abre el selector: es una lectura que el usuario no puede anticipar por una palabra
+    visible y casi no está medida (19 respuestas en la evaluación, 1 equivocada: ver docs/DISENO_ML_RECOMENDACION.md
+    §3.L2). No se sabe que sea peor que las palabras clave, que también se equivocan (10 % de sus respuestas en esa
+    evaluación). En ambos casos el usuario puede corregir la categoría."""
     categoria = interpretacion.categoria
     if interpretacion.fuente == FUENTE_MODELO:
         st.warning(
             f"Interpretado como: **{etiqueta_categoria(categoria)}**, por el modelo entrenado "
-            f"(confianza {interpretacion.confianza:.0%}). No reconocí una palabra clave en tu texto, así que esta lectura "
-            "es menos segura: revísala."
+            f"(confianza {interpretacion.confianza:.0%}). No reconocí una palabra clave en tu texto, así que lo decidió el "
+            "modelo: revisa que sea lo que querías."
         )
     else:
         st.success(f"Interpretado como: **{etiqueta_categoria(categoria)}**")

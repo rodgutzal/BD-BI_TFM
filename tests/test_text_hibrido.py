@@ -130,6 +130,11 @@ def test_un_manifiesto_roto_o_incompleto_no_rompe_la_carga(copia):
     assert th.cargar_modelo_adoptado(copia) is None
     ruta.write_text(json.dumps({"adoptado": True}), encoding="utf-8")  # sin modelo.sha256
     assert th.cargar_modelo_adoptado(copia) is None
+    # JSON válido pero de otra forma: tampoco tumba la pantalla (TypeError / AttributeError)
+    ruta.write_text(json.dumps({"adoptado": True, "modelo": None}), encoding="utf-8")
+    assert th.cargar_modelo_adoptado(copia) is None
+    ruta.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+    assert th.cargar_modelo_adoptado(copia) is None
 
 
 # ---- el sistema de la aplicación ES el que se evaluó -------------------------------------------------------------

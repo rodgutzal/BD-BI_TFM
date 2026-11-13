@@ -1,5 +1,5 @@
 """Tests de pantalla (Streamlit AppTest) de cómo Recomendación interpreta el texto: palabras clave primero, el modelo
-entrenado solo donde ellas no reconocen el negocio (con una lectura marcada como menos segura) y la posibilidad de
+entrenado solo donde ellas no reconocen el negocio (con su lectura marcada como decidida por el modelo) y la posibilidad de
 corregir la categoría (docs/DISENO_ML_RECOMENDACION.md §3.L2)."""
 
 import sys
@@ -83,14 +83,19 @@ def test_una_palabra_clave_se_interpreta_sin_aviso_del_modelo_y_se_puede_corregi
     assert selector(pagina).value == "hospital"
 
 
-def test_un_texto_que_solo_entiende_el_modelo_se_marca_como_menos_seguro(pagina, monkeypatch):
+def test_un_texto_que_solo_entiende_el_modelo_se_marca_como_decidido_por_el_modelo(pagina, monkeypatch):
     """Si las palabras clave no reconocen el negocio y responde el modelo, la pantalla lo dice, da su confianza y deja
     el selector abierto para revisarlo."""
     monkeypatch.setattr(rd, "get_text_model", lambda: ModeloFalso("sport", 0.62))
     pagina.run()
     buscar(pagina, "zzz qqq")
     avisos = [w.value for w in pagina.warning if "modelo entrenado" in w.value]
-    assert len(avisos) == 1 and "Deporte" in avisos[0] and "confianza 62%" in avisos[0] and "menos segura" in avisos[0]
+    assert (
+        len(avisos) == 1
+        and "Deporte" in avisos[0]
+        and "confianza 62%" in avisos[0]
+        and "lo decidió el modelo" in avisos[0]
+    )
     assert not pagina.success  # no se presenta como una lectura segura
     assert selector(pagina).value == "sport"
     assert next(e for e in pagina.expander if "Cambiar la categoría" in e.label).proto.expanded is True
@@ -143,7 +148,7 @@ def test_sin_modelo_la_pantalla_funciona_como_antes(pagina, monkeypatch):
 
 def test_con_el_modelo_real_una_errata_se_entiende_y_se_marca(pagina):
     """Con el artefacto versionado en data/ml/: «una pizeria» (errata) la entiende el modelo como restauración, con aviso
-    de lectura menos segura, y se calcula el puntaje de esa categoría."""
+    de que lo decidió el modelo, y se calcula el puntaje de esa categoría."""
     pagina.run()
     buscar(pagina, "una pizeria")
     avisos = [w.value for w in pagina.warning if "modelo entrenado" in w.value]
