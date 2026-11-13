@@ -150,10 +150,13 @@ def canario_respeta_la_fecha(respuesta, fecha: str) -> Optional[str]:
       ANTIGUA de la base (que ignora la fecha o no llega a ella) devolvería versiones viejas y pasaría la cota superior
       para una fecha reciente (2024 u hoy).
 
-    Las fechas ISO `AAAA-MM-DDThh:mm:ssZ` se comparan como texto. Distingue dos clases de problema: los DEFINITIVOS (ignora la
-    fecha, va atrasado, no admite `meta`) se devuelven como motivo y el espejo queda descartado; los PASAJEROS (HTTP 200 con
-    `remark` de saturación, respuesta recortada o con menos elementos de los esperados) se lanzan como `ValueError`, que no
-    se recuerda: un servidor saturado puede responder bien en la ronda siguiente, y para eso existen las rondas."""
+    Las fechas ISO `AAAA-MM-DDThh:mm:ssZ` se comparan como texto. Distingue dos clases de problema: los DEFINITIVOS, que
+    PRUEBAN que el espejo no sirve para esa fecha (ignora la fecha, va atrasado), se devuelven como motivo y el espejo queda
+    descartado; todo lo demás es PASAJERO (HTTP 200 con `remark` de saturación, respuesta recortada o con menos elementos de
+    los esperados, elementos sin `timestamp` por una respuesta defectuosa o por no admitir `meta`) y se lanza como
+    `ValueError`, que no se recuerda: no se sabe si el espejo se recuperará en la ronda siguiente, y descartarlo de por vida
+    por algo que no prueba nada sobre la fecha podría dejarnos sin el único espejo con historia. Un espejo que no admite
+    `meta` simplemente no pasa nunca el canario y falla, a la vista, tras agotar las rondas."""
     motivo = respuesta_valida(respuesta)
     if motivo:
         raise ValueError(motivo)
@@ -163,8 +166,8 @@ def canario_respeta_la_fecha(respuesta, fecha: str) -> Optional[str]:
             f"el canario devolvió solo {len(elementos)} elementos (se esperaban al menos {CANARIO_MIN_ELEMENTOS})"
         )
     sin_marca = sum(1 for e in elementos if not isinstance(e.get("timestamp"), str))
-    if sin_marca:
-        return f"{sin_marca} de {len(elementos)} elementos del canario no traen `timestamp`"
+    if sin_marca:  # no admite `meta`, o respuesta defectuosa: no se sabe cuál, así que NO se descarta de por vida
+        raise ValueError(f"{sin_marca} de {len(elementos)} elementos del canario no traen `timestamp`")
     marcas = [e["timestamp"] for e in elementos]
     posteriores = [t for t in marcas if t > fecha]
     if posteriores:

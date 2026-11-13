@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 892 funciones de test · 986 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 894 funciones de test · 989 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 50 | 54+ |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 52 | 57+ |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -480,7 +480,9 @@
 - `test_el_canario_rechaza_un_espejo_con_una_copia_antigua_de_la_base` — COTA INFERIOR: un espejo atrasado (última versión de hace 5 años) pasaría la cota superior para una fecha reciente y serviría datos viejos como si fueran de 2024 u hoy. Se detecta porque no hay ninguna versión de los 2 años previos.
 - `test_la_cota_inferior_del_canario_es_inclusiva_en_el_borde_de_la_ventana` — Una versión justo 730 días antes de la fecha cuenta como «reciente»; un segundo antes, no.
 - `test_el_canario_exige_un_minimo_de_elementos_y_lo_trata_como_pasajero` — Una respuesta vacía o recortada no se da por buena (no hay nada que comprobar), pero NO es un motivo definitivo: lanza una excepción, que no se recuerda y se puede reintentar.
-- `test_el_canario_rechaza_elementos_sin_timestamp` — Si el espejo no devuelve `timestamp` (no admite `meta`), no se puede comprobar: se rechaza.
+- `test_elementos_sin_timestamp_en_el_canario_son_un_problema_pasajero_no_definitivo` ×2 — Sin `timestamp` no se puede comprobar la fecha: no se acepta, pero tampoco se prueba que el espejo ignore la fecha (puede ser una respuesta defectuosa, no solo que no admita `meta`): lanza una excepción en vez de un motivo definitivo, tanto si faltan en todos los elementos como si falta solo en uno.
+- `test_un_canario_sin_timestamp_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recupera` — A nivel de `pedir`: un espejo que contesta una vez sin `timestamp` (respuesta defectuosa) y luego bien NO queda marcado de por vida; se reintenta en la ronda siguiente y se usa.
+- `test_un_espejo_que_nunca_admite_meta_falla_a_la_vista_tras_agotar_las_rondas` — Un espejo que de verdad no admite `meta` nunca pasa el canario: no se le piden datos y el error final lo dice.
 - `test_el_canario_con_remark_de_error_es_un_problema_pasajero` — Un error de Overpass con HTTP 200 (servidor saturado) no es un canario válido, pero tampoco prueba que el espejo ignore la fecha: lanza una excepción en vez de devolver un motivo definitivo.
 - `test_la_hora_base_del_servidor_es_la_actual_y_aun_asi_una_respuesta_historica_valida_se_acepta` — REGRESIÓN del hallazgo real: overpass-api.de pone la hora ACTUAL en `osm3s.timestamp_osm_base` aunque los datos sean de 2022. La versión anterior de la herramienta comparaba esa hora con la fecha pedida y habría rechazado TODAS las respuestas históricas válidas.
 - `test_un_espejo_que_ignora_la_fecha_se_rechaza_y_se_prueba_el_siguiente` — El primer espejo devuelve el mapa actual para una consulta de 2022: se descarta tras el canario y se usa el segundo. Al espejo malo no se le pide ningún dato real.

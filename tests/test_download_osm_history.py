@@ -248,10 +248,42 @@ def test_el_canario_exige_un_minimo_de_elementos_y_lo_trata_como_pasajero():
         dh.canario_respeta_la_fecha(_canario([]), FECHA)
 
 
-def test_el_canario_rechaza_elementos_sin_timestamp():
-    """Si el espejo no devuelve `timestamp` (no admite `meta`), no se puede comprobar: se rechaza."""
-    r = {"elements": [{"type": "node", "id": i} for i in range(30)]}
-    assert "no traen `timestamp`" in dh.canario_respeta_la_fecha(r, FECHA)
+@pytest.mark.parametrize("sin_marca", [30, 1])
+def test_elementos_sin_timestamp_en_el_canario_son_un_problema_pasajero_no_definitivo(sin_marca):
+    """Sin `timestamp` no se puede comprobar la fecha: no se acepta, pero tampoco se prueba que el espejo ignore la fecha
+    (puede ser una respuesta defectuosa, no solo que no admita `meta`): lanza una excepción en vez de un motivo definitivo,
+    tanto si faltan en todos los elementos como si falta solo en uno."""
+    elementos = [{"type": "node", "id": i, "timestamp": ANTIGUO} for i in range(30)]
+    for e in elementos[:sin_marca]:
+        del e["timestamp"]
+    with pytest.raises(ValueError, match=f"{sin_marca} de 30 elementos del canario no traen `timestamp`"):
+        dh.canario_respeta_la_fecha({"elements": elementos}, FECHA)
+
+
+def test_un_canario_sin_timestamp_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recupera():
+    """A nivel de `pedir`: un espejo que contesta una vez sin `timestamp` (respuesta defectuosa) y luego bien NO queda
+    marcado de por vida; se reintenta en la ronda siguiente y se usa."""
+
+    def sin_timestamp(consulta):
+        return {"osm3s": {}, "elements": [{"type": "node", "id": i} for i in range(30)]}
+
+    cliente = ClienteFalso({"https://a": [sin_timestamp, servidor(n=4)]})
+    verificados, esperas = {}, []
+    datos, espejo = dh.pedir(cliente, "q", FECHA, rondas=3, espera_s=90, dormir=esperas.append, verificados=verificados)
+    assert espejo == "https://a" and len(datos["elements"]) == 4
+    assert verificados == {("https://a", FECHA): None} and esperas == [90]
+
+
+def test_un_espejo_que_nunca_admite_meta_falla_a_la_vista_tras_agotar_las_rondas():
+    """Un espejo que de verdad no admite `meta` nunca pasa el canario: no se le piden datos y el error final lo dice."""
+
+    def sin_timestamp(consulta):
+        return {"osm3s": {}, "elements": [{"type": "node", "id": i} for i in range(30)]}
+
+    cliente = ClienteFalso({"https://a": sin_timestamp})
+    with pytest.raises(RuntimeError, match="no traen `timestamp`"):
+        dh.pedir(cliente, "q", FECHA, rondas=2, espera_s=0, dormir=lambda s: None)
+    assert cliente.consultas_reales() == 0 and cliente.canarios() == 2
 
 
 def test_el_canario_con_remark_de_error_es_un_problema_pasajero():
