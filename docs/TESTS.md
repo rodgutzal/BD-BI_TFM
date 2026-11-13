@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**49 archivos · 804 funciones de test · 894 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**49 archivos · 810 funciones de test · 900 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -49,7 +49,7 @@
 | [`tests/test_operations_status.py`](#teststest_operations_statuspy) | 11 | 16 |
 | [`tests/test_ors_null_fields.py`](#teststest_ors_null_fieldspy) | 2 | 2 |
 | [`tests/test_poi_extraction.py`](#teststest_poi_extractionpy) | 23 | 23 |
-| [`tests/test_predictive_modeling_dashboard.py`](#teststest_predictive_modeling_dashboardpy) | 7 | 7 |
+| [`tests/test_predictive_modeling_dashboard.py`](#teststest_predictive_modeling_dashboardpy) | 13 | 13 |
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
@@ -1045,6 +1045,12 @@
 - `test_regresion_no_falla_con_filas_sin_clima` — La regresión se ajusta sin fallar aunque haya filas sin clima.
 - `test_clasificacion_no_falla_con_filas_sin_clima` — El caso exacto del bug: 'Input X contains NaN' en LogisticRegression.
 - `test_el_temporal_y_el_clustering_conservan_las_filas_sin_clima` — Su tiempo de viaje es válido: no deben pasar por _complete_cases.
+- `test_la_particion_cronologica_entrena_con_lo_antiguo_y_evalua_con_lo_reciente` — El 80 % más antiguo entrena y el 20 % más reciente evalúa, aunque las filas lleguen desordenadas.
+- `test_un_mismo_ciclo_no_se_reparte_entre_entrenamiento_y_prueba` — Las rutas de un ciclo comparten marca de tiempo: caen todas del mismo lado del corte, no una en cada.
+- `test_la_regresion_se_evalua_con_las_filas_mas_recientes` — El conjunto de prueba de la regresión son exactamente las filas más recientes (con clima), no una muestra al azar.
+- `test_la_clasificacion_se_evalua_con_las_filas_mas_recientes` — Igual en la clasificación: el tramo de prueba es el final de la serie.
+- `test_la_validacion_cruzada_de_la_clasificacion_respeta_el_orden_temporal` — La elección de `max_features` valida con `TimeSeriesSplit` (cada pliegue prueba con filas posteriores a las que entrena, por orden de filas), no con pliegues barajados: si no, el AUC de validación cruzada vuelve a ser optimista. Corta por filas, no por fecha: un ciclo puede quedar a caballo entre dos tramos de un pliegue (como mucho uno).
+- `test_el_orden_de_llegada_de_las_filas_no_cambia_la_particion` — La base entrega las filas de la más reciente a la más antigua: el resultado no debe depender de ello.
 
 ## `tests/test_predictive_modeling_ondemand.py`
 
