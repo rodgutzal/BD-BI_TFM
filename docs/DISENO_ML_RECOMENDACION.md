@@ -398,6 +398,41 @@ Las 160 frases que sí describen un negocio se reparten así por categoría: `fo
 7. **Asimetría de las definiciones:** el etiquetador ciego recibió, para `ninguna`, una cláusula que los prompts de generación de los tipos directa, sinónimo, errata y larga no llevaban («o que solo menciona un negocio sin pedir abrirlo»). Es plausible que explique cuatro de los ocho desacuerdos («Busco una panadería artesanal», «Cine en St Julian's», «Farmacia de guardia» y «Veterinaria en Marsaskala», etiquetadas `ninguna`). No cambia la decisión (con las 200 frases se cumple igual) pero se declara: el 96 % de acuerdo está algo deprimido por esa diferencia.
 8. **Integración en la app (PR #72):** `src/ml/text_hibrido.py` aplica el híbrido evaluado (un test comprueba que da la misma respuesta que la evaluación para cada frase del conjunto principal), carga `data/ml/text_classifier.json` verificado con su manifiesto (adoptado y hash) y, si falta o no cuadra, la pantalla vuelve a las palabras clave. Cuando decide el modelo, la pantalla lo indica, muestra su confianza y abre el selector para **corregir la categoría**; cuando responden las palabras clave se presenta como antes (con el selector plegado). **El motivo no es que se sepa que el modelo falle más:** en las 192 frases las palabras clave responden 107 y se equivocan 11 (10,3 %; 8 de ellas son frases fuera de alcance que solo mencionan un negocio), mientras el modelo responde solo 19 y se equivoca 1 (5,3 %), una muestra demasiado pequeña para comparar. Se señala porque es una lectura que el usuario no puede anticipar por una palabra visible y casi no está medida. No hay medición con usuarios reales: las cifras de este apartado son las del conjunto escrito por Codex.
 
+### M. Fase 4: riesgo de cierre exploratorio — protocolo fijado antes de descargar nada (12-nov-2026)
+
+Este apartado se escribe y se sube al repositorio **antes** de la descarga histórica y de ver ninguna etiqueta o resultado; el historial de git lo prueba. Autorizada por el autor la descarga del estado histórico de toda el área para **las siete categorías**.
+
+**Pregunta.** Con datos solo de OpenStreetMap, ¿el entorno de un local en 2022 (competencia, densidad, edificios, turismo, transporte) predice si ya no figura hoy? **Es una señal de entorno, no una probabilidad de cierre ni de rentabilidad** (no hay datos de resultados de negocio).
+
+**Datos (a archivos fuera del repositorio y de la base, como en la fase 1b).** Overpass con consultas de fecha (`[date:...]`), el área de la rejilla (35,84–35,94 N, 14,44–14,58 E, ~11 × 13 km), las siete categorías de `CATEGORY_TAGS`, en tres instantes: **1-ene-2022**, **1-ene-2024** y **hoy** (la fecha de la descarga queda registrada). Pausa de 12 s entre consultas, tiempo máximo de servidor, espejos alternativos y `--dry-run`, como `download_osm_context.py`. Contexto estático (edificios, alojamiento, paradas, industria): el ya descargado en la fase 1b (estado actual).
+
+**Población de estudio.** Elementos de la foto de 2022 con nombre, en las siete categorías y dentro de la rejilla. Unidad: el local.
+
+**Etiquetas de cierre (definidas ya):**
+- **fuerte:** el mismo identificador sigue hoy en el mapa con una marca de ciclo de vida sobre la etiqueta de la categoría (`disused:`, `was:`, `abandoned:`, `demolished:`, `razed:`).
+- **probable:** el identificador ya no existe hoy, **y** no hay hoy un elemento con el mismo nombre normalizado a ≤ 60 m (descarta reetiquetados y re-mapeos), **y** no hay en Foursquare un local con el mismo nombre a ≤ 150 m.
+- **dudosa:** el identificador ya no existe pero hay un elemento con el mismo nombre cerca o en Foursquare. **No entra** ni como positivo ni como negativo.
+- **superviviente:** el mismo identificador sigue hoy sin marca de ciclo de vida. Es el negativo.
+
+El **cierre principal** es **fuerte ∪ probable** contra superviviente. La **sensibilidad al ruido** repite el análisis con **solo fuertes**. Foursquare se usa **solo para etiquetar**, nunca como variable.
+
+**Variables (todas calculadas con la foto de 2022, no con el estado actual).** Calcular la competencia con el mapa de hoy mezclaría el resultado con la causa (los cerrados ya no cuentan y los supervivientes sí). Por eso: categoría (7); número de locales de la **misma categoría** y **totales** de la foto de 2022 a 250 m y 500 m (sin contar el propio local); distancia al más cercano de la misma categoría; si el nombre se repite ≥ 3 veces en 2022 (cadena); edificios a 250/500 m, alojamiento turístico, paradas de transporte y suelo industrial (contexto de la fase 1b, estático, estado actual: se declara). **No se usan** el tiempo de viaje (contiene mediciones de TomTom) ni la población por zona (Google Data Commons): los resultados se publicarían y eso evita depender de datos con condiciones propias.
+
+**Puerta de tamaño muestral (fijada ya).** Se entrena y se evalúa **solo si** hay **al menos 60 cierres principales** y **al menos 30 bloques de 1 km con algún cierre**. Si no, el resultado es **«no concluyente: no se entrena»**, se publica el recuento y no se hace nada más.
+
+**Modelos y líneas base.** Candidato: boosting de árboles regularizado. Líneas base: constante (AUC 0,5); **solo categoría**; **solo densidad** (misma categoría y totales a 250/500 m); regresión logística con las mismas variables.
+
+**Validación.** Validación cruzada espacial por bloques de 1 km (`GroupKFold`), 10 repeticiones × 5 pliegues, como en la fase 1 (`src/ml/validation.py`). Las probabilidades fuera de muestra se promedian entre repeticiones. **AUC** con intervalo del 95 % por remuestreo de bloques (2 000 réplicas). La diferencia con la mejor línea base se mide con el mismo remuestreo pareado.
+
+**Regla de decisión (fijada ya).** Una señal de riesgo de cierre se considera **utilizable** solo si, en el cierre principal, **(a)** el límite inferior del IC del AUC del candidato es **> 0,5** y **(b)** el límite inferior de su diferencia con la mejor línea base es **> 0**. (El diseño original (D) exigía solo (a); se añade (b) para que «mejor que el azar» no baste si una línea base trivial ya lo explica, como pasó en la fase 1.) Si se cumple, **no entra directamente a la pantalla**: pasaría a un PR aparte con su propia revisión y con el aviso de que es una señal de entorno. Si no se cumple, **queda como hallazgo del TFM** y no se expone nada al usuario.
+
+**Controles descriptivos (sin efecto en la decisión).** Repetir con la foto de 2024 como instante de partida (cierres entre 2024 y hoy); desglose por categoría; y la tasa de cierre por categoría.
+
+**No se cambia nada después de ver los resultados.** Si se encuentra un error, se documenta y se repite entera declarando que hubo una repetición.
+
+**Sesgos que se declaran de antemano:** el mapa creció un 52 % de 2022 a hoy por mejor cartografía, no por negocios nuevos (los locales de 2022 son los más visibles: sesgo de supervivencia); «ya no figura» no es «cerró» (26 % de los «plausibles» de la sonda parecía seguir abierto); Foursquare cubre solo ~15 % de los locales de OSM y también arrastra fichas obsoletas; el contexto estático es de hoy; y con pocos cierres los intervalos serán anchos.
+
+**Qué se publica y qué no.** Se versionan solo agregados (recuentos por instante, categoría y nivel de etiqueta; la tabla de resultados; el manifiesto con hashes y fecha de descarga). **No** se versionan etiquetas por local: dependen de datos de Foursquare. Datos de OpenStreetMap bajo ODbL, con atribución.
 ### Confianza de datos por celda
 Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tienen datos reales, qué categoría de OSM es poco fiable en esa zona (por ejemplo, `food_drink` se ve en torno al 61 % frente a Foursquare) y cuántos POIs sustentan cada indicador. Una celda con poca información no se presenta con la misma seguridad que una bien cubierta.
 
@@ -421,7 +456,7 @@ Cada panorama lleva una **confianza** visible: cuántas de las tres lentes tiene
 | 2a | **Hecha (PR #42).** Tabla precalculada de panoramas por celda (tres lentes, percentiles, confianza y brecha exploratoria etiquetada), conteos para recalcular con otro perfil y manifiesto: `src/ml/panorama.py` y `tools/build_panorama.py` (sección 3.J). Sin interfaz | 1c |
 | 2b | **Hecha (PR #43).** Interfaz (sección 3.K): mapa de calor y ficha por celda en Recomendación, **con los controles de perfil ajustable** (a quién vendes, qué es competencia, qué proveedores) y la indicación del perfil usado; el MCDA se conserva como respaldo y para las otras 5 categorías. Tests de pantalla del recálculo al cambiar el perfil y del aviso de que el modelo aprendido no cambia | 2a |
 | 3 | **Hecha (PR #44) y repetida (PR #71).** Clasificador de texto comparado con las palabras clave: la primera evaluación (sección 3.L) **no lo adopta**; la repetición con un conjunto escrito por Codex y etiquetado a ciegas (3.L2) **sí adopta el híbrido** (+9,4 puntos de exactitud, 6,2 % frente a 5,7 % de respuestas equivocadas), **conectado a Recomendación en el PR #72** (palabras clave primero, el modelo solo si se abstienen, lectura del modelo indicada con su confianza y categoría corregible por el usuario). La primera evaluación no lo adoptó por tener más respuestas equivocadas que las palabras clave. | — |
-| 4 | Riesgo de cierre exploratorio (etiquetas de Overpass histórico de toda el área) | 0, **autorización de descarga** |
+| 4 | **En curso (PR #73):** riesgo de cierre exploratorio (sección 3.M). Descarga autorizada por el autor el 12-nov-2026 para las siete categorías; protocolo fijado antes de descargar | 0, descarga autorizada |
 
 ## 6. Riesgos y sesgos que hay que declarar en el TFM
 
