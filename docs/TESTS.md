@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**50 archivos · 819 funciones de test · 909 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**50 archivos · 820 funciones de test · 910 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -43,7 +43,7 @@
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
 | [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 23 | 23 |
-| [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 42 | 55 |
+| [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 43 | 56 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_dashboard.py`](#teststest_operations_dashboardpy) | 7 | 7+ |
@@ -902,6 +902,7 @@
 - `test_validar_datos_rechaza_una_etiqueta_ciega_desconocida` — Una etiqueta del etiquetador que no es una categoría (p. ej. una errata suya) invalida la evaluación.
 - `test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_escribio_las_frases` — Con --solo-coincidentes se evalúan solo las frases con la misma etiqueta del autor y del etiquetador ciego, se informa de cuántas se dejan fuera, y la advertencia del manifiesto ya no dice «mismo autor».
 - `test_main_solo_coincidentes_sin_columna_ciego_se_niega` — El archivo de evaluación antiguo no tiene la columna `ciego`: la opción lo dice en vez de fallar a medias.
+- `test_ambiguas_es_el_complemento_de_solo_coincidentes` — Cada frase está en exactamente uno de los dos conjuntos: las coincidentes se evalúan y las ambiguas se informan.
 
 ## `tests/test_ml_validation.py`
 

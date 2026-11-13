@@ -470,6 +470,12 @@ def test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_es
     )
     salida = capsys.readouterr().out
     assert "Se evalúan 192 de 200 frases" in salida and "evaluación reservada: 192 frases" in salida
+    # las 8 ambiguas se imprimen con la respuesta de los sistemas, no solo se cuentan
+    assert (
+        "Las 8 frases ambiguas" in salida
+        and "«Cine en St Julian's»" in salida
+        and "coincide con el autor en 5 y con el etiquetador en 2 de 8." in salida
+    )
     m = json.loads((tmp_path / "text_classifier_manifest.json").read_text(encoding="utf-8"))
     assert m["datos"]["evaluacion"]["frases"] == 192 and "Codex" in m["advertencia"]
 
@@ -478,3 +484,17 @@ def test_main_solo_coincidentes_sin_columna_ciego_se_niega(tmp_path, capsys):
     """El archivo de evaluación antiguo no tiene la columna `ciego`: la opción lo dice en vez de fallar a medias."""
     assert etc.main(["--solo-coincidentes"]) == 1
     assert "columna `ciego`" in capsys.readouterr().out
+
+
+def test_ambiguas_es_el_complemento_de_solo_coincidentes():
+    """Cada frase está en exactamente uno de los dos conjuntos: las coincidentes se evalúan y las ambiguas se informan."""
+    ev = pd.DataFrame(
+        {
+            "tipo": ["directa", "directa", "errata"],
+            "categoria": ["hospital", "school", "ninguna"],
+            "frase": ["a", "b", "c"],
+            "ciego": ["hospital", "leisure", "ninguna"],
+        }
+    )
+    assert list(etc.ambiguas(ev)["frase"]) == ["b"] and list(etc.solo_coincidentes(ev)["frase"]) == ["a", "c"]
+    assert len(etc.ambiguas(ev)) + len(etc.solo_coincidentes(ev)) == len(ev)

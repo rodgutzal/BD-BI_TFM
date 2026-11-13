@@ -68,8 +68,14 @@ def validar_datos(tr: pd.DataFrame, ev: pd.DataFrame) -> list:
 
 def solo_coincidentes(ev: pd.DataFrame) -> pd.DataFrame:
     """Las frases cuya etiqueta del autor coincide con la del etiquetador ciego (docs/DISENO_ML_RECOMENDACION.md §3.L2).
-    Las que no coinciden se consideran ambiguas y se evalúan aparte."""
+    Las que no coinciden son las ambiguas (`ambiguas`): quedan fuera de la evaluación principal y `main` imprime cómo
+    responden los sistemas a cada una."""
     return ev[ev["ciego"] == ev["categoria"]].reset_index(drop=True)
+
+
+def ambiguas(ev: pd.DataFrame) -> pd.DataFrame:
+    """Las frases cuya etiqueta del autor NO coincide con la del etiquetador ciego (el complemento de `solo_coincidentes`)."""
+    return ev[ev["ciego"] != ev["categoria"]].reset_index(drop=True)
 
 
 def evaluar(
@@ -209,6 +215,22 @@ def imprimir(r: dict) -> None:
             print(f"   «{f}»: dijo {resp}, era {real}")
 
 
+def imprimir_ambiguas(tr: pd.DataFrame, dudosas: pd.DataFrame, seed: int = 0) -> None:
+    """Cómo responden las palabras clave y el híbrido a las frases ambiguas (excluidas de la evaluación principal). Es
+    informativo: el modelo y el umbral son los mismos, sin tocar nada."""
+    r = evaluar(tr, dudosas, seed, 100, con_mlp=False)
+    print(
+        f"\nLas {len(dudosas)} frases ambiguas (no coinciden con el etiquetador ciego), fuera de la evaluación principal:"
+    )
+    pal, hib = r["sistemas"]["palabras"], r["sistemas"]["hibrido"]
+    for f, autor, ciego, p, h in zip(dudosas["frase"], dudosas["categoria"], dudosas["ciego"], pal, hib):
+        print(f"   autor={autor}, ciego={ciego} | palabras={p}, híbrido={h} | «{f}»")
+    print(
+        f"   El híbrido coincide con el autor en {sum(h == a for h, a in zip(hib, dudosas['categoria']))} y con el etiquetador "
+        f"en {sum(h == c for h, c in zip(hib, dudosas['ciego']))} de {len(dudosas)}."
+    )
+
+
 def exportar(r: dict, destino: Path, entrenamiento=ENTRENAMIENTO, evaluacion=EVALUACION, commit: str = "") -> dict:
     """Escribe text_classifier.json y text_classifier_manifest.json en `destino` y devuelve el manifiesto."""
     destino = Path(destino)
@@ -302,12 +324,15 @@ def main(argv=None) -> int:
         return 1
     if args.solo_coincidentes:
         n_antes = len(ev)
+        dudosas = ambiguas(ev)
         ev = solo_coincidentes(ev)
         print(
             f"Se evalúan {len(ev)} de {n_antes} frases: las otras {n_antes - len(ev)} son ambiguas (no coinciden con el etiquetador ciego).\n"
         )
     r = evaluar(tr, ev, args.seed, args.boot, con_mlp=not args.sin_mlp)
     imprimir(r)
+    if args.solo_coincidentes and len(dudosas):
+        imprimir_ambiguas(tr, dudosas, args.seed)
     if args.exportar:
         m = exportar(r, Path(args.exportar), args.entrenamiento, args.evaluacion, _commit())
         print(

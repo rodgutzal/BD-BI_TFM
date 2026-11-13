@@ -13,7 +13,7 @@ y (b) su tasa de respuestas equivocadas no pasa de la de las palabras clave más
 sustituir las palabras clave porque estas, cuando responden, suelen acertar: el clasificador solo entra donde ellas se
 abstienen.
 
-Umbral de confianza (fijado el 13-nov-2026, ANTES de generar el segundo conjunto de evaluación): el más bajo cuyo híbrido
+Umbral de confianza (fijado el 12-nov-2026, ANTES de generar el segundo conjunto de evaluación): el más bajo cuyo híbrido
 no supera, fuera de muestra sobre el entrenamiento, las respuestas equivocadas de las palabras clave más 2 puntos.
 """
 
