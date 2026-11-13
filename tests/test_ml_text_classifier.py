@@ -213,6 +213,7 @@ def test_elegir_umbral_mide_el_hibrido_no_el_clasificador_solo():
     p = np.array([[0.1, 0.9], [0.1, 0.9]])
     assert tt.elegir_umbral(clases, p, ["hospital", "hospital"], ["hospital", "hospital"]) == tt.UMBRALES[0]
 
+
 def test_bootstrap_pareado_con_diferencia_constante_y_con_diferencia_nula():
     """Si a acierta siempre y b nunca, el IC es [1, 1]; si son iguales, la diferencia es 0."""
     a, b = np.ones(30), np.zeros(30)
