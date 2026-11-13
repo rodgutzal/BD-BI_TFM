@@ -15,8 +15,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from src.database import RouteDatabase
-from src.location_scoring import DEFAULT_WEIGHTS, recommend_locations
+from src.location_scoring import DEFAULT_WEIGHTS, recommend_for_category
 from src.locations import LOCATIONS
+from src.ml.text_hibrido import CATEGORIAS, FUENTE_MODELO, Interpretacion, cargar_modelo_adoptado, interpretar
 from streamlit_app.dashboards.maps_dashboard import POI_CATEGORY_STYLE
 from streamlit_app.dashboards.panorama_section import render_panorama_section
 
@@ -30,14 +31,57 @@ def get_database():
     return RouteDatabase(CSV_PATH, DB_PATH)
 
 
+@st.cache_resource
+def get_text_model():
+    """El clasificador de texto adoptado en la fase 3 (verificado con su manifiesto), o None si falta o no cuadra: en
+    ese caso la pantalla usa solo las palabras clave, como antes."""
+    return cargar_modelo_adoptado()
+
+
 @st.cache_data(ttl=_CACHE_TTL, show_spinner="Calculando puntajes por zona...")
-def _cached_recommend(_db, texto: str, w_demanda: float, w_competencia: float, w_accesibilidad: float):
-    """Envuelve recommend_locations() para que Streamlit lo cachee por
-    separado según el texto y los pesos. Los pesos van como 3 floats sueltos
+def _cached_recommend(_db, categoria: str, w_demanda: float, w_competencia: float, w_accesibilidad: float):
+    """Envuelve recommend_for_category() para que Streamlit lo cachee por
+    separado según la categoría y los pesos. Los pesos van como 3 floats sueltos
     (no un dict): un dict no sirve como parte de la clave de caché de
     @st.cache_data de forma confiable."""
     weights = {"demanda": w_demanda, "competencia": w_competencia, "accesibilidad": w_accesibilidad}
-    return recommend_locations(_db, texto, weights=weights)
+    return recommend_for_category(_db, categoria, weights=weights)
+
+
+def etiqueta_categoria(categoria: str) -> str:
+    return POI_CATEGORY_STYLE.get(categoria, {}).get("label", categoria)
+
+
+def render_interpretacion(texto: str, interpretacion: Interpretacion) -> str:
+    """Dice cómo se entendió el texto y quién lo decidió, y deja cambiar la categoría. Devuelve la categoría a usar.
+
+    El modelo entrenado entra solo donde las palabras clave no reconocen el negocio. Su lectura se marca como decidida por
+    el modelo, con su confianza, y se abre el selector: es una lectura que el usuario no puede anticipar por una palabra
+    visible y casi no está medida (19 respuestas en la evaluación, 1 equivocada: ver docs/DISENO_ML_RECOMENDACION.md
+    §3.L2). No se sabe que sea peor que las palabras clave, que también se equivocan (10 % de sus respuestas en esa
+    evaluación). En ambos casos el usuario puede corregir la categoría."""
+    categoria = interpretacion.categoria
+    if interpretacion.fuente == FUENTE_MODELO:
+        st.warning(
+            f"Interpretado como: **{etiqueta_categoria(categoria)}**, por el modelo entrenado "
+            f"(confianza {interpretacion.confianza:.0%}). No reconocí una palabra clave en tu texto, así que lo decidió el "
+            "modelo: revisa que sea lo que querías."
+        )
+    else:
+        st.success(f"Interpretado como: **{etiqueta_categoria(categoria)}**")
+    with st.expander("¿No es lo que querías? Cambiar la categoría", expanded=interpretacion.fuente == FUENTE_MODELO):
+        elegida = st.selectbox(
+            "Categoría a usar",
+            CATEGORIAS,
+            index=CATEGORIAS.index(categoria),
+            format_func=etiqueta_categoria,
+            key=f"reco_cat::{texto}",  # otro texto, otra elección: no arrastra la corrección de una búsqueda anterior
+        )
+    if elegida != categoria:
+        st.info(
+            f"Usando la categoría que elegiste: **{etiqueta_categoria(elegida)}** (se había interpretado {etiqueta_categoria(categoria)})."
+        )
+    return elegida
 
 
 def normalize_weights(w_demanda: float, w_competencia: float, w_accesibilidad: float) -> dict:
@@ -160,7 +204,9 @@ def main():
     st.caption(
         "Sistema de apoyo a la decisión, no una predicción de machine learning: no existen datos "
         "históricos de resultados de negocio (ventas, cierres) con los que entrenar un modelo. "
-        "Combina demanda, competencia y accesibilidad con criterios explícitos y visibles."
+        "Combina demanda, competencia y accesibilidad con criterios explícitos y visibles. "
+        "Solo el texto que escribes se interpreta con ayuda de un clasificador entrenado, cuando las palabras clave no "
+        "reconocen el negocio; siempre puedes corregir la categoría."
     )
 
     db = get_database()
@@ -183,17 +229,19 @@ def main():
     if not texto:
         return
 
-    try:
-        out = _cached_recommend(db, texto.strip(), weights["demanda"], weights["competencia"], weights["accesibilidad"])
-    except ValueError as e:
-        st.error(str(e))
+    interpretacion = interpretar(texto, get_text_model())
+    if interpretacion.categoria is None:
+        st.error(
+            f"No pude identificar el tipo de negocio en: '{texto}'. "
+            "Prueba con una descripción más específica (ej. 'restaurante', 'farmacia', 'gimnasio')."
+        )
         st.info(
             "Prueba con palabras más concretas: restaurante, farmacia, gimnasio, escuela, centro comercial, tienda de ropa..."
         )
         return
 
-    categoria = out["categoria"].iloc[0]
-    st.success(f"Interpretado como: **{POI_CATEGORY_STYLE.get(categoria, {}).get('label', categoria)}**")
+    categoria = render_interpretacion(texto, interpretacion)
+    out = _cached_recommend(db, categoria, weights["demanda"], weights["competencia"], weights["accesibilidad"])
 
     top_zone = out.index[0]
     st.metric("🏆 Zona recomendada", top_zone, f"puntaje {out['score'].iloc[0]:.3f}")

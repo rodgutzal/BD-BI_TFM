@@ -10,7 +10,9 @@ El **código** de este repositorio es MIT (ver [`LICENSE`](../LICENSE)). Los **d
 | `data/raw/legacy_ors_traffic_weather_data.csv`, `data/raw/traffic_weather_data.csv` | Histórico heredado de ORS y OpenWeather (mayo de 2026) | Igual que la fila anterior |
 | `data/ml/cell_counts.csv` | Conteos de POIs de OpenStreetMap por celda | **ODbL** (OpenStreetMap), con atribución y *share-alike* |
 | `data/ml/panorama.csv` | Conteos de OpenStreetMap más salidas del modelo exploratorio (brecha de oferta). **Ver «Punto abierto»** | ODbL para la parte de OpenStreetMap; el resto, sin resolver |
-| `data/text/*.psv` | Frases de entrenamiento y evaluación del clasificador, escritas por el autor | MIT |
+| `data/text/frases_entrenamiento.psv`, `frases_evaluacion.psv` | Frases de entrenamiento y de la primera evaluación del clasificador, escritas por el autor | MIT |
+| `data/text/frases_evaluacion_v2.psv`, `data/text/evaluacion_v2/` | 200 frases de evaluación y los prompts usados, generados por Codex (un modelo de OpenAI) y etiquetados a ciegas por otra sesión | Salida de un modelo de lenguaje a partir de definiciones propias, sin datos de terceros; se publican bajo MIT con el aviso de su origen |
+| `data/ml/text_classifier.json`, `text_classifier_manifest.json` | Clasificador de texto (regresión logística sobre n-gramas de caracteres) entrenado solo con las frases del autor | MIT |
 
 **Atribución requerida:**
 

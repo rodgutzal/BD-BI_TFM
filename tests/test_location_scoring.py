@@ -20,6 +20,7 @@ from src.location_scoring import (
     FOOD_DRINK_OSM_COVERAGE,
     _haversine_m,
     _normalize_minmax,
+    recommend_for_category,
     recommend_locations,
     score_zones,
     zone_accessibility,
@@ -267,3 +268,34 @@ def test_recomendar_acepta_pesos_personalizados(db):
     out = recommend_locations(db, "farmacia", weights=solo_demanda)
     # con todo el peso en demanda, gana la zona más poblada (la última guardada)
     assert out.index[0] == list(LOCATIONS)[-1]
+
+
+class _ModeloFalso:
+    """Un modelo de texto que siempre responde la misma categoría (para no depender del modelo real)."""
+
+    def __init__(self, categoria):
+        self.categoria = categoria
+
+    def clasificar(self, texto):
+        return self.categoria, 0.9
+
+
+def test_recomendar_con_modelo_usa_el_modelo_solo_si_las_palabras_clave_no_reconocen(db):
+    """Un texto que las palabras clave no reconocen se interpreta con el modelo; uno que sí reconocen ignora al modelo."""
+    out = recommend_locations(db, "zzz qqq", modelo_texto=_ModeloFalso("sport"))
+    assert out["categoria"].iloc[0] == "sport"
+    out = recommend_locations(db, "una farmacia", modelo_texto=_ModeloFalso("sport"))
+    assert out["categoria"].iloc[0] == "hospital"
+
+
+def test_recomendar_sin_modelo_sigue_fallando_con_un_texto_que_las_palabras_clave_no_reconocen(db):
+    """Sin modelo (el comportamiento por defecto) un texto desconocido da el mismo error de siempre."""
+    with pytest.raises(ValueError):
+        recommend_locations(db, "zzz qqq")
+
+
+def test_recomendar_por_categoria_da_lo_mismo_que_recomendar_por_texto(db):
+    """`recommend_for_category` es la segunda mitad de `recommend_locations`: para la misma categoría, el mismo resultado."""
+    por_texto = recommend_locations(db, "farmacia")
+    por_categoria = recommend_for_category(db, "hospital")
+    assert por_texto.equals(por_categoria)

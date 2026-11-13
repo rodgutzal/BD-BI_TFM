@@ -30,8 +30,8 @@ from typing import Dict, Optional
 
 import pandas as pd
 
-from src.business_type_classifier import classify_business_type
 from src.locations import LOCATIONS
+from src.ml.text_hibrido import interpretar
 
 logger = logging.getLogger(__name__)
 
@@ -162,20 +162,36 @@ def score_zones(features: pd.DataFrame, weights: Optional[Dict[str, float]] = No
     return df.sort_values("score", ascending=False)
 
 
+def recommend_for_category(
+    db, category: str, weights: Optional[Dict[str, float]] = None, radius_m: float = DEFAULT_POI_RADIUS_M
+) -> pd.DataFrame:
+    """Features por zona y puntaje para una categoría ya decidida (ya sea interpretada del texto o elegida por el
+    usuario)."""
+    features = build_zone_features(db, category, radius_m)
+    if features["demanda"].isna().all():
+        logger.warning("Ninguna zona tiene demografía cargada — el score de demanda será neutral (0.5) para todas")
+    return score_zones(features, weights)
+
+
 def recommend_locations(
-    db, business_type_text: str, weights: Optional[Dict[str, float]] = None, radius_m: float = DEFAULT_POI_RADIUS_M
+    db,
+    business_type_text: str,
+    weights: Optional[Dict[str, float]] = None,
+    radius_m: float = DEFAULT_POI_RADIUS_M,
+    modelo_texto=None,
 ) -> pd.DataFrame:
     """Punto de entrada de extremo a extremo: texto libre -> categoría ->
     features por zona -> puntaje. Lanza ValueError si el texto no se pudo
-    interpretar (no adivina una categoría al azar)."""
-    category = classify_business_type(business_type_text)
+    interpretar (no adivina una categoría al azar).
+
+    La categoría sale del sistema híbrido de src/ml/text_hibrido.py: palabras clave primero y, solo si no
+    reconocen el negocio, el clasificador entrenado `modelo_texto` (si se da; sin él, solo palabras clave)."""
+    interpretacion = interpretar(business_type_text, modelo_texto)
+    category = interpretacion.categoria
     if category is None:
         raise ValueError(
             f"No pude identificar el tipo de negocio en: '{business_type_text}'. "
             "Prueba con una descripción más específica (ej. 'restaurante', 'farmacia', 'gimnasio')."
         )
-    logger.info(f"'{business_type_text}' -> categoría: {category}")
-    features = build_zone_features(db, category, radius_m)
-    if features["demanda"].isna().all():
-        logger.warning("Ninguna zona tiene demografía cargada — el score de demanda será neutral (0.5) para todas")
-    return score_zones(features, weights)
+    logger.info(f"'{business_type_text}' -> categoría: {category} ({interpretacion.fuente})")
+    return recommend_for_category(db, category, weights, radius_m)

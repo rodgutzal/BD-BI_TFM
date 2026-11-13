@@ -1,0 +1,84 @@
+{
+  "adoptado": true,
+  "advertencia": "Frases de evaluación escritas por un modelo de lenguaje (Codex) y etiquetadas por otra sesión a ciegas; no son consultas reales de usuarios: la exactitud puede ser optimista y depende de la composición del conjunto.",
+  "datos": {
+    "entrenamiento": {
+      "archivo": "frases_entrenamiento.psv",
+      "frases": 347,
+      "sha256": "3080f1b8b44df2bfca1fe22db22da05cc588ec0f62aac338761c77f805373a2f"
+    },
+    "evaluacion": {
+      "archivo": "frases_evaluacion_v2.psv",
+      "filtro": "solo_coincidentes",
+      "frases": 192,
+      "frases_en_archivo": 200,
+      "sha256": "300bc2747fe41efb939e7ec8b5527e3fca6c48880f6e3255cc566c76bb70ef20"
+    }
+  },
+  "decision": {
+    "equivocadas_hibrido": 0.0625,
+    "equivocadas_palabras": 0.057291666666666664,
+    "exactitud": {
+      "diferencia": 0.09375,
+      "ic_inf": 0.052083333333333336,
+      "ic_sup": 0.13541666666666666
+    },
+    "tolerancia_errores": 0.02
+  },
+  "formato": 1,
+  "modelo": {
+    "archivo": "text_classifier.json",
+    "clases": [
+      "business",
+      "food_drink",
+      "hospital",
+      "leisure",
+      "mall",
+      "ninguna",
+      "school",
+      "sport"
+    ],
+    "n_ngramas": 6295,
+    "ngramas": [
+      2,
+      5
+    ],
+    "sha256": "d18f93db34202d835070d899ff84b31c152f74bba5998ec3a3eea1f06cbe0291"
+  },
+  "procedencia": {
+    "commit": "d0462dd+",
+    "version.numpy": "2.4.6",
+    "version.pandas": "3.0.3",
+    "version.python": "3.13.14",
+    "version.scikit-learn": "1.9.0",
+    "version.scipy": "1.18.0"
+  },
+  "resumen": {
+    "hibrido": {
+      "equivocadas": 0.0625,
+      "exactitud": 0.7604166666666666,
+      "sin_respuesta": 0.17708333333333334
+    },
+    "hibrido_mlp": {
+      "equivocadas": 0.057291666666666664,
+      "exactitud": 0.7447916666666666,
+      "sin_respuesta": 0.19791666666666666
+    },
+    "logistica": {
+      "equivocadas": 0.026041666666666668,
+      "exactitud": 0.5833333333333334,
+      "sin_respuesta": 0.390625
+    },
+    "mlp": {
+      "equivocadas": 0.010416666666666666,
+      "exactitud": 0.6145833333333334,
+      "sin_respuesta": 0.375
+    },
+    "palabras": {
+      "equivocadas": 0.057291666666666664,
+      "exactitud": 0.6666666666666666,
+      "sin_respuesta": 0.2760416666666667
+    }
+  },
+  "umbral": 0.5
+}
