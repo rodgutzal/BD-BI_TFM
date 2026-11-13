@@ -30,14 +30,18 @@ class Respuesta:
 
 
 class SesionFalsa:
-    """Responde a cada espejo con lo que se le configure: {endpoint: JSON o excepción}."""
+    """Responde a cada espejo con lo que se le configure: {endpoint: JSON o excepción, o una LISTA de ellos que se va
+    consumiendo en cada llamada (la última se repite)}."""
 
     def __init__(self, respuestas):
-        self.respuestas, self.llamadas = respuestas, []
+        self.respuestas, self.llamadas, self.timeouts = respuestas, [], []
 
     def post(self, endpoint, data=None, timeout=None):
         self.llamadas.append((endpoint, data["data"]))
+        self.timeouts.append(timeout)
         r = self.respuestas[endpoint]
+        if isinstance(r, list):
+            r = r.pop(0) if len(r) > 1 else r[0]
         return Respuesta(None, r) if isinstance(r, Exception) else Respuesta(r)
 
 
@@ -132,7 +136,7 @@ def test_un_espejo_que_ignora_la_fecha_se_rechaza_y_se_prueba_el_siguiente():
             "https://bueno": respuesta("2022-01-01T00:00:00Z", n=3),
         }
     )
-    datos, espejo = dh.pedir(cliente, "consulta", "2022-01-01T00:00:00Z")
+    datos, espejo = dh.pedir(cliente, "consulta", "2022-01-01T00:00:00Z", espera_s=0)
     assert espejo == "https://bueno" and len(datos["elements"]) == 3
     assert [e for e, _ in cliente.session.llamadas] == ["https://malo", "https://bueno"]
 
@@ -143,7 +147,7 @@ def test_si_todos_los_espejos_ignoran_la_fecha_falla_en_vez_de_devolver_el_prese
         {"https://a": respuesta("2026-11-12T20:00:00Z"), "https://b": respuesta("2026-11-12T20:00:00Z")}
     )
     with pytest.raises(RuntimeError, match="ignoró la fecha"):
-        dh.pedir(cliente, "consulta", "2022-01-01T00:00:00Z")
+        dh.pedir(cliente, "consulta", "2022-01-01T00:00:00Z", espera_s=0)
 
 
 def test_un_error_de_red_en_un_espejo_pasa_al_siguiente():
@@ -172,7 +176,7 @@ def test_descargar_escribe_los_json_y_un_manifiesto_con_fecha_base_y_hash(tmp_pa
 def test_un_trozo_que_falla_se_anota_y_los_demas_siguen(tmp_path):
     """Si ningún espejo da la fecha pedida, ese trozo queda en `fallidos` y no se escribe su archivo."""
     cliente = ClienteFalso({"https://x": respuesta("2026-11-12T20:00:00Z")})
-    m = dh.descargar(cliente, tmp_path, ["2022-01-01"], pausa_s=0, log=lambda *_: None)
+    m = dh.descargar(cliente, tmp_path, ["2022-01-01"], pausa_s=0, log=lambda *_: None, espera_s=0)
     assert len(m["fallidos"]) == 2 and m["archivos"] == {}
     assert not (tmp_path / "2022-01-01_0.json").exists()
 
@@ -205,3 +209,55 @@ def test_el_dry_run_no_hace_ninguna_llamada_de_red(monkeypatch, capsys):
 def test_los_datos_descargados_estan_ignorados_por_git():
     """El estado histórico se regenera y no se versiona: `data/osm_history/` está en .gitignore."""
     assert "data/osm_history/" in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
+# ---- servicios públicos saturados: rondas, motivo de cada espejo y timeout de conexión -------------------------------
+def test_si_todos_fallan_en_la_primera_ronda_se_espera_y_se_reintenta():
+    """Los espejos públicos se saturan y se recuperan: tras una ronda en la que todos fallan se espera y se vuelve a
+    empezar; aquí el primero está «al límite de capacidad» en la ronda 1 y responde en la 2."""
+    cliente = ClienteFalso(
+        {"https://a": [OSError("502 al límite de capacidad"), respuesta("2022-01-01T00:00:00Z", n=5)]}
+    )
+    esperas = []
+    datos, espejo = dh.pedir(cliente, "q", "2022-01-01T00:00:00Z", rondas=3, espera_s=90, dormir=esperas.append)
+    assert len(datos["elements"]) == 5 and espejo == "https://a"
+    assert esperas == [90]  # una sola espera, entre la ronda 1 y la 2
+
+
+def test_se_rinde_tras_las_rondas_indicadas_y_solo_espera_entre_ellas():
+    """Con 3 rondas fallidas hay 2 esperas (no una tras la última) y 3 intentos por espejo."""
+    cliente = ClienteFalso({"https://a": OSError("sin red")})
+    esperas = []
+    with pytest.raises(RuntimeError, match="3 rondas"):
+        dh.pedir(cliente, "q", None, rondas=3, espera_s=7, dormir=esperas.append)
+    assert esperas == [7, 7] and len(cliente.session.llamadas) == 3
+
+
+def test_el_error_final_dice_por_que_fallo_cada_espejo():
+    """Antes solo se veía el motivo del ÚLTIMO espejo y se ocultaba el de los demás."""
+    cliente = ClienteFalso({"https://a": OSError("502 sin capacidad"), "https://b": ValueError("respuesta inválida")})
+    with pytest.raises(RuntimeError) as e:
+        dh.pedir(cliente, "q", None, rondas=1, espera_s=0)
+    texto = str(e.value)
+    assert "https://a -> OSError: 502 sin capacidad" in texto and "https://b -> ValueError: respuesta inválida" in texto
+
+
+def test_el_timeout_de_conexion_es_corto_y_el_de_lectura_largo():
+    """Un espejo que no conecta se salta en segundos; solo la lectura (la consulta pesada) puede tardar."""
+    cliente = ClienteFalso({"https://a": respuesta("2022-01-01T00:00:00Z")})
+    dh.pedir(cliente, "q", "2022-01-01T00:00:00Z")
+    conexion, lectura = cliente.session.timeouts[0]
+    assert conexion <= 20 and lectura >= 150
+
+
+def test_descargar_respeta_las_rondas_y_la_espera_que_se_le_indican(tmp_path, monkeypatch):
+    """`descargar` pasa `rondas` y `espera_s` a `pedir`: con 2 rondas y un espejo caído hay 2 intentos por trozo (4 en
+    total para los 2 trozos de 2022) y una espera de 5 s por trozo, entre la ronda 1 y la 2."""
+    esperas = []
+    monkeypatch.setattr(dh.time, "sleep", esperas.append)
+    cliente = ClienteFalso({"https://x": OSError("sin capacidad")})
+    m = dh.descargar(cliente, tmp_path, ["2022-01-01"], pausa_s=0, log=lambda *_: None, rondas=2, espera_s=5)
+    assert len(cliente.session.llamadas) == 4 and esperas.count(5) == 2 and len(m["fallidos"]) == 2
+    assert (
+        "2 rondas" in m["fallidos"][0]["error"] and "https://x -> OSError: sin capacidad" in m["fallidos"][0]["error"]
+    )

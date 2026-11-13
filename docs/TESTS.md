@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 857 funciones de test · 951 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 862 funciones de test · 956 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 15 | 19 |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 20 | 24 |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -477,6 +477,11 @@
 - `test_descargar_solo_escribe_dentro_del_directorio_de_salida` — No toca nada fuera de `out_dir` (ni la base de datos).
 - `test_el_dry_run_no_hace_ninguna_llamada_de_red` — `--dry-run` imprime las consultas y no crea ni usa el cliente de Overpass.
 - `test_los_datos_descargados_estan_ignorados_por_git` — El estado histórico se regenera y no se versiona: `data/osm_history/` está en .gitignore.
+- `test_si_todos_fallan_en_la_primera_ronda_se_espera_y_se_reintenta` — Los espejos públicos se saturan y se recuperan: tras una ronda en la que todos fallan se espera y se vuelve a empezar; aquí el primero está «al límite de capacidad» en la ronda 1 y responde en la 2.
+- `test_se_rinde_tras_las_rondas_indicadas_y_solo_espera_entre_ellas` — Con 3 rondas fallidas hay 2 esperas (no una tras la última) y 3 intentos por espejo.
+- `test_el_error_final_dice_por_que_fallo_cada_espejo` — Antes solo se veía el motivo del ÚLTIMO espejo y se ocultaba el de los demás.
+- `test_el_timeout_de_conexion_es_corto_y_el_de_lectura_largo` — Un espejo que no conecta se salta en segundos; solo la lectura (la consulta pesada) puede tardar.
+- `test_descargar_respeta_las_rondas_y_la_espera_que_se_le_indican` — `descargar` pasa `rondas` y `espera_s` a `pedir`: con 2 rondas y un espejo caído hay 2 intentos por trozo (4 en total para los 2 trozos de 2022) y una espera de 5 s por trozo, entre la ronda 1 y la 2.
 
 ## `tests/test_ensemble_predictor.py`
 

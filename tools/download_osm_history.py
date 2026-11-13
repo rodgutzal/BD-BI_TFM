@@ -36,6 +36,9 @@ from src.poi_client import CATEGORY_TAGS, OverpassClient, _parse_spec  # noqa: E
 PAUSA_S = 12
 TIMEOUT_SERVIDOR_S = 150
 TIMEOUT_HTTP_S = 190
+TIMEOUT_CONEXION_S = 15  # un espejo que no conecta en 15 s se salta; no hay que esperar 190 s para saberlo
+RONDAS = 3  # veces que se recorren todos los espejos antes de rendirse (los públicos se saturan y se recuperan)
+ESPERA_RONDAS_S = 90
 FRANJAS = 2  # el área se parte en franjas de latitud para no cargar el servicio público
 
 # Instante -> fecha ISO que se le pide a Overpass (None = el estado actual).
@@ -120,22 +123,41 @@ def fecha_aceptada(respuesta: dict, fecha_pedida: Optional[str]) -> bool:
     return isinstance(base, str) and base <= fecha_pedida
 
 
-def pedir(cliente, consulta: str, fecha_pedida: Optional[str]) -> Tuple[dict, str]:
+def pedir(
+    cliente,
+    consulta: str,
+    fecha_pedida: Optional[str],
+    rondas: Optional[int] = None,
+    espera_s: Optional[float] = None,
+    dormir=None,
+) -> Tuple[dict, str]:
     """Envía la consulta probando cada espejo en orden; devuelve (JSON, espejo). Un espejo que responde pero con otra fecha
-    base se descarta como si fallara. Lanza RuntimeError si todos fallan."""
-    ultimo = None
-    for endpoint in cliente.endpoints:
-        try:
-            r = cliente.session.post(endpoint, data={"data": consulta}, timeout=TIMEOUT_HTTP_S)
-            r.raise_for_status()
-            datos = r.json()
-            if not fecha_aceptada(datos, fecha_pedida):
-                base = (datos.get("osm3s") or {}).get("timestamp_osm_base")
-                raise ValueError(f"el espejo ignoró la fecha: pedí {fecha_pedida} y usó {base}")
-            return datos, endpoint
-        except Exception as e:  # red, HTTP, JSON inválido o fecha ignorada: se prueba el siguiente espejo
-            ultimo = e
-    raise RuntimeError(f"Todos los espejos de Overpass fallaron. Último error: {ultimo}")
+    base se descarta como si fallara. Si TODOS fallan se espera `espera_s` y se vuelve a empezar, hasta `rondas` rondas
+    (los espejos públicos se saturan y se recuperan). Lanza RuntimeError con el motivo de CADA espejo en la última ronda.
+    """
+    rondas = RONDAS if rondas is None else rondas
+    espera_s = ESPERA_RONDAS_S if espera_s is None else espera_s
+    dormir = time.sleep if dormir is None else dormir
+    errores: Dict[str, str] = {}
+    for ronda in range(rondas):
+        errores = {}
+        for endpoint in cliente.endpoints:
+            try:
+                r = cliente.session.post(
+                    endpoint, data={"data": consulta}, timeout=(TIMEOUT_CONEXION_S, TIMEOUT_HTTP_S)
+                )
+                r.raise_for_status()
+                datos = r.json()
+                if not fecha_aceptada(datos, fecha_pedida):
+                    base = (datos.get("osm3s") or {}).get("timestamp_osm_base")
+                    raise ValueError(f"el espejo ignoró la fecha: pedí {fecha_pedida} y usó {base}")
+                return datos, endpoint
+            except Exception as e:  # red, HTTP, JSON inválido o fecha ignorada: se prueba el siguiente espejo
+                errores[endpoint] = f"{type(e).__name__}: {str(e)[:160]}"
+        if ronda < rondas - 1:
+            dormir(espera_s)
+    detalle = "; ".join(f"{ep} -> {err}" for ep, err in errores.items())
+    raise RuntimeError(f"Todos los espejos de Overpass fallaron en {rondas} rondas. {detalle}")
 
 
 def sha256_de(ruta: Path) -> str:
@@ -143,7 +165,13 @@ def sha256_de(ruta: Path) -> str:
 
 
 def descargar(
-    cliente, out_dir: Path, instantes: Optional[List[str]] = None, pausa_s: float = PAUSA_S, log=print
+    cliente,
+    out_dir: Path,
+    instantes: Optional[List[str]] = None,
+    pausa_s: float = PAUSA_S,
+    log=print,
+    rondas: Optional[int] = None,
+    espera_s: Optional[float] = None,
 ) -> dict:
     """Descarga cada trozo a `out_dir/<instante>_<franja>.json` y escribe `manifest.json`. Devuelve el manifiesto.
     NO escribe nada fuera de `out_dir`."""
@@ -161,7 +189,7 @@ def descargar(
         t0 = time.perf_counter()
         archivo = f"{nombre}_{franja}.json"
         try:
-            datos, endpoint = pedir(cliente, consulta, fecha)
+            datos, endpoint = pedir(cliente, consulta, fecha, rondas, espera_s)
             elementos = datos.get("elements", [])
             ruta = out_dir / archivo
             ruta.write_text(
@@ -202,6 +230,8 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--instantes", nargs="+", choices=list(INSTANTES), default=list(INSTANTES))
     ap.add_argument("--dry-run", action="store_true", help="muestra las consultas sin hacer ninguna llamada de red")
     ap.add_argument("--pausa", type=float, default=PAUSA_S, help="segundos de pausa entre peticiones")
+    ap.add_argument("--rondas", type=int, default=RONDAS, help="rondas por todos los espejos antes de rendirse")
+    ap.add_argument("--espera", type=float, default=ESPERA_RONDAS_S, help="segundos entre rondas")
     args = ap.parse_args(argv)
 
     trabajo = plan(args.instantes)
@@ -215,7 +245,12 @@ def main(argv: Optional[list] = None) -> int:
         return 0
 
     manifiesto = descargar(
-        OverpassClient(timeout=TIMEOUT_HTTP_S, max_retries=1), Path(args.out), args.instantes, args.pausa
+        OverpassClient(timeout=TIMEOUT_HTTP_S, max_retries=1),
+        Path(args.out),
+        args.instantes,
+        args.pausa,
+        rondas=args.rondas,
+        espera_s=args.espera,
     )
     print("\nResumen:")
     for archivo, d in manifiesto["archivos"].items():
