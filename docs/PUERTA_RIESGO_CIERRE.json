@@ -1,0 +1,34 @@
+{
+  "bloques_con_cierre": 45,
+  "cierres_principales": 203,
+  "descartados_de_la_poblacion": {
+    "borde_o_fuera": 99,
+    "local_vacio": 0,
+    "sin_categoria": 0,
+    "sin_coordenadas": 0,
+    "sin_nombre": 240
+  },
+  "entradas_sha256": {
+    "2022-01-01_0.json": "8807fb5a32b3d8a5ce9d9e7002ae3e10a4bb84a1880501dea9aae318ceba2780",
+    "2022-01-01_1.json": "c734cdd0f0c91ca311bfb1d86dfff77d3aaade8ae5f18a9896a1fdfde7790a44",
+    "2024-01-01_0.json": "f64b8dfd815bf5cb0cc534ac9e8907dfa44f3a6be7da0ab677ac49b9640c0348",
+    "2024-01-01_1.json": "08db0ff1e9d460d2e4da46797f9481386088b86d29dc4931a114286eb147b0b7",
+    "ciclo_de_vida_0.json": "4d1cd13fc64cb870a193c3c9621ebf95c69cad9a23f72c65856ebb7b07a27e8f",
+    "hoy_0.json": "eb5bff85efbc04317d2d1f8e1290da1b21fb4e9ce8398c98025437de73d8de20",
+    "hoy_1.json": "da17dcf509fb44af24006c8b0bc493338b929f0f220e43fec05ebbd60feabc04"
+  },
+  "minimos": {
+    "bloques_con_cierre": 30,
+    "cierres_principales": 60
+  },
+  "pasa": true,
+  "poblacion": 1772,
+  "por_nivel": {
+    "dudoso": 341,
+    "fuerte": 38,
+    "probable": 165,
+    "superviviente": 1228
+  },
+  "protocolo": "docs/DISENO_ML_RECOMENDACION.md, sección 3.M (v2.1)",
+  "veredicto": "la puerta se cumple: se puede entrenar y evaluar"
+}
