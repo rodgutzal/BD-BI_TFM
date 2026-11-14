@@ -56,11 +56,21 @@ def cargar_fotos(rutas: Dict[str, Path]) -> Dict[str, List[dict]]:
     return {g: [e for a in archivos for e in leer_elementos(rutas[a])] for g, archivos in asignados.items()}
 
 
-def calcular_puerta(out_dir: Path, huella: Optional[dict]) -> dict:
-    """Verifica, lee y devuelve el resultado de la puerta junto con lo descartado de la población y lo que se leyó."""
+def etiquetas_verificadas(out_dir: Path, huella: Optional[dict]):
+    """LA vía para leer la descarga (la validación posterior debe partir de aquí): exige la huella versionada, verifica con
+    `exigir_datos_verificados` ANTES de leer ningún archivo y devuelve (tabla de etiquetas, descartados de la población, rutas).
+    """
+    if huella is None:
+        raise ValueError("falta docs/HUELLA_OSM_HISTORY.json: sin el ancla externa no se leen los datos.")
     rutas = dh.exigir_datos_verificados(out_dir, huella)  # se niega (ValueError) si algo no es utilizable
     fotos = cargar_fotos(rutas)
     etiquetas, descartados = closure_labels.etiquetar(fotos["2022"], fotos["hoy"], fotos["ciclo"])
+    return etiquetas, descartados, rutas
+
+
+def calcular_puerta(out_dir: Path, huella: Optional[dict]) -> dict:
+    """Verifica, lee y devuelve el resultado de la puerta junto con lo descartado de la población y lo que se leyó."""
+    etiquetas, descartados, rutas = etiquetas_verificadas(out_dir, huella)
     resultado = closure_labels.puerta(etiquetas)
     resultado["descartados_de_la_poblacion"] = descartados
     resultado["protocolo"] = PROTOCOLO
@@ -80,9 +90,6 @@ def main(argv: Optional[list] = None) -> int:
 
     try:
         huella = dh.cargar_huella(dh.HUELLA_POR_DEFECTO)
-        if huella is None:
-            print("ERROR: falta docs/HUELLA_OSM_HISTORY.json: sin el ancla externa no se leen los datos.")
-            return 1
         resultado = calcular_puerta(Path(args.out), huella)
     except (ValueError, OSError, KeyError) as e:
         print(f"ERROR: {e}")

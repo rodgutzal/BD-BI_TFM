@@ -2,8 +2,10 @@
 
 Implementa, SIN ninguna decisión nueva, el protocolo fijado antes de descargar los datos: sección 3.M de
 `docs/DISENO_ML_RECOMENDACION.md` (v2.2: v2.1 más los detalles de implementación declarados). Cada función cita la regla del protocolo que aplica. Son funciones puras sobre
-listas de elementos de OpenStreetMap (`{"type", "id", "lat"/"lon" o "center", "tags"}`); no leen archivos ni red. Quien las
-llama (`tools/build_closure_labels.py`) es quien debe haber pasado `exigir_datos_verificados` antes de leer los datos.
+listas de elementos de OpenStreetMap (`{"type", "id", "lat"/"lon" o "center", "tags"}`); no leen archivos ni red (un test lo
+fija). Por eso NO pueden imponer que los datos estén verificados: esa garantía la da la ÚNICA vía del repositorio para leer
+la descarga, `tools/build_closure_labels.etiquetas_verificadas`, que llama a `exigir_datos_verificados` con la huella antes
+de leer nada. Cualquier análisis posterior (la validación) debe partir de ella, no de archivos leídos por su cuenta.
 
 Un local es el par **(tipo, id)**. Los niveles se evalúan en orden y decide el primero que se cumple:
 fuerte → superviviente → dudoso → probable. **Cierre principal** = fuerte ∪ probable contra superviviente (los dudosos no
@@ -117,8 +119,13 @@ def _unicos(elementos: Iterable[dict]) -> Dict[LLAVE, dict]:
     salida: Dict[LLAVE, dict] = {}
     for e in elementos:
         k = llave(e)
-        if k is not None and k not in salida:
-            salida[k] = e
+        if k is None:
+            continue
+        if k in salida and salida[k] != e:
+            # Las franjas solapadas deben traer copias IGUALES: si no, no se elige una en silencio (los duplicados de la
+            # descarga real son idénticos, comprobado).
+            raise ValueError(f"El elemento {k} aparece repetido con datos distintos: no se puede elegir una copia.")
+        salida.setdefault(k, e)
     return salida
 
 

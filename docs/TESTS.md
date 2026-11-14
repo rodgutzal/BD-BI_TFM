@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**54 archivos · 1038 funciones de test · 1240 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**54 archivos · 1042 funciones de test · 1244 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -19,7 +19,7 @@
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
-| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 68 | 138+ |
+| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 72 | 142+ |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
 | [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 38 | 49+ |
@@ -343,7 +343,11 @@
 - `test_un_elements_que_no_es_lista_se_rechaza`
 - `test_justo_a_500_m_del_borde_se_excluye_la_poblacion_es_a_MAS_de_500`
 - `test_justo_a_60_m_es_el_mismo_sitio_el_umbral_es_inclusivo`
-- `test_si_un_elemento_viene_repetido_con_datos_distintos_gana_el_primero` — Determinista: las franjas solapadas traen copias iguales, pero si no lo fueran no depende del azar.
+- `test_un_elemento_repetido_con_datos_distintos_es_un_error_no_se_elige_en_silencio` — Las franjas solapadas traen copias iguales; si discrepasen, no se puede saber cuál vale: se niega.
+- `test_un_elemento_repetido_con_datos_identicos_cuenta_una_vez`
+- `test_el_modulo_de_etiquetas_no_lee_archivos_ni_la_descarga` — Es puro: la garantía de «solo datos verificados» la da `etiquetas_verificadas`, la única vía de lectura.
+- `test_etiquetas_verificadas_se_niega_sin_huella_y_no_lee_nada`
+- `test_etiquetas_verificadas_verifica_antes_de_leer_y_devuelve_las_etiquetas`
 - `test_si_hoy_y_ciclo_de_vida_discrepan_en_un_tag_manda_hoy` — Hoy dice «Café Luna»; el archivo de ciclo de vida (otra consulta, otro instante) dice «Otro»: manda hoy, así que es superviviente.
 - `test_un_way_de_2022_se_empareja_con_el_way_de_hoy_y_no_con_un_nodo_del_mismo_numero`
 - `test_cargar_fotos_asigna_todos_los_archivos_del_plan_real` — Los nombres salen de `dh.plan()`, no escritos a mano: si la descarga cambia de nombres, este test lo ve.

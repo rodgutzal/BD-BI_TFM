@@ -658,10 +658,51 @@ def test_justo_a_60_m_es_el_mismo_sitio_el_umbral_es_inclusivo(monkeypatch):
     assert un_nivel(nodo(1, **CAFE), hoy=[nodo(900, **CAFE)]) == "probable"
 
 
-def test_si_un_elemento_viene_repetido_con_datos_distintos_gana_el_primero():
-    """Determinista: las franjas solapadas traen copias iguales, pero si no lo fueran no depende del azar."""
-    tabla, _ = cl.poblacion_2022([nodo(1, amenity="cafe", name="Primero"), nodo(1, amenity="cafe", name="Segundo")])
-    assert list(tabla["nombre_norm"]) == ["primero"]
+def test_un_elemento_repetido_con_datos_distintos_es_un_error_no_se_elige_en_silencio():
+    """Las franjas solapadas traen copias iguales; si discrepasen, no se puede saber cuál vale: se niega."""
+    with pytest.raises(ValueError, match="aparece repetido con datos distintos"):
+        cl.poblacion_2022([nodo(1, amenity="cafe", name="Primero"), nodo(1, amenity="cafe", name="Segundo")])
+    with pytest.raises(ValueError, match="aparece repetido con datos distintos"):
+        cl.etiquetar([], [nodo(1, **CAFE), nodo(1, **CAFE, extra="x")], [])
+
+
+def test_un_elemento_repetido_con_datos_identicos_cuenta_una_vez():
+    tabla, _ = cl.poblacion_2022([nodo(1, **CAFE), nodo(1, **CAFE)])
+    assert len(tabla) == 1
+
+
+def test_el_modulo_de_etiquetas_no_lee_archivos_ni_la_descarga():
+    """Es puro: la garantía de «solo datos verificados» la da `etiquetas_verificadas`, la única vía de lectura."""
+    texto = (ROOT / "src" / "ml" / "closure_labels.py").read_text(encoding="utf-8")
+    codigo = "\n".join(linea for linea in texto.split("\n") if not linea.lstrip().startswith(("#", '"', "`")))
+    for prohibido in ("open(", "read_text(", "read_bytes(", "json.load", "osm_history", "requests."):
+        assert prohibido not in codigo, f"el módulo de etiquetas no debe contener {prohibido!r}"
+
+
+def test_etiquetas_verificadas_se_niega_sin_huella_y_no_lee_nada(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        dh, "exigir_datos_verificados", lambda *a, **k: pytest.fail("no debe verificar ni leer sin huella")
+    )
+    with pytest.raises(ValueError, match="falta docs/HUELLA_OSM_HISTORY.json"):
+        herramienta.etiquetas_verificadas(tmp_path, None)
+
+
+def test_etiquetas_verificadas_verifica_antes_de_leer_y_devuelve_las_etiquetas(tmp_path, monkeypatch):
+    antes = [nodo(i, **{**CAFE, "name": f"N{i}"}) for i in range(1, 4)]
+    llamadas = _entradas_falsas(tmp_path, monkeypatch, antes, hoy=[nodo(2, amenity="cafe", name="N2")], ciclo=[])
+    orden = []
+    real_leer = herramienta.leer_elementos
+    monkeypatch.setattr(
+        herramienta, "leer_elementos", lambda ruta: orden.append(("leer", ruta.name)) or real_leer(ruta)
+    )
+    real_exigir = dh.exigir_datos_verificados
+    monkeypatch.setattr(
+        dh, "exigir_datos_verificados", lambda *a, **k: orden.append(("verificar",)) or real_exigir(*a, **k)
+    )
+    etiquetas, descartados, rutas = herramienta.etiquetas_verificadas(tmp_path, {"archivos": {}})
+    assert orden[0] == ("verificar",) and all(paso[0] == "leer" for paso in orden[1:]) and len(orden) > 1
+    assert sorted(etiquetas["nivel"].astype(str)) == ["probable", "probable", "superviviente"]
+    assert sorted(rutas) == sorted(f"{n}_{f}.json" for n, f, _, _ in dh.plan()) and len(llamadas) == 1
 
 
 def test_si_hoy_y_ciclo_de_vida_discrepan_en_un_tag_manda_hoy():
