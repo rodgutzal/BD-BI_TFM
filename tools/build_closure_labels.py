@@ -15,6 +15,7 @@ Uso (desde la raíz del proyecto; los datos están en `data/osm_history/`, ignor
 """
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -31,15 +32,23 @@ RESULTADO_POR_DEFECTO = ROOT / "docs" / "PUERTA_RIESGO_CIERRE.json"
 PROTOCOLO = "docs/DISENO_ML_RECOMENDACION.md, sección 3.M (v2.2)"
 
 
-def leer_elementos(ruta: Path) -> List[dict]:
-    """Los elementos de un archivo de la descarga."""
-    elementos = json.loads(Path(ruta).read_text(encoding="utf-8"))["elements"]
+def leer_elementos(ruta: Path, sha256_esperado: str) -> List[dict]:
+    """Los elementos de un archivo de la descarga. Lee los bytes UNA sola vez, comprueba que su sha256 es el verificado y
+    parsea esos mismos bytes: así no hay ventana entre «verificar» y «leer» en la que el archivo pueda haber cambiado.
+    """
+    datos = Path(ruta).read_bytes()
+    leido = hashlib.sha256(datos).hexdigest()
+    if leido != sha256_esperado:
+        raise ValueError(
+            f"{ruta}: el archivo que se lee no es el que se verificó (sha256 {leido[:12]}… en vez de {str(sha256_esperado)[:12]}…)."
+        )
+    elementos = json.loads(datos.decode("utf-8"))["elements"]
     if not isinstance(elementos, list):
         raise ValueError(f"{ruta}: «elements» no es una lista")
     return elementos
 
 
-def cargar_fotos(rutas: Dict[str, Path]) -> Dict[str, List[dict]]:
+def cargar_fotos(rutas: Dict[str, Path], hashes: Dict[str, str]) -> Dict[str, List[dict]]:
     """Agrupa los trozos verificados por instante: 2022, hoy y ciclo de vida (cada uno en dos franjas, salvo el último).
     Se niega si algún grupo queda vacío o algún archivo no encaja en ninguno: con un nombre cambiado en la descarga, «hoy»
     saldría vacío y todos los locales serían «probables» sin que nada avisara."""
@@ -53,29 +62,33 @@ def cargar_fotos(rutas: Dict[str, Path]) -> Dict[str, List[dict]]:
     desconocidos = sorted(a for a in rutas if a not in usados and not a.startswith("2024-01-01_"))
     if desconocidos:
         raise ValueError(f"Archivos verificados que no encajan en ningún instante conocido: {desconocidos}")
-    return {g: [e for a in archivos for e in leer_elementos(rutas[a])] for g, archivos in asignados.items()}
+    return {g: [e for a in archivos for e in leer_elementos(rutas[a], hashes[a])] for g, archivos in asignados.items()}
 
 
 def etiquetas_verificadas(out_dir: Path, huella: Optional[dict]):
     """LA vía para leer la descarga (la validación posterior debe partir de aquí): exige la huella versionada, verifica con
-    `exigir_datos_verificados` ANTES de leer ningún archivo y devuelve (tabla de etiquetas, descartados de la población, rutas).
+    `exigir_datos_verificados` ANTES de leer ningún archivo y lee cada archivo comprobando que sus bytes son los verificados
+    (sha256 de la huella). Devuelve (tabla de etiquetas, descartados de la población, {archivo: sha256 de lo verificado}).
     """
     if huella is None:
         raise ValueError("falta docs/HUELLA_OSM_HISTORY.json: sin el ancla externa no se leen los datos.")
     rutas = dh.exigir_datos_verificados(out_dir, huella)  # se niega (ValueError) si algo no es utilizable
-    fotos = cargar_fotos(rutas)
+    # Los hashes son los del ancla externa (la huella), no los de un segundo vistazo al manifiesto.
+    hashes = {a: huella["archivos"][a]["sha256"] for a in rutas}
+    fotos = cargar_fotos(rutas, hashes)
     etiquetas, descartados = closure_labels.etiquetar(fotos["2022"], fotos["hoy"], fotos["ciclo"])
-    return etiquetas, descartados, rutas
+    return etiquetas, descartados, hashes
 
 
 def calcular_puerta(out_dir: Path, huella: Optional[dict]) -> dict:
     """Verifica, lee y devuelve el resultado de la puerta junto con lo descartado de la población y lo que se leyó."""
-    etiquetas, descartados, rutas = etiquetas_verificadas(out_dir, huella)
+    etiquetas, descartados, hashes = etiquetas_verificadas(out_dir, huella)
     resultado = closure_labels.puerta(etiquetas)
     resultado["descartados_de_la_poblacion"] = descartados
     resultado["protocolo"] = PROTOCOLO
-    manifiesto = json.loads((Path(out_dir) / "manifest.json").read_text(encoding="utf-8"))["archivos"]
-    resultado["entradas_sha256"] = {a: manifiesto[a]["sha256"] for a in sorted(rutas)}
+    resultado["entradas_sha256"] = {
+        a: hashes[a] for a in sorted(hashes)
+    }  # lo verificado y leído, sin releer el manifiesto
     return resultado
 
 

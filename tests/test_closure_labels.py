@@ -526,14 +526,27 @@ def _entradas_falsas(tmp_path, monkeypatch, antes, hoy, ciclo):
         "hoy_1.json": _escribe(tmp_path, "hoy_1.json", hoy[1::2]),
         "ciclo_de_vida_0.json": _escribe(tmp_path, "ciclo_de_vida_0.json", ciclo),
     }
-    manifiesto = {"archivos": {a: {"sha256": f"{i:064x}"} for i, a in enumerate(rutas)}}
-    (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
-    llamadas = []
+    huella = {
+        "archivos": {a: {"sha256": dh.sha256_de(r)} for a, r in rutas.items()}
+    }  # el ancla: hashes de lo verificado
+    (tmp_path / "manifest.json").write_text(json.dumps(huella), encoding="utf-8")  # (no lo lee ya la herramienta)
+    llamadas = _Llamadas()
+    llamadas.huella = huella
     monkeypatch.setattr(
         dh, "exigir_datos_verificados", lambda out_dir, huella=None: llamadas.append((out_dir, huella)) or rutas
     )
-    monkeypatch.setattr(dh, "cargar_huella", lambda ruta: {"archivos": {}})
+    monkeypatch.setattr(dh, "cargar_huella", lambda ruta: huella)
     return llamadas
+
+
+class _Llamadas(list):
+    """Las llamadas a `exigir_datos_verificados`, y la huella sintética con los sha256 de los archivos escritos."""
+
+    huella = None
+
+
+def _hashes(rutas):
+    return {a: dh.sha256_de(r) for a, r in rutas.items()}
 
 
 def test_la_herramienta_verifica_antes_de_leer_e_imprime_la_puerta(tmp_path, monkeypatch, capsys):
@@ -541,7 +554,7 @@ def test_la_herramienta_verifica_antes_de_leer_e_imprime_la_puerta(tmp_path, mon
     llamadas = _entradas_falsas(tmp_path, monkeypatch, antes, hoy=[nodo(3, amenity="cafe", name="N3")], ciclo=[])
     assert herramienta.main(["--out", str(tmp_path)]) == 0
     salida = capsys.readouterr().out
-    assert llamadas == [(tmp_path, {"archivos": {}})]  # se verificó con la huella
+    assert llamadas == [(tmp_path, llamadas.huella)]  # se verificó con la huella
     assert "Población de estudio" in salida and "fuerte 0 | superviviente 1 | dudoso 0 | probable 3" in salida
     assert "PUERTA: no concluyente: no se entrena" in salida
 
@@ -554,7 +567,7 @@ def test_la_herramienta_se_niega_si_los_datos_no_estan_verificados_y_no_lee_nada
 
     monkeypatch.setattr(dh, "exigir_datos_verificados", niega)
     leidos = []
-    monkeypatch.setattr(herramienta, "leer_elementos", lambda ruta: leidos.append(ruta) or [])
+    monkeypatch.setattr(herramienta, "leer_elementos", lambda ruta, sha: leidos.append(ruta) or [])
     assert herramienta.main(["--out", str(tmp_path)]) == 1
     assert "no son utilizables" in capsys.readouterr().out and leidos == []
 
@@ -631,7 +644,8 @@ def test_guardar_sin_destino_escribe_en_el_destino_por_defecto(tmp_path, monkeyp
 def test_la_herramienta_agrupa_los_trozos_por_instante_y_no_usa_2024(tmp_path, monkeypatch):
     antes = [nodo(1, **CAFE)]
     _entradas_falsas(tmp_path, monkeypatch, antes, hoy=[], ciclo=[])
-    fotos = herramienta.cargar_fotos(dh.exigir_datos_verificados(tmp_path, None))
+    rutas = dh.exigir_datos_verificados(tmp_path, None)
+    fotos = herramienta.cargar_fotos(rutas, _hashes(rutas))
     assert set(fotos) == {"2022", "hoy", "ciclo"} and [e["id"] for e in fotos["2022"]] == [1]
     assert all(e["id"] != 999 for g in fotos.values() for e in g)  # el elemento de 2024 no entra
 
@@ -640,7 +654,7 @@ def test_un_elements_que_no_es_lista_se_rechaza(tmp_path):
     ruta = tmp_path / "x.json"
     ruta.write_text(json.dumps({"elements": {"a": 1}}), encoding="utf-8")
     with pytest.raises(ValueError, match="no es una lista"):
-        herramienta.leer_elementos(ruta)
+        herramienta.leer_elementos(ruta, dh.sha256_de(ruta))
 
 
 # ---- casos límite que las mutaciones mostraron sin cubrir -----------------------------------------------------------------
@@ -693,13 +707,15 @@ def test_etiquetas_verificadas_verifica_antes_de_leer_y_devuelve_las_etiquetas(t
     orden = []
     real_leer = herramienta.leer_elementos
     monkeypatch.setattr(
-        herramienta, "leer_elementos", lambda ruta: orden.append(("leer", ruta.name)) or real_leer(ruta)
+        herramienta,
+        "leer_elementos",
+        lambda ruta, sha: orden.append(("leer", ruta.name)) or real_leer(ruta, sha),
     )
     real_exigir = dh.exigir_datos_verificados
     monkeypatch.setattr(
         dh, "exigir_datos_verificados", lambda *a, **k: orden.append(("verificar",)) or real_exigir(*a, **k)
     )
-    etiquetas, descartados, rutas = herramienta.etiquetas_verificadas(tmp_path, {"archivos": {}})
+    etiquetas, descartados, rutas = herramienta.etiquetas_verificadas(tmp_path, llamadas.huella)
     assert orden[0] == ("verificar",) and all(paso[0] == "leer" for paso in orden[1:]) and len(orden) > 1
     assert sorted(etiquetas["nivel"].astype(str)) == ["probable", "probable", "superviviente"]
     assert sorted(rutas) == sorted(f"{n}_{f}.json" for n, f, _, _ in dh.plan()) and len(llamadas) == 1
@@ -738,7 +754,8 @@ def _rutas_del_plan(tmp_path):
 
 def test_cargar_fotos_asigna_todos_los_archivos_del_plan_real(tmp_path):
     """Los nombres salen de `dh.plan()`, no escritos a mano: si la descarga cambia de nombres, este test lo ve."""
-    fotos = herramienta.cargar_fotos(_rutas_del_plan(tmp_path))
+    rutas = _rutas_del_plan(tmp_path)
+    fotos = herramienta.cargar_fotos(rutas, _hashes(rutas))
     assert len(fotos["2022"]) == 2 and len(fotos["hoy"]) == 2 and len(fotos["ciclo"]) == 1
 
 
@@ -747,14 +764,14 @@ def test_cargar_fotos_se_niega_si_un_grupo_queda_vacio(tmp_path, prefijo):
     """Sin «hoy», todos los locales saldrían «probables» y la puerta se cumpliría sin avisar."""
     rutas = {a: r for a, r in _rutas_del_plan(tmp_path).items() if not a.startswith(prefijo)}
     with pytest.raises(ValueError, match="No hay archivos verificados para"):
-        herramienta.cargar_fotos(rutas)
+        herramienta.cargar_fotos(rutas, _hashes(rutas))
 
 
 def test_cargar_fotos_se_niega_ante_un_archivo_desconocido(tmp_path):
     rutas = _rutas_del_plan(tmp_path)
     rutas["actual_0.json"] = _escribe(tmp_path, "actual_0.json", [])
     with pytest.raises(ValueError, match="no encajan en ningún instante"):
-        herramienta.cargar_fotos(rutas)
+        herramienta.cargar_fotos(rutas, _hashes(rutas))
 
 
 def test_la_herramienta_con_la_verificacion_real_se_niega_ante_datos_sin_verificar(tmp_path, monkeypatch, capsys):
@@ -769,6 +786,81 @@ def test_la_herramienta_con_la_verificacion_real_se_niega_ante_datos_sin_verific
     (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
     monkeypatch.setattr(dh, "cargar_huella", lambda ruta: {"archivos": {}})
     leidos = []
-    monkeypatch.setattr(herramienta, "leer_elementos", lambda ruta: leidos.append(ruta) or [])
+    monkeypatch.setattr(herramienta, "leer_elementos", lambda ruta, sha: leidos.append(ruta) or [])
     assert herramienta.main(["--out", str(tmp_path)]) == 1
     assert "no está verificado como completo" in capsys.readouterr().out and leidos == []
+
+
+# ---- sin ventana entre verificar y leer; los hashes del resultado son los verificados ------------------------------------------
+def test_leer_elementos_se_niega_si_los_bytes_no_son_los_verificados(tmp_path):
+    ruta = _escribe(tmp_path, "x.json", [nodo(1, **CAFE)])
+    verificado = dh.sha256_de(ruta)
+    assert len(herramienta.leer_elementos(ruta, verificado)) == 1
+    ruta.write_text(json.dumps({"elements": [nodo(2, **CAFE)]}), encoding="utf-8")  # cambia tras verificar
+    with pytest.raises(ValueError, match="no es el que se verificó"):
+        herramienta.leer_elementos(ruta, verificado)
+
+
+def test_un_archivo_cambiado_entre_verificar_y_leer_no_se_usa(tmp_path, monkeypatch):
+    """La ventana que señaló el QA: `exigir_datos_verificados` pasa, el archivo cambia y luego se lee. Se detecta porque se
+    compara el sha256 de los bytes realmente leídos con el verificado."""
+    antes = [nodo(i, **{**CAFE, "name": f"N{i}"}) for i in range(1, 4)]
+    llamadas = _entradas_falsas(tmp_path, monkeypatch, antes, hoy=[], ciclo=[])
+    verifica = dh.exigir_datos_verificados
+
+    def verifica_y_luego_cambian_el_archivo(out_dir, huella=None):
+        rutas = verifica(out_dir, huella)
+        rutas["hoy_0.json"].write_text(json.dumps({"elements": [nodo(1, **CAFE)]}), encoding="utf-8")
+        return rutas
+
+    monkeypatch.setattr(dh, "exigir_datos_verificados", verifica_y_luego_cambian_el_archivo)
+    with pytest.raises(ValueError, match="no es el que se verificó"):
+        herramienta.etiquetas_verificadas(tmp_path, llamadas.huella)
+
+
+def test_los_hashes_del_resultado_son_los_de_la_huella_y_el_manifiesto_no_se_vuelve_a_leer(tmp_path, monkeypatch):
+    """Antes se releía `manifest.json` después de leer los datos (otra ventana): ahora salen del ancla verificada."""
+    llamadas = _entradas_falsas(tmp_path, monkeypatch, [nodo(1, **CAFE)], hoy=[], ciclo=[])
+    verifica = dh.exigir_datos_verificados
+
+    def verifica_y_borra_el_manifiesto(out_dir, huella=None):
+        rutas = verifica(out_dir, huella)
+        (tmp_path / "manifest.json").unlink()
+        return rutas
+
+    monkeypatch.setattr(dh, "exigir_datos_verificados", verifica_y_borra_el_manifiesto)
+    resultado = herramienta.calcular_puerta(tmp_path, llamadas.huella)
+    assert resultado["entradas_sha256"] == {a: d["sha256"] for a, d in sorted(llamadas.huella["archivos"].items())}
+
+
+def test_el_modulo_de_etiquetas_solo_importa_lo_esperado_y_no_llama_a_open():
+    """Guarda por AST (más fuerte que buscar texto): sin módulos de E/S ni red, y sin llamadas a `open`/`read_*`/`load*`."""
+    import ast
+
+    arbol = ast.parse((ROOT / "src" / "ml" / "closure_labels.py").read_text(encoding="utf-8"))
+    importados = set()
+    for nodo_ast in ast.walk(arbol):
+        if isinstance(nodo_ast, ast.Import):
+            importados |= {a.name for a in nodo_ast.names}
+        elif isinstance(nodo_ast, ast.ImportFrom):
+            importados.add(nodo_ast.module or "")
+    assert importados == {"math", "unicodedata", "typing", "numpy", "pandas", "src.ml", "src.poi_client"}
+    llamadas = {
+        (n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", ""))
+        for n in ast.walk(arbol)
+        if isinstance(n, ast.Call)
+    }
+    prohibidas = {"open", "read_text", "read_bytes", "load", "loads", "read_csv", "read_json", "post", "urlopen"}
+    assert not (llamadas & prohibidas)  # (`get` no se prohíbe: `tags.get(...)` es de diccionarios)
+
+
+def test_leer_elementos_lee_el_archivo_una_sola_vez_y_parsea_esos_mismos_bytes(tmp_path, monkeypatch):
+    """Si parseara releyendo el archivo (`read_text`), reabriría la ventana: cambiaría entre la comprobación y el parseo."""
+    ruta = _escribe(tmp_path, "x.json", [nodo(1, **CAFE)])
+    verificado = dh.sha256_de(ruta)
+    lecturas = []
+    real = Path.read_bytes
+    monkeypatch.setattr(Path, "read_bytes", lambda self: lecturas.append(self.name) or real(self))
+    monkeypatch.setattr(Path, "read_text", lambda self, *a, **k: pytest.fail("no debe releer el archivo con read_text"))
+    assert len(herramienta.leer_elementos(ruta, verificado)) == 1
+    assert lecturas == ["x.json"]

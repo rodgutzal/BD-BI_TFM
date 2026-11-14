@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**54 archivos · 1042 funciones de test · 1244 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**54 archivos · 1047 funciones de test · 1249 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -19,7 +19,7 @@
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
-| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 72 | 142+ |
+| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 77 | 147+ |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
 | [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 38 | 49+ |
@@ -354,6 +354,11 @@
 - `test_cargar_fotos_se_niega_si_un_grupo_queda_vacio` ×3 — Sin «hoy», todos los locales saldrían «probables» y la puerta se cumpliría sin avisar.
 - `test_cargar_fotos_se_niega_ante_un_archivo_desconocido`
 - `test_la_herramienta_con_la_verificacion_real_se_niega_ante_datos_sin_verificar` — Sin doble de `exigir_datos_verificados`: archivos y manifiesto sin `verificacion` deben ser rechazados por la función real.
+- `test_leer_elementos_se_niega_si_los_bytes_no_son_los_verificados`
+- `test_un_archivo_cambiado_entre_verificar_y_leer_no_se_usa` — La ventana que señaló el QA: `exigir_datos_verificados` pasa, el archivo cambia y luego se lee. Se detecta porque se compara el sha256 de los bytes realmente leídos con el verificado.
+- `test_los_hashes_del_resultado_son_los_de_la_huella_y_el_manifiesto_no_se_vuelve_a_leer` — Antes se releía `manifest.json` después de leer los datos (otra ventana): ahora salen del ancla verificada.
+- `test_el_modulo_de_etiquetas_solo_importa_lo_esperado_y_no_llama_a_open` — Guarda por AST (más fuerte que buscar texto): sin módulos de E/S ni red, y sin llamadas a `open`/`read_*`/`load*`.
+- `test_leer_elementos_lee_el_archivo_una_sola_vez_y_parsea_esos_mismos_bytes` — Si parseara releyendo el archivo (`read_text`), reabriría la ventana: cambiaría entre la comprobación y el parseo.
 
 ## `tests/test_collector.py`
 
