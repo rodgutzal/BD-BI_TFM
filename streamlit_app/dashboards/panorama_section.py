@@ -49,13 +49,19 @@ def load_data(ruta: Path):
     return _cargar_guardado(str(ruta), firma), _cargar_conteos(str(ruta), firma), manifiesto
 
 
-def render_profile_controls(categoria: str, base, counts):
-    """Controles del perfil. Devuelve (perfil, avisos)."""
+def render_profile_controls(categoria: str, base, counts, con_brecha: bool = False):
+    """Controles del perfil. Devuelve (perfil, avisos). `con_brecha`: la tabla trae brecha para esta categoría (solo entonces
+    se habla del modelo de brecha)."""
     opciones, def_directa, def_indirecta = pv.competition_options(base, counts)
     with st.expander("⚙️ Ajustar a quién vendes, qué es competencia y qué proveedores", expanded=False):
         st.caption(
             "Partes de un perfil por defecto (borrador del autor, a revisar). Lo que cambies aquí recalcula las "
-            "lentes del mapa; **no** reentrena el modelo de brecha, que sigue usando las categorías estándar."
+            "lentes del mapa."
+            + (
+                "  **No** reentrena el modelo de brecha, que sigue usando las categorías estándar."
+                if con_brecha
+                else ""
+            )
         )
         segmentos = st.multiselect(
             "Le vendes a…", pv.segment_names(), default=list(base.segmentos), key=f"pano_seg_{categoria}"
@@ -223,7 +229,8 @@ def render_panorama_section(categoria: str, data_dir: Optional[Path] = None):
         "aprender cuánto vale cada una."
     )
 
-    perfil, avisos = render_profile_controls(categoria, base, counts)
+    con_brecha = bool(guardado.loc[guardado["perfil"] == categoria, "brecha_relativa"].notna().any())
+    perfil, avisos = render_profile_controls(categoria, base, counts, con_brecha)
     render_profile_status(perfil, base, avisos)
     vista = pv.compute_view(counts, perfil, guardado, categoria)
 
@@ -260,4 +267,9 @@ def render_panorama_section(categoria: str, data_dir: Optional[Path] = None):
         f"(commit {manifiesto.get('procedencia', {}).get('commit', '?')}), {len(vista)} celdas activas. Los residentes se "
         "aproximan con edificios no claramente no residenciales (en Malta, ~78 % de los edificios son `building=yes`): es un "
         "proxy de superficie construida, no población."
+        + (
+            " Después se retiró la brecha de oferta del panorama publicado (condiciones de datos de terceros); las lentes no cambian."
+            if manifiesto.get("derivado")
+            else ""
+        )
     )

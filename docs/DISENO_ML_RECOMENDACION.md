@@ -259,7 +259,7 @@ El entrenamiento no corre donde está el stack. Hasta la fase 1b las herramienta
 
 | Archivo | Contenido |
 |---|---|
-| `panorama.csv` | 7.973 filas (perfil × celda): ubicación, zona más cercana, las tres lentes con sus indicadores, percentiles, confianza y, solo para `food_drink` y `business`, la brecha exploratoria |
+| `panorama.csv` | 7.973 filas (perfil × celda): ubicación, zona más cercana, las tres lentes con sus indicadores, percentiles, confianza y, solo para `food_drink` y `business`, la brecha exploratoria (**retirada del archivo publicado el 14-nov-2026**: dependía de la población de Data Commons y de un tiempo de viaje con mediciones de TomTom, y no estaba validada; ver `docs/DATOS_Y_LICENCIAS.md`) |
 | `cell_counts.csv` | 1.447 celdas × (categoría\|subcategoría): la base para recalcular las lentes con el perfil que ajuste el usuario, sin la base de datos |
 | `panorama_manifest.json` | procedencia (hash de la entrada, commit, versiones), parámetros, decisión de la validación y sha256 de los dos CSV |
 
@@ -272,7 +272,7 @@ El entrenamiento no corre donde está el stack. Hasta la fase 1b las herramienta
 
 **Error encontrado y corregido durante la fase:** `cell_counts.csv` incluía solo las celdas activas, pero estas se definen con POIs de Overpass y el contexto de OSM (edificios, alojamiento) de celdas inactivas vecinas también suma en las lentes de las activas. Recalcular desde esa tabla daba otros números (2,4 % de las celdas con distinto `mercado_residentes`). Ahora incluye toda celda con algún conteo (1.447 en lugar de 1.139) y un test comprueba que las lentes recalculadas son idénticas a las del panorama.
 
-**Reproducibilidad:** con la misma entrada y semilla, `panorama.csv` sale con el mismo hash (comprobado dos veces, incluida la brecha).
+**Reproducibilidad:** con la misma entrada y semilla, `panorama.csv` salía con el mismo hash (comprobado dos veces, incluida la brecha). El archivo publicado ya no se obtiene así: se derivó de aquel quitándole la brecha con `tools/strip_panorama_gap.py` (ver `docs/DATOS_Y_LICENCIAS.md`).
 
 ### K. Interfaz del panorama (fase 2b, 9-nov-2026)
 

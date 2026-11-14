@@ -90,9 +90,30 @@ def test_siempre_indica_el_perfil_usado():
     assert not any("Perfil personalizado" in t for t in textos(at.info))
 
 
-def test_las_capas_son_las_tres_lentes_y_la_brecha_solo_donde_existe():
-    """food_drink ofrece la brecha como capa exploratoria; hospital no la tiene."""
-    con, sin = abrir("food_drink"), abrir("hospital")
+def test_la_tabla_publicada_no_ofrece_brecha_en_ninguna_categoria():
+    """La brecha se retiró de `data/ml/` (docs/DATOS_Y_LICENCIAS.md): ni capa, ni aviso, ni intervalo en la ficha."""
+    for categoria in ("food_drink", "business", "hospital"):
+        at = abrir(categoria)
+        assert not any("Brecha" in o for o in at.radio[0].options), categoria
+        assert not any("Brecha" in w.value for w in at.warning), categoria
+        assert not any(
+            "modelo de brecha" in c for c in textos(at.caption)
+        ), categoria  # ni se habla de un modelo que no hay
+        assert any(
+            "se retiró la brecha de oferta" in c for c in textos(at.caption)
+        ), categoria  # y se dice que se retiró
+        lentes = {
+            "Competencia directa (conteo ponderado)",
+            "Mercado (índice 0-1)",
+            "Proveedores (conteo ponderado)",
+            "Diversidad de proveedores (0-1)",
+        }
+        assert at.radio[0].options and set(at.radio[0].options) <= lentes, categoria  # solo lentes, nada más
+
+
+def test_las_capas_son_las_tres_lentes_y_la_brecha_solo_donde_existe(datos_ml_con_brecha):
+    """Con una brecha (sintética), food_drink la ofrece como capa exploratoria; hospital no la tiene."""
+    con, sin = abrir("food_drink", datos_ml_con_brecha), abrir("hospital", datos_ml_con_brecha)
     assert con.radio[0].options[-1].startswith("Brecha de oferta — EXPLORATORIA")
     assert not any("Brecha" in o for o in sin.radio[0].options)
     assert con.radio[0].options[:3] == [
@@ -184,9 +205,9 @@ def test_el_mapa_y_la_ficha_usan_el_perfil_elegido():
 
 
 # ---- brecha exploratoria -----------------------------------------------------------------------------------------
-def test_la_brecha_de_la_ficha_se_etiqueta_como_exploratoria_y_no_validada():
-    """Donde hay brecha, la ficha la muestra con la advertencia de que no está validada y el intervalo no es de confianza."""
-    at = abrir("food_drink")
+def test_la_brecha_de_la_ficha_se_etiqueta_como_exploratoria_y_no_validada(datos_ml_con_brecha):
+    """Donde hay brecha (sintética), la ficha la muestra con la advertencia de que no está validada y el intervalo no es de confianza."""
+    at = abrir("food_drink", datos_ml_con_brecha)
     aviso = next(w.value for w in at.warning if "Brecha de oferta EXPLORATORIA" in w.value)
     assert "no validada" in aviso and "no es de confianza" in aviso
 
@@ -197,9 +218,9 @@ def test_sin_brecha_no_hay_advertencia_de_brecha():
     assert not any("Brecha" in w.value for w in at.warning)
 
 
-def test_elegir_la_capa_de_brecha_muestra_la_advertencia_de_capa():
+def test_elegir_la_capa_de_brecha_muestra_la_advertencia_de_capa(datos_ml_con_brecha):
     """Cambiar a la capa de brecha añade el aviso de que es exploratoria y puede reflejar solo la saturación."""
-    at = abrir("food_drink")
+    at = abrir("food_drink", datos_ml_con_brecha)
     at.radio[0].set_value(at.radio[0].options[-1]).run()
     assert not at.exception
     assert any(w.value.startswith("Capa **exploratoria**") and "no está validada" in w.value for w in at.warning)
@@ -241,10 +262,10 @@ def test_dejar_vacia_la_competencia_directa_avisa_y_conserva_la_de_por_defecto()
     assert not at.exception and any("no puede quedar vacía" in w.value for w in at.warning)
 
 
-def test_cambiar_el_perfil_no_cambia_la_brecha_y_la_pantalla_lo_dice():
-    """La brecha de la misma celda es idéntica con el perfil por defecto y con uno personalizado, y la ficha avisa de que
-    usa las categorías estándar."""
-    at = abrir("food_drink")
+def test_cambiar_el_perfil_no_cambia_la_brecha_y_la_pantalla_lo_dice(datos_ml_con_brecha):
+    """La brecha (sintética) de la misma celda es idéntica con el perfil por defecto y con uno personalizado, y la ficha
+    avisa de que usa las categorías estándar."""
+    at = abrir("food_drink", datos_ml_con_brecha)
 
     def aviso(a):
         return next(w.value for w in a.warning if w.value.startswith("**Brecha de oferta EXPLORATORIA"))
@@ -354,3 +375,14 @@ def test_cambiar_de_negocio_no_arrastra_los_ajustes_del_anterior(pagina):
     assert any("Interpretado como" in s.value for s in pagina.success)
     assert not any("Perfil personalizado" in i.value for i in pagina.info)
     assert any("Farmacia, clínica o consulta" in t.value for t in pagina.caption)
+
+
+def test_con_brecha_la_pantalla_si_menciona_el_modelo_de_brecha(datos_ml_con_brecha):
+    at = abrir("food_drink", datos_ml_con_brecha)
+    assert any("modelo de brecha" in c for c in textos(at.caption))
+    assert not any("se retiró la brecha de oferta" in c for c in textos(at.caption))
+
+
+def test_una_categoria_sin_brecha_no_habla_del_modelo_aunque_otras_categorias_lo_tengan(datos_ml_con_brecha):
+    at = abrir("hospital", datos_ml_con_brecha)
+    assert not any("modelo de brecha" in c for c in textos(at.caption))
