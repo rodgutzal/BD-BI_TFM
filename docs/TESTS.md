@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 970 funciones de test · 1102 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**54 archivos · 1034 funciones de test · 1234 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -19,6 +19,7 @@
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
+| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 64 | 132+ |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
 | [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 38 | 49+ |
@@ -274,6 +275,77 @@
 - `test_report_avisa_si_ahora_mismo_no_llega_trafico` — El informe avisa «AHORA MISMO» si el último dato es antiguo y devuelve su edad.
 - `test_report_mide_el_tiempo_total_sin_datos` — El informe cuenta los huecos y suma el tiempo total sin datos, sin avisar de sequía actual si los datos son recientes.
 - `test_report_sin_datos` — Sin datos, el informe devuelve cero huecos y escribe «Sin datos».
+
+## `tests/test_closure_labels.py`
+
+> Tests de las etiquetas de cierre y la puerta de tamaño muestral (fase 4, protocolo 3.M de docs/DISENO_ML_RECOMENDACION.md).
+>
+> Datos sintéticos: cada test fija UNA regla del protocolo. Ningún test lee los datos reales de `data/osm_history/`.
+
+- `test_normalizar_nombre` ×7
+- `test_un_nombre_vacio_o_que_no_es_texto_normaliza_a_vacio` ×7
+- `test_dos_nombres_son_el_mismo_solo_si_son_iguales_tras_normalizar_sin_coincidencia_aproximada`
+- `test_categoria_usa_la_clasificacion_del_recolector` ×12
+- `test_local_vacio` ×9
+- `test_toda_combinacion_prefijo_clave_es_una_marca_de_ciclo_de_vida` ×25
+- `test_lo_que_no_es_prefijo_y_clave_de_categoria_no_es_una_marca` ×6
+- `test_las_marcas_de_ciclo_de_vida_son_las_que_descarga_la_herramienta` — Si la descarga cambiase de claves o prefijos, las etiquetas dejarían de ver marcas: un test lo ata.
+- `test_el_punto_es_el_nodo_o_el_centro_del_way`
+- `test_un_elemento_sin_coordenadas_validas_no_tiene_punto`
+- `test_un_nodo_y_un_way_con_el_mismo_numero_son_elementos_distintos`
+- `test_la_distancia_al_borde_se_mide_contra_los_cuatro_lados` ×4
+- `test_fuera_de_la_rejilla_la_distancia_es_negativa`
+- `test_la_poblacion_son_los_locales_de_las_siete_categorias_con_nombre_lejos_del_borde_y_abiertos`
+- `test_el_margen_del_borde_es_estricto_a_500_m`
+- `test_los_elementos_repetidos_entre_franjas_cuentan_una_vez_y_nodo_y_way_con_el_mismo_id_son_dos`
+- `test_una_poblacion_vacia_da_una_tabla_vacia_con_columnas`
+- `test_fuerte_marca_de_ciclo_sin_categoria_activa`
+- `test_fuerte_tambien_con_la_marca_dentro_de_los_archivos_de_hoy_y_otro_prefijo`
+- `test_fuerte_un_local_vacio_hoy_es_cierre_explicito_aunque_haya_cambiado_de_nombre_o_categoria` ×5 — Por eso «fuerte» prevalece sobre «dudoso».
+- `test_vacio_y_marca_de_ciclo_a_la_vez_es_fuerte`
+- `test_la_marca_de_ciclo_con_categoria_activa_y_sin_vacio_es_dudosa_no_fuerte`
+- `test_los_tags_de_hoy_son_la_union_de_los_dos_archivos` — Con la categoría activa en «hoy» y la marca en el archivo de ciclo de vida, el elemento es activo+marca (dudoso), no fuerte.
+- `test_superviviente_misma_categoria_mismo_nombre_normalizado_y_sin_marca`
+- `test_el_superviviente_no_depende_de_otras_etiquetas_ni_del_valor_concreto_de_la_clave`
+- `test_dudoso_sigue_pero_cambio_de_nombre`
+- `test_dudoso_sigue_pero_perdio_el_nombre`
+- `test_dudoso_sigue_pero_cambio_de_categoria`
+- `test_dudoso_ausente_pero_hay_un_elemento_con_el_mismo_nombre_a_menos_de_60_m_nodo_que_pasa_a_way`
+- `test_la_distancia_de_60_m_es_inclusiva_y_mas_alla_es_probable`
+- `test_el_emparejamiento_por_nombre_vale_para_cualquiera_de_las_siete_categorias`
+- `test_otro_nombre_a_menos_de_60_m_no_basta`
+- `test_el_nombre_de_un_elemento_sin_categoria_activa_no_cuenta_como_remapeo`
+- `test_un_local_vacio_con_el_mismo_nombre_no_es_un_remapeo` ×2 — Interpretación declarada: un negocio re-mapeado tiene que estar abierto, igual que en la población de estudio.
+- `test_el_remapeo_no_se_aplica_al_que_sigue_con_su_propio_id` — Un local que sigue con su (tipo, id) y mismo nombre no necesita emparejamiento: es superviviente aunque haya otro igual cerca.
+- `test_el_mismo_numero_pero_otro_tipo_no_es_el_mismo_local` — El nodo 1 de 2022 y un way 1 de hoy: son distintos. El nodo no figura hoy; el way, a 0 m con el mismo nombre → dudoso.
+- `test_probable_no_figura_hoy_ni_hay_nada_con_su_nombre_cerca`
+- `test_el_mismo_nombre_lejos_no_evita_el_probable`
+- `test_no_se_usa_foursquare_ni_ninguna_fuente_externa` — `etiquetar` solo recibe elementos de OSM: no hay parámetro para otra fuente (el protocolo la deja fuera de la principal).
+- `test_cierre_principal_y_sensibilidad_a`
+- `test_el_orden_de_las_reglas_decide_la_primera_que_se_cumple_sin_solapes` — Cada local tiene exactamente un nivel, y la tabla recorre los cuatro.
+- `test_hay_bloques_de_sobra_en_la_rejilla_para_estos_tests`
+- `test_la_puerta_se_cumple_con_60_cierres_en_30_bloques_exactos`
+- `test_con_59_cierres_no_pasa_aunque_haya_bloques_de_sobra`
+- `test_con_29_bloques_no_pasa_aunque_haya_cierres_de_sobra`
+- `test_los_bloques_se_cuentan_por_bloque_de_1_km_no_por_celda` — 64 cierres en las 16 celdas de un mismo bloque de 1 km (filas y columnas 0-3): un único bloque.
+- `test_celdas_vecinas_de_bloques_distintos_son_bloques_distintos` — Las filas 3 y 4 están en bloques de 1 km diferentes (la cuadrícula de bloques no está desplazada).
+- `test_solo_cuentan_los_cierres_principales_no_los_superviviente_ni_dudosos`
+- `test_sin_cierres_no_pasa_y_no_falla`
+- `test_los_minimos_de_la_puerta_son_los_del_protocolo`
+- `test_la_herramienta_verifica_antes_de_leer_e_imprime_la_puerta`
+- `test_la_herramienta_se_niega_si_los_datos_no_estan_verificados_y_no_lee_nada`
+- `test_la_herramienta_se_niega_sin_huella_versionada`
+- `test_la_herramienta_con_una_huella_rota_sale_con_error_claro`
+- `test_guardar_escribe_solo_agregados_y_nunca_etiquetas_por_local`
+- `test_sin_guardar_no_se_escribe_ningun_archivo_ni_en_el_destino_por_defecto`
+- `test_guardar_sin_destino_escribe_en_el_destino_por_defecto`
+- `test_la_herramienta_agrupa_los_trozos_por_instante_y_no_usa_2024`
+- `test_un_elements_que_no_es_lista_se_rechaza`
+- `test_justo_a_500_m_del_borde_se_excluye_la_poblacion_es_a_MAS_de_500`
+- `test_justo_a_60_m_es_el_mismo_sitio_el_umbral_es_inclusivo`
+- `test_si_un_elemento_viene_repetido_con_datos_distintos_gana_el_primero` — Determinista: las franjas solapadas traen copias iguales, pero si no lo fueran no depende del azar.
+- `test_si_hoy_y_ciclo_de_vida_discrepan_en_un_tag_manda_hoy` — Hoy dice «Café Luna»; el archivo de ciclo de vida (otra consulta, otro instante) dice «Otro»: manda hoy, así que es superviviente.
+- `test_un_way_de_2022_se_empareja_con_el_way_de_hoy_y_no_con_un_nodo_del_mismo_numero`
 
 ## `tests/test_collector.py`
 
