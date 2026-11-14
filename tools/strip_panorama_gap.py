@@ -17,6 +17,9 @@ tienen nada que ver con la brecha. Aquí se DERIVA del propio `panorama.csv` ver
     original, con una sección `derivado` que dice qué se hizo y el hash anterior.
 
 Se niega si el directorio no verifica contra su manifiesto. Es idempotente: sobre un panorama que ya no tiene brecha no hace nada.
+Cada archivo se escribe de forma atómica (temporal + reemplazo) y el hash original se conserva en `derivado` aunque se repita.
+Límite: son dos archivos; si el proceso se corta justo entre ambos, el directorio deja de verificar y la herramienta se niega a
+tocarlo: se recupera con `git checkout -- data/ml` y se repite.
 
 Uso (desde la raíz del proyecto):
     python tools/strip_panorama_gap.py
@@ -25,6 +28,7 @@ Uso (desde la raíz del proyecto):
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -70,7 +74,9 @@ def quitar_brecha(directorio) -> dict:
         tabla[col] = np.nan
     tabla["modelo_brecha"] = ""
     tabla["brecha_validada"] = False
-    panorama._escribir_csv(tabla, ruta_p, False)
+    temporal_p = ruta_p.with_name(ruta_p.name + ".tmp")
+    panorama._escribir_csv(tabla, temporal_p, False)
+    os.replace(temporal_p, ruta_p)
     nuevo = panorama.file_hash(ruta_p)
     manifiesto["archivos"][panorama.ARCHIVOS["panorama"]] = {"filas": int(len(tabla)), "sha256": nuevo}
     manifiesto["parametros"] = {**manifiesto.get("parametros", {}), "con_brecha": False}
@@ -78,12 +84,15 @@ def quitar_brecha(directorio) -> dict:
     manifiesto["advertencia"] = ADVERTENCIA_SIN_BRECHA
     manifiesto["derivado"] = {
         "herramienta": "tools/strip_panorama_gap.py",
-        "panorama_sha256_anterior": anterior,
+        # el hash del panorama ORIGINAL (con brecha), también si se repara un estado a medias
+        "panorama_sha256_anterior": manifiesto.get("derivado", {}).get("panorama_sha256_anterior", anterior),
         "motivo": MOTIVO,
     }
-    ruta_m.write_text(
+    temporal_m = ruta_m.with_name(ruta_m.name + ".tmp")
+    temporal_m.write_text(
         json.dumps(manifiesto, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
     )
+    os.replace(temporal_m, ruta_m)
     return {"cambiado": True, "filas": int(len(tabla)), "sha256_anterior": anterior, "sha256": nuevo}
 
 

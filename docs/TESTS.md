@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**58 archivos · 1157 funciones de test · 1378 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**58 archivos · 1161 funciones de test · 1382 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -59,8 +59,8 @@
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 26 | 26+ |
-| [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 13 | 13 |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 28 | 28+ |
+| [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 15 | 15 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
@@ -1486,6 +1486,8 @@
 - `test_los_resultados_sobreviven_a_cambiar_un_control_del_panorama` — Regresión: cada cambio de un control vuelve a ejecutar la página con el botón en False; antes los resultados desaparecían. Ahora se recuerda el texto buscado.
 - `test_buscar_con_texto_vacio_avisa_y_no_deja_resultados_viejos` — Un texto vacío da el aviso de siempre y borra lo buscado antes.
 - `test_cambiar_de_negocio_no_arrastra_los_ajustes_del_anterior` — Los controles del panorama son propios de cada categoría: tras ajustar el perfil de un restaurante y buscar una farmacia, el perfil de la farmacia es el de por defecto.
+- `test_con_brecha_la_pantalla_si_menciona_el_modelo_de_brecha`
+- `test_una_categoria_sin_brecha_no_habla_del_modelo_aunque_otras_categorias_lo_tengan`
 
 ## `tests/test_strip_panorama_gap.py`
 
@@ -1503,8 +1505,10 @@
 - `test_el_resultado_es_lo_que_daria_el_panorama_sin_brecha_de_la_herramienta_de_construccion` — Misma representación de las columnas de brecha que `build_panorama(...)` sin tabla de brecha.
 - `test_main_imprime_y_devuelve_codigos`
 - `test_tiene_brecha_detecta_cualquiera_de_sus_columnas`
-- `test_si_la_tabla_ya_no_tiene_brecha_pero_el_manifiesto_la_declara_se_corrige_el_manifiesto` — Estado a medias (p. ej. una ejecución interrumpida): no se da por hecho solo porque la tabla esté vacía.
+- `test_si_la_tabla_ya_no_tiene_brecha_pero_el_manifiesto_la_declara_se_corrige_el_manifiesto` — Manifiesto incoherente con la tabla ya vacía: no se da por hecho solo porque la tabla esté vacía.
 - `test_si_el_manifiesto_dice_con_brecha_true_se_corrige_aunque_la_tabla_este_vacia`
+- `test_al_reparar_se_conserva_el_hash_del_panorama_original` — La referencia al panorama con brecha no se pierde si se repite la herramienta para corregir el manifiesto.
+- `test_no_deja_temporales_y_si_se_corta_el_reemplazo_el_original_queda_intacto`
 
 ## `tests/test_tests_documentation.py`
 

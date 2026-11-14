@@ -164,7 +164,7 @@ def test_tiene_brecha_detecta_cualquiera_de_sus_columnas():
 
 
 def test_si_la_tabla_ya_no_tiene_brecha_pero_el_manifiesto_la_declara_se_corrige_el_manifiesto(con_brecha):
-    """Estado a medias (p. ej. una ejecución interrumpida): no se da por hecho solo porque la tabla esté vacía."""
+    """Manifiesto incoherente con la tabla ya vacía: no se da por hecho solo porque la tabla esté vacía."""
     herramienta.quitar_brecha(con_brecha)
     ruta = con_brecha / "panorama_manifest.json"
     m = json.loads(ruta.read_text(encoding="utf-8"))
@@ -182,3 +182,28 @@ def test_si_el_manifiesto_dice_con_brecha_true_se_corrige_aunque_la_tabla_este_v
     ruta.write_text(json.dumps(m), encoding="utf-8")
     assert herramienta.quitar_brecha(con_brecha)["cambiado"] is True
     assert json.loads(ruta.read_text(encoding="utf-8"))["parametros"]["con_brecha"] is False
+
+
+def test_al_reparar_se_conserva_el_hash_del_panorama_original(con_brecha):
+    """La referencia al panorama con brecha no se pierde si se repite la herramienta para corregir el manifiesto."""
+    r = herramienta.quitar_brecha(con_brecha)
+    ruta = con_brecha / "panorama_manifest.json"
+    m = json.loads(ruta.read_text(encoding="utf-8"))
+    m["parametros"]["con_brecha"] = True
+    ruta.write_text(json.dumps(m), encoding="utf-8")
+    herramienta.quitar_brecha(con_brecha)
+    derivado = json.loads(ruta.read_text(encoding="utf-8"))["derivado"]
+    assert derivado["panorama_sha256_anterior"] == r["sha256_anterior"] != r["sha256"]
+
+
+def test_no_deja_temporales_y_si_se_corta_el_reemplazo_el_original_queda_intacto(con_brecha, monkeypatch):
+    antes = {p.name: p.read_bytes() for p in con_brecha.iterdir()}
+    monkeypatch.setattr(herramienta.os, "replace", lambda *a: (_ for _ in ()).throw(OSError("corte")))
+    with pytest.raises(OSError):
+        herramienta.quitar_brecha(con_brecha)
+    assert {p.name: p.read_bytes() for p in con_brecha.iterdir() if not p.name.endswith(".tmp")} == antes
+    monkeypatch.undo()
+    for p in con_brecha.glob("*.tmp"):
+        p.unlink()
+    herramienta.quitar_brecha(con_brecha)
+    assert sorted(p.name for p in con_brecha.iterdir()) == sorted(panorama.ARCHIVOS.values())

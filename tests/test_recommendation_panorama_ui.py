@@ -96,6 +96,12 @@ def test_la_tabla_publicada_no_ofrece_brecha_en_ninguna_categoria():
         at = abrir(categoria)
         assert not any("Brecha" in o for o in at.radio[0].options), categoria
         assert not any("Brecha" in w.value for w in at.warning), categoria
+        assert not any(
+            "modelo de brecha" in c for c in textos(at.caption)
+        ), categoria  # ni se habla de un modelo que no hay
+        assert any(
+            "se retiró la brecha de oferta" in c for c in textos(at.caption)
+        ), categoria  # y se dice que se retiró
         lentes = {
             "Competencia directa (conteo ponderado)",
             "Mercado (índice 0-1)",
@@ -369,3 +375,14 @@ def test_cambiar_de_negocio_no_arrastra_los_ajustes_del_anterior(pagina):
     assert any("Interpretado como" in s.value for s in pagina.success)
     assert not any("Perfil personalizado" in i.value for i in pagina.info)
     assert any("Farmacia, clínica o consulta" in t.value for t in pagina.caption)
+
+
+def test_con_brecha_la_pantalla_si_menciona_el_modelo_de_brecha(datos_ml_con_brecha):
+    at = abrir("food_drink", datos_ml_con_brecha)
+    assert any("modelo de brecha" in c for c in textos(at.caption))
+    assert not any("se retiró la brecha de oferta" in c for c in textos(at.caption))
+
+
+def test_una_categoria_sin_brecha_no_habla_del_modelo_aunque_otras_categorias_lo_tengan(datos_ml_con_brecha):
+    at = abrir("hospital", datos_ml_con_brecha)
+    assert not any("modelo de brecha" in c for c in textos(at.caption))

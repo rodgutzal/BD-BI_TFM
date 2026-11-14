@@ -394,8 +394,8 @@ def test_la_tabla_versionada_no_publica_la_brecha():
     assert p[list(panorama.COLUMNAS_BRECHA)].isna().all().all()
     assert p["modelo_brecha"].eq("").all() and not p["brecha_validada"].any()
     assert m["brecha"] == {} and m["parametros"]["con_brecha"] is False
-    assert m["advertencia"] == "Sin brecha: solo lentes explícitas." and "EXPLORATORIA" not in json.dumps(m)
-    assert m["derivado"]["herramienta"] == "tools/strip_panorama_gap.py" and "TomTom" in m["derivado"]["motivo"]
+    # sirve igual si el panorama se generó con `build_panorama --sin-brecha` o con `strip_panorama_gap`
+    assert m["advertencia"].startswith("Sin brecha") and "EXPLORATORIA" not in json.dumps(m)
 
 
 def test_la_tabla_versionada_recalcula_las_mismas_lentes():

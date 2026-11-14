@@ -272,7 +272,7 @@ El entrenamiento no corre donde está el stack. Hasta la fase 1b las herramienta
 
 **Error encontrado y corregido durante la fase:** `cell_counts.csv` incluía solo las celdas activas, pero estas se definen con POIs de Overpass y el contexto de OSM (edificios, alojamiento) de celdas inactivas vecinas también suma en las lentes de las activas. Recalcular desde esa tabla daba otros números (2,4 % de las celdas con distinto `mercado_residentes`). Ahora incluye toda celda con algún conteo (1.447 en lugar de 1.139) y un test comprueba que las lentes recalculadas son idénticas a las del panorama.
 
-**Reproducibilidad:** con la misma entrada y semilla, `panorama.csv` sale con el mismo hash (comprobado dos veces, incluida la brecha).
+**Reproducibilidad:** con la misma entrada y semilla, `panorama.csv` salía con el mismo hash (comprobado dos veces, incluida la brecha). El archivo publicado ya no se obtiene así: se derivó de aquel quitándole la brecha con `tools/strip_panorama_gap.py` (ver `docs/DATOS_Y_LICENCIAS.md`).
 
 ### K. Interfaz del panorama (fase 2b, 9-nov-2026)
 
