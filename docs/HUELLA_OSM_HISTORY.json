@@ -1,0 +1,61 @@
+{
+  "archivos": {
+    "2022-01-01_0.json": {
+      "descargado_utc": "2026-11-13T21:49:46Z",
+      "elementos": 743,
+      "espejo": "https://overpass-api.de/api/interpreter",
+      "fecha_pedida": "2022-01-01T00:00:00Z",
+      "sha256": "8807fb5a32b3d8a5ce9d9e7002ae3e10a4bb84a1880501dea9aae318ceba2780"
+    },
+    "2022-01-01_1.json": {
+      "descargado_utc": "2026-11-13T21:50:53Z",
+      "elementos": 1370,
+      "espejo": "https://overpass-api.de/api/interpreter",
+      "fecha_pedida": "2022-01-01T00:00:00Z",
+      "sha256": "c734cdd0f0c91ca311bfb1d86dfff77d3aaade8ae5f18a9896a1fdfde7790a44"
+    },
+    "2024-01-01_0.json": {
+      "descargado_utc": "2026-11-13T21:51:51Z",
+      "elementos": 810,
+      "espejo": "https://overpass-api.de/api/interpreter",
+      "fecha_pedida": "2024-01-01T00:00:00Z",
+      "sha256": "f64b8dfd815bf5cb0cc534ac9e8907dfa44f3a6be7da0ab677ac49b9640c0348"
+    },
+    "2024-01-01_1.json": {
+      "descargado_utc": "2026-11-13T21:52:54Z",
+      "elementos": 1504,
+      "espejo": "https://overpass-api.de/api/interpreter",
+      "fecha_pedida": "2024-01-01T00:00:00Z",
+      "sha256": "08db0ff1e9d460d2e4da46797f9481386088b86d29dc4931a114286eb147b0b7"
+    },
+    "ciclo_de_vida_0.json": {
+      "descargado_utc": "2026-11-13T22:03:51Z",
+      "elementos": 107,
+      "espejo": "https://overpass-api.de/api/interpreter",
+      "fecha_pedida": null,
+      "sha256": "4d1cd13fc64cb870a193c3c9621ebf95c69cad9a23f72c65856ebb7b07a27e8f"
+    },
+    "hoy_0.json": {
+      "descargado_utc": "2026-11-13T21:53:44Z",
+      "elementos": 1314,
+      "espejo": "https://overpass-api.de/api/interpreter",
+      "fecha_pedida": null,
+      "sha256": "eb5bff85efbc04317d2d1f8e1290da1b21fb4e9ce8398c98025437de73d8de20"
+    },
+    "hoy_1.json": {
+      "descargado_utc": "2026-11-13T21:54:30Z",
+      "elementos": 2693,
+      "espejo": "https://overpass-api.de/api/interpreter",
+      "fecha_pedida": null,
+      "sha256": "da17dcf509fb44af24006c8b0bc493338b929f0f220e43fec05ebbd60feabc04"
+    }
+  },
+  "area": {
+    "este": 14.58,
+    "norte": 35.94,
+    "oeste": 14.44,
+    "sur": 35.84
+  },
+  "formato": 1,
+  "nota": "Huella de data/osm_history/ (hashes, recuentos y fechas; sin datos). Ver tools/download_osm_history.py."
+}

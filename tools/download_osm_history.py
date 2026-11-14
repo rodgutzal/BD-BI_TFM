@@ -23,6 +23,9 @@ Qué hace y qué NO hace:
     se detecta con `--verificar`: comprueba que cada archivo es el descrito por el manifiesto (sha256, instante, franja, fecha y
     número de elementos), repite su consulta como un recuento (`out count;`, que calcula el propio servidor) y compara con lo
     guardado (exacto para el pasado; 1 % para el estado actual, que cambia cada minuto), y anota el resultado en el manifiesto. El análisis debe usar solo archivos con `verificacion.estado == "completo"`.
+    El manifiesto vive junto a los datos y por sí solo no detecta que se alteren ambos a la vez: por eso `--huella` escribe
+    `docs/HUELLA_OSM_HISTORY.json` (solo hashes, recuentos y fechas, sin datos) para VERSIONARLA en git como ancla externa, y
+    `--verificar` la exige si existe.
   - Pausa entre peticiones, tiempo máximo de servidor y el área partida en franjas, como `download_osm_context.py`.
   - `--dry-run` muestra las consultas sin hacer NINGUNA llamada de red.
 
@@ -65,6 +68,9 @@ CLAVES_CICLO_DE_VIDA = ("amenity", "shop", "office", "leisure", "tourism")
 PREFIJOS_CICLO_DE_VIDA = ("disused", "was", "abandoned", "demolished", "razed")
 TEMA_CICLO_DE_VIDA = "ciclo_de_vida"
 SALIDA_POR_DEFECTO = ROOT / "data" / "osm_history"
+# Ancla externa: solo hashes, recuentos y fechas (NO datos), versionada en git. Ver `escribir_huella`.
+HUELLA_POR_DEFECTO = ROOT / "docs" / "HUELLA_OSM_HISTORY.json"
+CAMPOS_DE_LA_HUELLA = ("sha256", "elementos", "fecha_pedida", "espejo", "descargado_utc")
 
 
 def clausulas_categorias() -> List[str]:
@@ -401,11 +407,24 @@ def total_del_servidor(respuesta: dict) -> int:
     return int(total)
 
 
-def comprobar_identidad(ruta: Path, entrada: dict, nombre: str, franja: int, fecha: Optional[str]) -> Optional[str]:
+def comprobar_identidad(
+    ruta: Path, entrada: dict, nombre: str, franja: int, fecha: Optional[str], huella: Optional[dict] = None
+) -> Optional[str]:
     """None si el archivo es EL QUE DESCRIBE el manifiesto; si no, el motivo. «Completo» solo tiene sentido para el archivo que
     se descargó: se comprueba el sha256 y que dentro diga el mismo instante, franja y fecha pedida y el mismo número de
     elementos (un JSON alterado a mano, de otra franja o de otra fecha, con la misma cantidad, no puede salir «completo»).
+
+    El manifiesto vive junto a los datos, así que por sí solo no autentica nada: quien editara el archivo podría recalcular su
+    hash en el manifiesto. Por eso, si se da la `huella` versionada en git (el ancla externa), la entrada del manifiesto
+    debe coincidir con ella en sha256, elementos, fecha pedida, espejo y fecha de descarga.
     """
+    if huella is not None:
+        registrada = huella.get("archivos", {}).get(f"{nombre}_{franja}.json")
+        if registrada is None:
+            return "el archivo no figura en la huella versionada"
+        for campo in CAMPOS_DE_LA_HUELLA:
+            if entrada.get(campo) != registrada.get(campo):
+                return f"el manifiesto no coincide con la huella versionada en `{campo}`"
     esperado = entrada.get("sha256")
     if not esperado:
         return "el manifiesto no trae el sha256 de este archivo"
@@ -435,13 +454,15 @@ def verificar_descarga(
     log=print,
     rondas: Optional[int] = None,
     espera_s: Optional[float] = None,
+    huella: Optional[dict] = None,
 ) -> dict:
     """Comprueba que cada archivo descargado está COMPLETO: repite su consulta como recuento y compara el total del servidor con
     los elementos guardados. Es la barrera contra una respuesta parcial pero JSON válido y sin `remark` (que de otro modo no se
     distinguiría de una legítima). Anota el resultado en `manifest.json` (`archivos[...]["verificacion"]`) y devuelve
     `{"correctos", "incorrectos", "sin_verificar", "sin_archivo", "alterados", "ok"}`. Antes de contar comprueba que el archivo
-    es el descrito por el manifiesto (sha256, instante, franja, fecha y número de elementos): si no, queda «MODIFICADO». Los instantes pasados deben coincidir exactamente; el
-    estado actual admite `TOLERANCIA_ESTADO_ACTUAL`. NO toca los archivos de datos."""
+    es el descrito por el manifiesto (sha256, instante, franja, fecha y número de elementos) y, si se da `huella`, por la
+    huella versionada en git (el ancla externa): si no, queda «MODIFICADO». Los instantes pasados deben coincidir
+    exactamente; el estado actual admite `TOLERANCIA_ESTADO_ACTUAL`. NO toca los archivos de datos."""
     out_dir = Path(out_dir)
     ruta_manifiesto = out_dir / "manifest.json"
     if not ruta_manifiesto.exists():
@@ -464,7 +485,7 @@ def verificar_descarga(
             log(f"   {archivo}: no está descargado")
             continue
         ahora = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        alteracion = comprobar_identidad(ruta, manifiesto["archivos"][archivo], nombre, franja, fecha)
+        alteracion = comprobar_identidad(ruta, manifiesto["archivos"][archivo], nombre, franja, fecha, huella)
         if alteracion:  # no es el archivo descargado: no se gasta una consulta ni se le da el visto bueno
             manifiesto["archivos"][archivo]["verificacion"] = {
                 "estado": "MODIFICADO",
@@ -519,6 +540,49 @@ def verificar_descarga(
     return resumen
 
 
+def cargar_huella(ruta: Path = HUELLA_POR_DEFECTO) -> Optional[dict]:
+    """La huella versionada, o None si no existe. Si existe pero no se puede leer, es un error (no se ignora en silencio)."""
+    ruta = Path(ruta)
+    if not ruta.exists():
+        return None
+    try:
+        huella = json.loads(ruta.read_text(encoding="utf-8"))
+        if not isinstance(huella["archivos"], dict):
+            raise TypeError("`archivos` no es un objeto")
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise ValueError(f"La huella {ruta} no se puede leer ({type(e).__name__}): no se ignora en silencio.") from None
+    return huella
+
+
+def escribir_huella(out_dir: Path, destino: Path = HUELLA_POR_DEFECTO) -> dict:
+    """Escribe la HUELLA de la descarga: por archivo, solo sha256, elementos, fecha pedida, espejo y fecha de descarga (ningún
+    dato de OSM). Se versiona en git como ancla externa: alterar un archivo Y el manifiesto ya no basta sin reescribir
+    también la historia del repositorio. Solo se ancla lo verificado como `completo` y de los trozos del plan."""
+    manifiesto = json.loads((Path(out_dir) / "manifest.json").read_text(encoding="utf-8"))
+    esperados = [f"{nombre}_{franja}.json" for nombre, franja, _, _ in plan()]
+    archivos: Dict[str, dict] = {}
+    for archivo in esperados:
+        entrada = manifiesto["archivos"].get(archivo)
+        if entrada is None:
+            raise ValueError(f"Falta {archivo} en el manifiesto: no se ancla una descarga incompleta.")
+        estado = (entrada.get("verificacion") or {}).get("estado")
+        if estado != "completo":
+            raise ValueError(
+                f"{archivo} no está verificado como completo (estado: {estado}): ejecuta --verificar antes."
+            )
+        archivos[archivo] = {campo: entrada.get(campo) for campo in CAMPOS_DE_LA_HUELLA}
+    huella = {
+        "formato": 1,
+        "nota": "Huella de data/osm_history/ (hashes, recuentos y fechas; sin datos). Ver tools/download_osm_history.py.",
+        "area": manifiesto["area"],
+        "archivos": archivos,
+    }
+    destino = Path(destino)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(json.dumps(huella, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    return huella
+
+
 def main(argv: Optional[list] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", default=str(SALIDA_POR_DEFECTO), help="directorio donde guardar los JSON (NO la base)")
@@ -532,7 +596,22 @@ def main(argv: Optional[list] = None) -> int:
         action="store_true",
         help="no descarga: comprueba que lo ya descargado está completo comparando con el recuento que da el servidor",
     )
+    ap.add_argument(
+        "--huella",
+        action="store_true",
+        help="escribe docs/HUELLA_OSM_HISTORY.json (hashes y recuentos, sin datos) para versionarla como ancla externa; "
+        "solo si todo está verificado como completo",
+    )
     args = ap.parse_args(argv)
+
+    if args.huella:
+        try:
+            huella = escribir_huella(Path(args.out), HUELLA_POR_DEFECTO)
+        except (ValueError, OSError, KeyError) as e:
+            print(f"No se escribió la huella: {e}")
+            return 1
+        print(f"Huella escrita en {HUELLA_POR_DEFECTO} ({len(huella['archivos'])} archivos). Versiónala con git.")
+        return 0
 
     trabajo = plan(args.instantes)
     print(
@@ -545,6 +624,12 @@ def main(argv: Optional[list] = None) -> int:
         return 0
 
     if args.verificar:
+        huella = cargar_huella(HUELLA_POR_DEFECTO)
+        if huella is None:
+            print(
+                "AVISO: no hay huella versionada (docs/HUELLA_OSM_HISTORY.json): se comprueba contra el manifiesto, que vive "
+                "junto a los datos y por sí solo no detecta una alteración conjunta."
+            )
         resumen = verificar_descarga(
             OverpassClient(timeout=TIMEOUT_HTTP_S, max_retries=1),
             Path(args.out),
@@ -552,6 +637,7 @@ def main(argv: Optional[list] = None) -> int:
             args.pausa,
             rondas=args.rondas,
             espera_s=args.espera,
+            huella=huella,
         )
         print(
             f"\nVerificación: {len(resumen['correctos'])} completos, {len(resumen['incorrectos'])} INCOMPLETOS, "

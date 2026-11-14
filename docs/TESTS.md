@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 927 funciones de test · 1051 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 941 funciones de test · 1068 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 85 | 119+ |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 99 | 136+ |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -551,6 +551,20 @@
 - `test_el_total_del_servidor_debe_ser_una_cadena_de_digitos_ascii` ×13 — `int()` aceptaría «-5», «+5», « 5 » o dígitos de otros alfabetos: un recuento así no es válido y no se interpreta.
 - `test_el_total_del_servidor_acepta_cadenas_de_digitos_ascii` ×3
 - `test_un_archivo_cuyo_elements_no_es_una_lista_queda_modificado_aunque_tenga_la_longitud_esperada` — `elements` como cadena de 4 caracteres tiene `len` 4, como los 4 elementos del manifiesto: se comprueba el tipo.
+- `test_la_huella_solo_contiene_hashes_recuentos_y_fechas_no_datos` — Es lo que se versiona en git: por archivo, sha256, elementos, fecha pedida, espejo y fecha de descarga. Ningún elemento de OSM, ni etiquetas, ni posiciones.
+- `test_la_huella_coincide_con_el_manifiesto_archivo_por_archivo` — Los valores anclados son los del manifiesto verificado (sha256 incluido).
+- `test_no_se_ancla_lo_que_no_esta_verificado_como_completo` — Sin `--verificar` previo (o con algún archivo incompleto) la huella se niega: no se ancla lo no comprobado.
+- `test_no_se_ancla_una_descarga_incompleta` — Si falta algún trozo del plan en el manifiesto, no se escribe la huella.
+- `test_no_se_ancla_un_archivo_con_verificacion_incompleta` — Un solo archivo INCOMPLETO impide anclar toda la descarga.
+- `test_alterar_un_archivo_y_el_manifiesto_a_juego_se_detecta_con_la_huella` — Sin ancla externa, un archivo cambiado con el manifiesto recalculado pasa todas las comprobaciones locales; con la huella versionada, el sha256 del manifiesto ya no coincide con el anclado y queda MODIFICADO.
+- `test_sin_huella_una_alteracion_conjunta_de_archivo_y_manifiesto_no_se_detecta_y_esta_declarado` — LÍMITE DECLARADO (y probado, para que nadie crea lo contrario): sin ancla externa, un manifiesto que vive junto a los datos no puede detectar que se alteraron ambos a la vez. Por eso se avisa y se recomienda versionar la huella.
+- `test_cada_campo_de_la_huella_se_comprueba` ×4 — Si el manifiesto difiere de la huella en cualquiera de sus campos, el archivo queda MODIFICADO.
+- `test_un_archivo_que_no_figura_en_la_huella_queda_modificado` — Un trozo que no está anclado no puede darse por íntegro.
+- `test_una_huella_intacta_deja_pasar_los_archivos_intactos` — Con la huella correcta y los datos sin tocar, todo sale completo (no hay falsos positivos).
+- `test_cargar_huella_sin_archivo_devuelve_none_y_con_archivo_roto_falla_a_la_vista` — Que no exista la huella es un caso normal (aviso); que exista y esté rota no se ignora en silencio.
+- `test_main_huella_escribe_la_huella_y_se_niega_si_no_esta_verificado` — `--huella` escribe docs/HUELLA_OSM_HISTORY.json solo con todo verificado; si no, sale con 1 y lo explica.
+- `test_main_verificar_usa_la_huella_si_existe_y_avisa_si_no` — Sin huella versionada, `--verificar` avisa de que se comprueba solo contra el manifiesto; con huella, la usa.
+- `test_la_huella_real_versionada_tiene_la_forma_prometida` — `docs/HUELLA_OSM_HISTORY.json` (la real, en git) cubre exactamente los 7 trozos del plan, solo con los campos permitidos y sin ningún dato de OSM. En el CI no están los datos descargados, así que aquí solo se comprueba la forma; el contenido se contrasta con `--verificar` donde estén los datos.
 
 ## `tests/test_ensemble_predictor.py`
 
