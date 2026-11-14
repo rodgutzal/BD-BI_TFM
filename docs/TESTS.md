@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**58 archivos · 1161 funciones de test · 1382 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**58 archivos · 1162 funciones de test · 1383 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -60,7 +60,7 @@
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
 | [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 28 | 28+ |
-| [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 15 | 15 |
+| [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
@@ -1508,7 +1508,8 @@
 - `test_si_la_tabla_ya_no_tiene_brecha_pero_el_manifiesto_la_declara_se_corrige_el_manifiesto` — Manifiesto incoherente con la tabla ya vacía: no se da por hecho solo porque la tabla esté vacía.
 - `test_si_el_manifiesto_dice_con_brecha_true_se_corrige_aunque_la_tabla_este_vacia`
 - `test_al_reparar_se_conserva_el_hash_del_panorama_original` — La referencia al panorama con brecha no se pierde si se repite la herramienta para corregir el manifiesto.
-- `test_no_deja_temporales_y_si_se_corta_el_reemplazo_el_original_queda_intacto`
+- `test_si_falla_el_reemplazo_el_original_queda_intacto_y_no_se_deja_ningun_temporal`
+- `test_si_falla_la_escritura_del_manifiesto_no_queda_su_temporal` — El CSV ya se reemplazó (límite documentado: dos archivos), pero el temporal del manifiesto no se deja.
 
 ## `tests/test_tests_documentation.py`
 

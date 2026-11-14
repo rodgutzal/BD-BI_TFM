@@ -196,14 +196,27 @@ def test_al_reparar_se_conserva_el_hash_del_panorama_original(con_brecha):
     assert derivado["panorama_sha256_anterior"] == r["sha256_anterior"] != r["sha256"]
 
 
-def test_no_deja_temporales_y_si_se_corta_el_reemplazo_el_original_queda_intacto(con_brecha, monkeypatch):
+def test_si_falla_el_reemplazo_el_original_queda_intacto_y_no_se_deja_ningun_temporal(con_brecha, monkeypatch):
     antes = {p.name: p.read_bytes() for p in con_brecha.iterdir()}
     monkeypatch.setattr(herramienta.os, "replace", lambda *a: (_ for _ in ()).throw(OSError("corte")))
     with pytest.raises(OSError):
         herramienta.quitar_brecha(con_brecha)
-    assert {p.name: p.read_bytes() for p in con_brecha.iterdir() if not p.name.endswith(".tmp")} == antes
+    assert {p.name: p.read_bytes() for p in con_brecha.iterdir()} == antes  # ni cambios ni .tmp
     monkeypatch.undo()
-    for p in con_brecha.glob("*.tmp"):
-        p.unlink()
     herramienta.quitar_brecha(con_brecha)
     assert sorted(p.name for p in con_brecha.iterdir()) == sorted(panorama.ARCHIVOS.values())
+
+
+def test_si_falla_la_escritura_del_manifiesto_no_queda_su_temporal(con_brecha, monkeypatch):
+    """El CSV ya se reemplazó (límite documentado: dos archivos), pero el temporal del manifiesto no se deja."""
+    reales = herramienta.os.replace
+
+    def falla_el_segundo(origen, destino):
+        if str(destino).endswith("panorama_manifest.json"):
+            raise OSError("corte")
+        return reales(origen, destino)
+
+    monkeypatch.setattr(herramienta.os, "replace", falla_el_segundo)
+    with pytest.raises(OSError):
+        herramienta.quitar_brecha(con_brecha)
+    assert not list(con_brecha.glob("*.tmp"))

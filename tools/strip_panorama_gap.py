@@ -53,6 +53,16 @@ def tiene_brecha(tabla) -> bool:
     return bool(tabla[list(panorama.COLUMNAS_BRECHA)].notna().any().any() or tabla["modelo_brecha"].ne("").any())
 
 
+def _reemplazar_atomico(ruta: Path, escribir) -> None:
+    """Escribe en un temporal y lo reemplaza sobre `ruta`; si algo falla, el temporal no se queda."""
+    temporal = ruta.with_name(ruta.name + ".tmp")
+    try:
+        escribir(temporal)
+        os.replace(temporal, ruta)
+    finally:
+        temporal.unlink(missing_ok=True)
+
+
 def quitar_brecha(directorio) -> dict:
     """Quita la brecha de `directorio`. Devuelve `{"cambiado": bool, "filas": n, "sha256_anterior": ..., "sha256": ...}`."""
     d = Path(directorio)
@@ -74,9 +84,7 @@ def quitar_brecha(directorio) -> dict:
         tabla[col] = np.nan
     tabla["modelo_brecha"] = ""
     tabla["brecha_validada"] = False
-    temporal_p = ruta_p.with_name(ruta_p.name + ".tmp")
-    panorama._escribir_csv(tabla, temporal_p, False)
-    os.replace(temporal_p, ruta_p)
+    _reemplazar_atomico(ruta_p, lambda temporal: panorama._escribir_csv(tabla, temporal, False))
     nuevo = panorama.file_hash(ruta_p)
     manifiesto["archivos"][panorama.ARCHIVOS["panorama"]] = {"filas": int(len(tabla)), "sha256": nuevo}
     manifiesto["parametros"] = {**manifiesto.get("parametros", {}), "con_brecha": False}
@@ -88,11 +96,8 @@ def quitar_brecha(directorio) -> dict:
         "panorama_sha256_anterior": manifiesto.get("derivado", {}).get("panorama_sha256_anterior", anterior),
         "motivo": MOTIVO,
     }
-    temporal_m = ruta_m.with_name(ruta_m.name + ".tmp")
-    temporal_m.write_text(
-        json.dumps(manifiesto, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
-    )
-    os.replace(temporal_m, ruta_m)
+    texto = json.dumps(manifiesto, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    _reemplazar_atomico(ruta_m, lambda temporal: temporal.write_text(texto, encoding="utf-8", newline="\n"))
     return {"cambiado": True, "filas": int(len(tabla)), "sha256_anterior": anterior, "sha256": nuevo}
 
 
