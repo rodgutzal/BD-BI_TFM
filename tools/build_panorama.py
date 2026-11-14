@@ -7,6 +7,10 @@ Está pensado para correr en la MÁQUINA DE ENTRENAMIENTO con el paquete de entr
 acepta también la base completa. Es de SOLO LECTURA sobre la entrada. La brecha requiere entrenar (validación espacial
 repetida, 1-2 minutos por objetivo); con `--sin-brecha` solo se calculan las lentes, en segundos.
 
+AVISO: sin `--sin-brecha` el panorama sale CON brecha, y la brecha NO se versiona (dependía de datos de TomTom y de Data
+Commons y no estaba validada; ver docs/DATOS_Y_LICENCIAS.md): para publicar usa `--sin-brecha` o pasa después
+`tools/strip_panorama_gap.py`. Un test falla si `data/ml/panorama.csv` vuelve a traer brecha.
+
 Escribe en --out-dir (por defecto data/ml/), para versionar y llevar al dashboard:
     panorama.csv            una fila por (perfil, celda activa)
     cell_counts.csv         celda × (categoría|subcategoría): base para recalcular las lentes con otro perfil

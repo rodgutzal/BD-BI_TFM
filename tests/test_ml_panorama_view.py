@@ -44,6 +44,12 @@ def datos():
     return panorama.read_panorama(DATA_ML), panorama.read_counts(DATA_ML)
 
 
+@pytest.fixture(scope="module")
+def datos_con_brecha(datos_ml_con_brecha):
+    """Como `datos`, pero con una brecha SINTÉTICA: la tabla publicada ya no trae brecha (docs/DATOS_Y_LICENCIAS.md)."""
+    return panorama.read_panorama(datos_ml_con_brecha), panorama.read_counts(datos_ml_con_brecha)
+
+
 # ---- opciones ----------------------------------------------------------------------------------------------------
 def test_expand_selectors_separa_las_subcategorias_y_etiqueta_el_resto():
     """Cada subcategoría de un selector queda por separado; una categoría entera y un «todo salvo» tienen su etiqueta."""
@@ -158,9 +164,15 @@ def test_same_profile_distingue_competencia_segmentos_y_proveedores():
 
 
 # ---- panorama con el perfil --------------------------------------------------------------------------------------
-def test_gap_table_solo_existe_para_las_categorias_con_brecha(datos):
-    """food_drink y business tienen brecha (no validada); hospital no."""
+def test_la_tabla_publicada_ya_no_tiene_brecha_en_ninguna_categoria(datos):
     guardado, _ = datos
+    for clave in bp.DEFAULT_PROFILES:
+        assert pv.gap_table(guardado, clave) == (None, "", False), clave
+
+
+def test_gap_table_solo_existe_para_las_categorias_con_brecha(datos_con_brecha):
+    """Con una brecha (sintética) en food_drink y business (no validada), hospital no tiene."""
+    guardado, _ = datos_con_brecha
     for clave in ("food_drink", "business"):
         tabla, modelo, validada = pv.gap_table(guardado, clave)
         assert (
@@ -182,9 +194,9 @@ def test_la_vista_por_defecto_coincide_con_la_tabla_guardada(datos):
             )
 
 
-def test_un_perfil_distinto_cambia_las_lentes_pero_no_la_brecha(datos):
+def test_un_perfil_distinto_cambia_las_lentes_pero_no_la_brecha(datos_con_brecha):
     """Quitar la competencia indirecta baja la competencia directa+indirecta pero la brecha sigue siendo la precalculada."""
-    guardado, counts = datos
+    guardado, counts = datos_con_brecha
     base = pv.compute_view(counts, FOOD, guardado, "food_drink")
     opciones, directa, _ = pv.competition_options(FOOD, counts)
     perfil, _ = pv.custom_profile(FOOD, opciones, directa, [], FOOD.segmentos, FOOD.proveedores)
@@ -224,9 +236,15 @@ def test_filtro_de_oportunidad_ignora_las_celdas_sin_datos():
     assert not pv.opportunity_mask(v).any()
 
 
-def test_capas_disponibles_omiten_lo_que_no_tiene_datos(datos):
-    """La brecha solo es una capa si la categoría la tiene; una lente toda NaN no se ofrece."""
+def test_la_tabla_publicada_no_ofrece_la_capa_de_brecha(datos):
     guardado, counts = datos
+    for clave, perfil in bp.DEFAULT_PROFILES.items():
+        assert pv.CAPA_BRECHA not in pv.available_layers(pv.compute_view(counts, perfil, guardado, clave)), clave
+
+
+def test_capas_disponibles_omiten_lo_que_no_tiene_datos(datos_con_brecha):
+    """La brecha solo es una capa si la categoría la tiene; una lente toda NaN no se ofrece."""
+    guardado, counts = datos_con_brecha
     con = pv.compute_view(counts, FOOD, guardado, "food_drink")
     sin = pv.compute_view(counts, bp.get_default_profile("hospital"), guardado, "hospital")
     assert pv.CAPA_BRECHA in pv.available_layers(con) and pv.CAPA_BRECHA not in pv.available_layers(sin)
@@ -235,9 +253,9 @@ def test_capas_disponibles_omiten_lo_que_no_tiene_datos(datos):
     assert "Mercado (índice 0-1)" not in pv.available_layers(sin_mercado)
 
 
-def test_layer_values_devuelve_la_columna_correcta(datos):
+def test_layer_values_devuelve_la_columna_correcta(datos_con_brecha):
     """Cada capa muestra su columna; la de brecha, la brecha relativa."""
-    guardado, counts = datos
+    guardado, counts = datos_con_brecha
     v = pv.compute_view(counts, FOOD, guardado, "food_drink")
     for capa, (col, _) in pv.CAPAS.items():
         assert pv.layer_values(v, capa)[0].equals(v[col])

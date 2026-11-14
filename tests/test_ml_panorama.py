@@ -384,17 +384,18 @@ def test_la_tabla_versionada_coincide_con_su_manifiesto():
     assert b"\r\n" not in (DATA_ML / "panorama.csv").read_bytes()
 
 
-def test_la_tabla_versionada_declara_la_brecha_como_lo_dice_la_validacion():
-    """La brecha solo aparece en food_drink y business; brecha_validada coincide con la decisión del manifiesto (hoy
-    ninguna) y las otras cinco categorías no afirman nada. Si algún día un candidato gana, habrá que regenerarla."""
+def test_la_tabla_versionada_no_publica_la_brecha():
+    """La brecha de oferta se retiró de `panorama.csv` (dependía de la población de Data Commons y del tiempo de viaje con
+    mediciones de TomTom, y no estaba validada): ninguna columna de brecha trae valores y el manifiesto lo declara. Si algún
+    día se publica otra brecha, habrá que cambiar este test a propósito (docs/DATOS_Y_LICENCIAS.md)."""
     p = panorama.read_panorama(DATA_ML)
     m = json.loads((DATA_ML / "panorama_manifest.json").read_text(encoding="utf-8"))
     assert set(p["perfil"]) == set(bp.DEFAULT_PROFILES)
-    assert set(p.loc[p["esperado"].notna(), "perfil"]) == set(m["brecha"]) == {"food_drink", "business"}
-    for clave, info in m["brecha"].items():
-        assert p.loc[p["perfil"] == clave, "brecha_validada"].eq(info["ganador"] is not None).all()
-    assert not p.loc[~p["perfil"].isin(m["brecha"]), "brecha_validada"].any()
-    assert "EXPLORATORIA" in m["advertencia"]
+    assert p[list(panorama.COLUMNAS_BRECHA)].isna().all().all()
+    assert p["modelo_brecha"].eq("").all() and not p["brecha_validada"].any()
+    assert m["brecha"] == {} and m["parametros"]["con_brecha"] is False
+    assert m["advertencia"] == "Sin brecha: solo lentes explícitas." and "EXPLORATORIA" not in json.dumps(m)
+    assert m["derivado"]["herramienta"] == "tools/strip_panorama_gap.py" and "TomTom" in m["derivado"]["motivo"]
 
 
 def test_la_tabla_versionada_recalcula_las_mismas_lentes():

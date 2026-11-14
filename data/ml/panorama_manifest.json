@@ -1,5 +1,5 @@
 {
-  "advertencia": "La brecha de oferta es EXPLORATORIA: en la validación espacial ningún candidato superó con claridad a la densidad de POIs (ver docs/DISENO_ML_RECOMENDACION.md §3.G y §3.H). No entra en ningún puntaje.",
+  "advertencia": "Sin brecha: solo lentes explícitas.",
   "archivos": {
     "cell_counts.csv": {
       "filas": 1447,
@@ -7,53 +7,19 @@
     },
     "panorama.csv": {
       "filas": 7973,
-      "sha256": "265a374718cf6c10a896e5c27218f805e20701b22079488a66a0c844179a35cb"
+      "sha256": "dc789299eaa0dcd7e4746c02afa7c801d785816459ef2516f97084f04312931c"
     }
   },
-  "brecha": {
-    "business": {
-      "comparaciones": {
-        "boosting": {
-          "diferencia": -0.3465,
-          "ic_inf": -0.6635,
-          "ic_sup": 0.0153,
-          "veredicto": "indistinguible"
-        },
-        "mlp": {
-          "diferencia": 2.3369,
-          "ic_inf": -0.2611,
-          "ic_sup": 7.3227,
-          "veredicto": "indistinguible"
-        }
-      },
-      "ganador": null,
-      "mejor_baseline": "solo_densidad",
-      "modelo_brecha": "boosting"
-    },
-    "food_drink": {
-      "comparaciones": {
-        "boosting": {
-          "diferencia": -0.2088,
-          "ic_inf": -0.5675,
-          "ic_sup": 0.1038,
-          "veredicto": "indistinguible"
-        },
-        "mlp": {
-          "diferencia": 0.3322,
-          "ic_inf": -0.1712,
-          "ic_sup": 0.9853,
-          "veredicto": "indistinguible"
-        }
-      },
-      "ganador": null,
-      "mejor_baseline": "solo_densidad",
-      "modelo_brecha": "boosting"
-    }
+  "brecha": {},
+  "derivado": {
+    "herramienta": "tools/strip_panorama_gap.py",
+    "motivo": "La brecha de oferta dependía de la población de Data Commons y del tiempo de viaje medio, calculado con mediciones de TomTom (cuyas condiciones prohíben las bases de datos derivadas), y no estaba validada: se retiró del panorama publicado. Las lentes y cell_counts.csv no cambian.",
+    "panorama_sha256_anterior": "265a374718cf6c10a896e5c27218f805e20701b22079488a66a0c844179a35cb"
   },
   "formato": 1,
   "parametros": {
     "boot": 2000,
-    "con_brecha": true,
+    "con_brecha": false,
     "con_contexto": true,
     "folds": 5,
     "k": 50,

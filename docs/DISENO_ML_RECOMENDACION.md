@@ -259,7 +259,7 @@ El entrenamiento no corre donde está el stack. Hasta la fase 1b las herramienta
 
 | Archivo | Contenido |
 |---|---|
-| `panorama.csv` | 7.973 filas (perfil × celda): ubicación, zona más cercana, las tres lentes con sus indicadores, percentiles, confianza y, solo para `food_drink` y `business`, la brecha exploratoria |
+| `panorama.csv` | 7.973 filas (perfil × celda): ubicación, zona más cercana, las tres lentes con sus indicadores, percentiles, confianza y, solo para `food_drink` y `business`, la brecha exploratoria (**retirada del archivo publicado el 14-nov-2026**: dependía de la población de Data Commons y de un tiempo de viaje con mediciones de TomTom, y no estaba validada; ver `docs/DATOS_Y_LICENCIAS.md`) |
 | `cell_counts.csv` | 1.447 celdas × (categoría\|subcategoría): la base para recalcular las lentes con el perfil que ajuste el usuario, sin la base de datos |
 | `panorama_manifest.json` | procedencia (hash de la entrada, commit, versiones), parámetros, decisión de la validación y sha256 de los dos CSV |
 
