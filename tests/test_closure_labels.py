@@ -641,13 +641,18 @@ def test_guardar_sin_destino_escribe_en_el_destino_por_defecto(tmp_path, monkeyp
     assert json.loads(por_defecto.read_text(encoding="utf-8"))["poblacion"] == 1
 
 
-def test_la_herramienta_agrupa_los_trozos_por_instante_y_no_usa_2024(tmp_path, monkeypatch):
+def test_la_herramienta_agrupa_los_trozos_por_instante_y_las_etiquetas_no_usan_2024(tmp_path, monkeypatch):
     antes = [nodo(1, **CAFE)]
     _entradas_falsas(tmp_path, monkeypatch, antes, hoy=[], ciclo=[])
     rutas = dh.exigir_datos_verificados(tmp_path, None)
     fotos = herramienta.cargar_fotos(rutas, _hashes(rutas))
-    assert set(fotos) == {"2022", "hoy", "ciclo"} and [e["id"] for e in fotos["2022"]] == [1]
-    assert all(e["id"] != 999 for g in fotos.values() for e in g)  # el elemento de 2024 no entra
+    assert set(fotos) == {"2022", "2024", "hoy", "ciclo"} and [e["id"] for e in fotos["2022"]] == [1]
+    assert [e["id"] for e in fotos["2024"]] == [999]  # 2024 se lee (lo usa el control de la validación)
+    assert all(
+        e["id"] != 999 for g in ("2022", "hoy", "ciclo") for e in fotos[g]
+    )  # pero no mezcla con los otros instantes
+    etiquetas, _, _ = herramienta.etiquetas_verificadas(tmp_path, dh.cargar_huella(None))
+    assert 999 not in set(etiquetas["id"])  # las etiquetas 2022 → hoy no usan 2024
 
 
 def test_un_elements_que_no_es_lista_se_rechaza(tmp_path):
@@ -760,7 +765,7 @@ def test_cargar_fotos_asigna_todos_los_archivos_del_plan_real(tmp_path):
     assert len(fotos["2022"]) == 2 and len(fotos["hoy"]) == 2 and len(fotos["ciclo"]) == 1
 
 
-@pytest.mark.parametrize("prefijo", ["2022-01-01_", "hoy_", "ciclo_de_vida_"])
+@pytest.mark.parametrize("prefijo", ["2022-01-01_", "2024-01-01_", "hoy_", "ciclo_de_vida_"])
 def test_cargar_fotos_se_niega_si_un_grupo_queda_vacio(tmp_path, prefijo):
     """Sin «hoy», todos los locales saldrían «probables» y la puerta se cumpliría sin avisar."""
     rutas = {a: r for a, r in _rutas_del_plan(tmp_path).items() if not a.startswith(prefijo)}
@@ -906,3 +911,132 @@ def test_una_huella_que_no_cubre_exactamente_el_plan_se_niega_y_no_lee_nada(tmp_
     with pytest.raises(ValueError, match="no son exactamente los del plan"):
         herramienta.etiquetas_verificadas(tmp_path, huella)
     assert leidos == []
+
+
+# ---- sensibilidad B (con Foursquare; solo descriptiva) ------------------------------------------------------------------------
+def _etiquetas_para_b():
+    """Cuatro locales en puntos separados: 1 fuerte, 2 superviviente, 3 y 4 probables (no figuran hoy)."""
+    p = {1: mas_lejos(0, 0), 2: mas_lejos(0, 700), 3: mas_lejos(0, 1400), 4: mas_lejos(0, 4000)}
+    antes = [nodo(i, p[i], amenity="cafe", name=f"Local {i}") for i in p]
+    hoy = [nodo(2, p[2], amenity="cafe", name="Local 2")]
+    ciclo = [nodo(1, p[1], **{"disused:amenity": "cafe"})]
+    tabla, _ = cl.etiquetar(antes, hoy, ciclo)
+    assert sorted(zip(tabla["id"], tabla["nivel"].astype(str))) == [
+        (1, "fuerte"),
+        (2, "superviviente"),
+        (3, "probable"),
+        (4, "probable"),
+    ]
+    return tabla, p
+
+
+def _fsq(*filas):
+    return pd.DataFrame(filas, columns=["name", "latitude", "longitude"])
+
+
+def test_la_sensibilidad_b_solo_conserva_los_locales_a_menos_de_1500_m_de_un_punto_de_busqueda():
+    tabla, p = _etiquetas_para_b()
+    resultado = cl.sensibilidad_b(tabla, _fsq(), [mas_lejos(0, 0)])  # un punto de búsqueda en el local 1
+    assert sorted(resultado["id"]) == [1, 2, 3]  # 0 m, 700 m y 1.400 m; el de 4.000 m queda fuera
+
+
+def test_el_limite_de_cobertura_es_1500_m_inclusivo(monkeypatch):
+    tabla, _ = _etiquetas_para_b()
+    monkeypatch.setattr(
+        cl.grid, "haversine_m", lambda *a: np.full(np.broadcast(*[np.asarray(x) for x in a]).shape, 1500.0)
+    )
+    assert len(cl.sensibilidad_b(tabla, _fsq(), [(LAT0, LON0)])) == len(tabla)
+    monkeypatch.setattr(
+        cl.grid, "haversine_m", lambda *a: np.full(np.broadcast(*[np.asarray(x) for x in a]).shape, 1500.01)
+    )
+    assert len(cl.sensibilidad_b(tabla, _fsq(), [(LAT0, LON0)])) == 0
+
+
+def test_un_probable_con_homonimo_en_foursquare_a_150_m_pasa_a_dudoso():
+    tabla, p = _etiquetas_para_b()
+    lat3, lon3 = mas_lejos(0, 1400 + 100)
+    resultado = cl.sensibilidad_b(tabla, _fsq(("local 3", lat3, lon3)), [mas_lejos(0, 700)])
+    por_id = resultado.set_index("id")
+    assert str(por_id.loc[3, "nivel"]) == "dudoso" and math.isnan(por_id.loc[3, "cierre_principal"])
+    assert 4 not in por_id.index  # el local 4 (a 4.000 m del punto de búsqueda) queda fuera de la cobertura
+
+
+def test_el_homonimo_de_foursquare_debe_estar_a_150_m_o_menos_y_tener_el_mismo_nombre_normalizado(monkeypatch):
+    tabla, p = _etiquetas_para_b()
+    punto = [mas_lejos(0, 700)]
+    lejos = cl.sensibilidad_b(tabla, _fsq(("LOCAL 3!", *mas_lejos(0, 1400 + 151))), punto).set_index("id")
+    cerca = cl.sensibilidad_b(tabla, _fsq(("LOCAL 3!", *mas_lejos(0, 1400 + 149))), punto).set_index("id")
+    otro_nombre = cl.sensibilidad_b(tabla, _fsq(("Local 33", *mas_lejos(0, 1400 + 10))), punto).set_index("id")
+    assert str(lejos.loc[3, "nivel"]) == "probable"  # a 151 m
+    assert str(cerca.loc[3, "nivel"]) == "dudoso"  # a 149 m; mayúsculas y signos no importan
+    assert str(otro_nombre.loc[3, "nivel"]) == "probable"  # nombre distinto
+    monkeypatch.setattr(
+        cl.grid, "haversine_m", lambda *a: np.full(np.broadcast(*[np.asarray(x) for x in a]).shape, 150.0)
+    )
+    assert (
+        str(cl.sensibilidad_b(tabla, _fsq(("Local 3", LAT0, LON0)), [(LAT0, LON0)]).set_index("id").loc[3, "nivel"])
+        == "dudoso"
+    )  # 150 m inclusivo
+    monkeypatch.setattr(
+        cl.grid,
+        "haversine_m",
+        lambda *a: (
+            np.full(np.broadcast(*[np.asarray(x) for x in a]).shape, 150.01)
+            if np.broadcast(*[np.asarray(x) for x in a]).shape == (4, 1)
+            else np.float64(150.01)
+        ),
+    )
+    assert (
+        str(cl.sensibilidad_b(tabla, _fsq(("Local 3", LAT0, LON0)), [(LAT0, LON0)]).set_index("id").loc[3, "nivel"])
+        == "probable"
+    )
+
+
+@pytest.mark.parametrize("nombre", ["(sin nombre)", "(Sin Nombre)", "", None, "!!!"])
+def test_las_fichas_sin_nombre_de_foursquare_se_excluyen(nombre):
+    tabla, p = _etiquetas_para_b()
+    resultado = cl.sensibilidad_b(tabla, _fsq((nombre, *p[3]), ("Local 3 sin parecido", *p[3])), [p[3]]).set_index("id")
+    assert str(resultado.loc[3, "nivel"]) == "probable"
+
+
+def test_los_fuertes_y_los_supervivientes_no_cambian_aunque_tengan_homonimo():
+    tabla, p = _etiquetas_para_b()
+    fsq = _fsq(("Local 1", *p[1]), ("Local 2", *p[2]))
+    resultado = cl.sensibilidad_b(tabla, fsq, [p[1], p[2]]).set_index("id")
+    assert str(resultado.loc[1, "nivel"]) == "fuerte" and str(resultado.loc[2, "nivel"]) == "superviviente"
+    assert resultado.loc[1, "cierre_principal"] == 1.0 and resultado.loc[2, "cierre_principal"] == 0.0
+
+
+def test_la_sensibilidad_b_recalcula_las_columnas_de_cierre_y_no_modifica_la_tabla_original():
+    tabla, p = _etiquetas_para_b()
+    antes = tabla.copy(deep=True)
+    resultado = cl.sensibilidad_b(tabla, _fsq(("Local 3", *p[3])), [p[3]])
+    assert list(resultado.columns) == list(tabla.columns)
+    pd.testing.assert_frame_equal(tabla, antes)  # no se toca la original
+    por_id = resultado.set_index("id")
+    assert math.isnan(por_id.loc[3, "cierre_principal"]) and math.isnan(por_id.loc[3, "cierre_fuerte"])
+
+
+def test_la_sensibilidad_b_se_niega_sin_puntos_de_busqueda():
+    tabla, _ = _etiquetas_para_b()
+    with pytest.raises(ValueError, match="No hay puntos de búsqueda"):
+        cl.sensibilidad_b(tabla, _fsq(), [])
+
+
+def test_los_parametros_de_la_sensibilidad_b_son_los_del_protocolo():
+    assert (cl.UMBRAL_FOURSQUARE_M, cl.COBERTURA_FOURSQUARE_M) == (150.0, 1500.0)
+
+
+def test_una_ficha_sin_nombre_de_foursquare_no_empareja_ni_con_un_local_que_se_llama_igual():
+    """Un local de OSM llamado «Sin nombre» y una ficha «(sin nombre)» de Foursquare en el mismo sitio NO son homónimos: las
+    fichas sin nombre se excluyen (protocolo)."""
+    p = mas_lejos(0, 0)
+    tabla, _ = cl.etiquetar([nodo(1, p, amenity="cafe", name="Sin nombre")], [], [])
+    assert str(tabla.loc[0, "nivel"]) == "probable"
+    resultado = cl.sensibilidad_b(tabla, _fsq(("(sin nombre)", *p)), [p])
+    assert str(resultado.loc[0, "nivel"]) == "probable"
+    # tras normalizar (sin signos) «Sin nombre» y «(sin nombre)» son lo mismo: ambos se excluyen
+    assert str(cl.sensibilidad_b(tabla, _fsq(("Sin nombre", *p)), [p]).loc[0, "nivel"]) == "probable"
+    # una ficha con nombre real a la misma distancia sí empareja (control de que la prueba puede fallar)
+    otro, _ = cl.etiquetar([nodo(2, p, amenity="cafe", name="Café Luna")], [], [])
+    assert str(cl.sensibilidad_b(otro, _fsq(("Café Luna", *p)), [p]).loc[0, "nivel"]) == "dudoso"

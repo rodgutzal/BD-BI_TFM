@@ -49,27 +49,25 @@ def leer_elementos(ruta: Path, sha256_esperado: str) -> List[dict]:
 
 
 def cargar_fotos(rutas: Dict[str, Path], hashes: Dict[str, str]) -> Dict[str, List[dict]]:
-    """Agrupa los trozos verificados por instante: 2022, hoy y ciclo de vida (cada uno en dos franjas, salvo el último).
+    """Agrupa los trozos verificados por instante: 2022, 2024, hoy y ciclo de vida (cada uno en dos franjas, salvo el último).
     Se niega si algún grupo queda vacío o algún archivo no encaja en ninguno: con un nombre cambiado en la descarga, «hoy»
     saldría vacío y todos los locales serían «probables» sin que nada avisara."""
-    grupos = {"2022": "2022-01-01_", "hoy": "hoy_", "ciclo": "ciclo_de_vida_"}
+    grupos = {"2022": "2022-01-01_", "2024": "2024-01-01_", "hoy": "hoy_", "ciclo": "ciclo_de_vida_"}
     asignados = {g: [a for a in sorted(rutas) if a.startswith(pref)] for g, pref in grupos.items()}
     vacios = [g for g, archivos in asignados.items() if not archivos]
     if vacios:
         raise ValueError(f"No hay archivos verificados para: {', '.join(vacios)} (archivos: {sorted(rutas)})")
     usados = {a for archivos in asignados.values() for a in archivos}
-    # 2024 se verifica con el resto pero NO se usa en esta etapa (control descriptivo posterior)
-    desconocidos = sorted(a for a in rutas if a not in usados and not a.startswith("2024-01-01_"))
+    desconocidos = sorted(a for a in rutas if a not in usados)
     if desconocidos:
         raise ValueError(f"Archivos verificados que no encajan en ningún instante conocido: {desconocidos}")
     return {g: [e for a in archivos for e in leer_elementos(rutas[a], hashes[a])] for g, archivos in asignados.items()}
 
 
-def etiquetas_verificadas(out_dir: Path, huella: Optional[dict]):
-    """LA vía para leer la descarga (la validación posterior debe partir de aquí): exige la huella versionada, verifica con
-    `exigir_datos_verificados` ANTES de leer ningún archivo y lee cada archivo comprobando que sus bytes son los verificados
-    (sha256 de la huella). Devuelve (tabla de etiquetas, descartados de la población, {archivo: sha256 de lo verificado}).
-    """
+def fotos_verificadas(out_dir: Path, huella: Optional[dict]):
+    """LA vía para leer la descarga (la validación debe partir de aquí): exige la huella versionada, verifica con
+    `exigir_datos_verificados` ANTES de leer ningún archivo y lee cada archivo UNA vez comprobando que sus bytes son los
+    verificados (sha256 de la huella). Devuelve ({instante: [elementos]}, {archivo: sha256 de lo verificado})."""
     if huella is None:
         raise ValueError("falta docs/HUELLA_OSM_HISTORY.json: sin el ancla externa no se leen los datos.")
     rutas = dh.exigir_datos_verificados(out_dir, huella)  # se niega (ValueError) si algo no es utilizable
@@ -84,7 +82,13 @@ def etiquetas_verificadas(out_dir: Path, huella: Optional[dict]):
         )
     # Los hashes son los del ancla externa (la huella), no los de un segundo vistazo al manifiesto.
     hashes = {a: huella["archivos"][a]["sha256"] for a in rutas}
-    fotos = cargar_fotos(rutas, hashes)
+    return cargar_fotos(rutas, hashes), hashes
+
+
+def etiquetas_verificadas(out_dir: Path, huella: Optional[dict]):
+    """Etiquetas de cierre (2022 → hoy) sobre `fotos_verificadas`. Devuelve (tabla de etiquetas, descartados de la población,
+    {archivo: sha256 de lo verificado})."""
+    fotos, hashes = fotos_verificadas(out_dir, huella)
     etiquetas, descartados = closure_labels.etiquetar(fotos["2022"], fotos["hoy"], fotos["ciclo"])
     return etiquetas, descartados, hashes
 
