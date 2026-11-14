@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**54 archivos · 1050 funciones de test · 1256 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**54 archivos · 1051 funciones de test · 1257 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -19,7 +19,7 @@
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
-| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 80 | 154+ |
+| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 81 | 155+ |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
 | [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 38 | 49+ |
@@ -348,7 +348,8 @@
 - `test_el_modulo_de_etiquetas_no_lee_archivos_ni_la_descarga` — Es puro: la garantía de «solo datos verificados» la da `etiquetas_verificadas`, la única vía de lectura.
 - `test_etiquetas_verificadas_se_niega_sin_huella_y_no_lee_nada`
 - `test_etiquetas_verificadas_verifica_antes_de_leer_y_devuelve_las_etiquetas`
-- `test_si_hoy_y_ciclo_de_vida_discrepan_en_un_tag_manda_hoy` — Hoy dice «Café Luna»; el archivo de ciclo de vida (otra consulta, otro instante) dice «Otro»: manda hoy, así que es superviviente.
+- `test_si_hoy_y_ciclo_de_vida_discrepan_en_un_tag_manda_hoy` — Hoy dice «Café Luna»; el archivo de ciclo de vida (otra consulta, otro instante) dice «Otro»: manda hoy, así que es superviviente. Si mandase el de ciclo de vida, el nombre sería «Otro» y saldría «dudoso» (cambio de nombre).
+- `test_la_marca_del_archivo_de_ciclo_de_vida_se_une_a_los_tags_de_hoy_y_da_dudoso` — Caso distinto del anterior (aquí no hay discrepancia de un tag): la categoría activa viene de «hoy» y la marca de ciclo de vida, solo del otro archivo; la unión da «activa + marca» = dudoso.
 - `test_un_way_de_2022_se_empareja_con_el_way_de_hoy_y_no_con_un_nodo_del_mismo_numero`
 - `test_cargar_fotos_asigna_todos_los_archivos_del_plan_real` — Los nombres salen de `dh.plan()`, no escritos a mano: si la descarga cambia de nombres, este test lo ve.
 - `test_cargar_fotos_se_niega_si_un_grupo_queda_vacio` ×3 — Sin «hoy», todos los locales saldrían «probables» y la puerta se cumpliría sin avisar.

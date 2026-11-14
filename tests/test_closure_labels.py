@@ -722,17 +722,18 @@ def test_etiquetas_verificadas_verifica_antes_de_leer_y_devuelve_las_etiquetas(t
 
 
 def test_si_hoy_y_ciclo_de_vida_discrepan_en_un_tag_manda_hoy():
-    """Hoy dice «Café Luna»; el archivo de ciclo de vida (otra consulta, otro instante) dice «Otro»: manda hoy, así que es superviviente."""
-    assert (
-        un_nivel(
-            nodo(1, **CAFE), hoy=[nodo(1, **CAFE)], ciclo=[nodo(1, amenity="cafe", name="Otro", **{"was:shop": "x"})]
-        )
-        == "dudoso"
-    )
+    """Hoy dice «Café Luna»; el archivo de ciclo de vida (otra consulta, otro instante) dice «Otro»: manda hoy, así que
+    es superviviente. Si mandase el de ciclo de vida, el nombre sería «Otro» y saldría «dudoso» (cambio de nombre)."""
     assert (
         un_nivel(nodo(1, **CAFE), hoy=[nodo(1, **CAFE)], ciclo=[nodo(1, amenity="cafe", name="Otro")])
         == "superviviente"
     )
+
+
+def test_la_marca_del_archivo_de_ciclo_de_vida_se_une_a_los_tags_de_hoy_y_da_dudoso():
+    """Caso distinto del anterior (aquí no hay discrepancia de un tag): la categoría activa viene de «hoy» y la marca de
+    ciclo de vida, solo del otro archivo; la unión da «activa + marca» = dudoso."""
+    assert un_nivel(nodo(1, **CAFE), hoy=[nodo(1, **CAFE)], ciclo=[nodo(1, **{"was:shop": "x"})]) == "dudoso"
 
 
 def test_un_way_de_2022_se_empareja_con_el_way_de_hoy_y_no_con_un_nodo_del_mismo_numero():
