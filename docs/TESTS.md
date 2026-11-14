@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 869 funciones de test · 967 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 970 funciones de test · 1102 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 27 | 35 |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 128 | 170+ |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -461,6 +461,10 @@
 >
 > Sin red: se usa un cliente falso. Lo más importante que comprueban: que un espejo de Overpass que IGNORA la fecha pedida
 > (y devuelve el mapa actual) se rechaza, porque si no, el «estado de 2022» sería en realidad el de hoy y no habría cierres.
+>
+> OJO con cómo se detecta: medido contra overpass-api.de, `osm3s.timestamp_osm_base` trae SIEMPRE la hora actual del servidor,
+> también en una respuesta con datos de 2022. Por eso la fecha se comprueba con un canario (`out meta`: el `timestamp` de cada
+> elemento) y NO con esa hora base; una prueba de regresión fija que una respuesta histórica con hora base actual se acepta.
 
 - `test_el_plan_pide_tres_instantes_en_dos_franjas_y_el_ciclo_de_vida_solo_para_hoy` — 2022, 2024 y hoy, cada uno en 2 franjas (6 consultas), más una de ciclo de vida del estado actual: 7.
 - `test_las_consultas_pasadas_llevan_la_fecha_y_las_actuales_no` — Solo 2022 y 2024 llevan `[date:...]`; «hoy» y el ciclo de vida piden el estado actual.
@@ -468,27 +472,128 @@
 - `test_las_siete_categorias_estan_en_la_consulta` — Cada etiqueta de cada categoría aparece en la consulta (nada se queda sin pedir).
 - `test_las_clausulas_de_ciclo_de_vida_cubren_cinco_prefijos_por_cinco_claves` — `disused:`, `was:`, `abandoned:`, `demolished:` y `razed:` sobre amenity, shop, office, leisure y tourism.
 - `test_las_franjas_cubren_toda_el_area_sin_huecos_ni_solapes` — Las franjas de latitud son contiguas y suman toda la rejilla.
-- `test_la_fecha_base_debe_no_ser_posterior_a_la_pedida` ×5 — Un espejo que devuelve el mapa actual para un instante pasado se detecta por su fecha base.
-- `test_un_espejo_que_ignora_la_fecha_se_rechaza_y_se_prueba_el_siguiente` — El primer espejo devuelve el presente para una consulta de 2022: se descarta y se usa el segundo.
+- `test_la_consulta_del_canario_lleva_la_fecha_que_se_va_a_pedir_y_pide_meta` — El canario es una consulta pequeña en LA FECHA PEDIDA con `out center meta` (para ver el `timestamp` de cada elemento); hay uno por fecha, no uno fijo.
+- `test_el_canario_acepta_un_espejo_que_respeta_la_fecha` — Todas las versiones son anteriores a la fecha y alguna es de los 2 años previos: es un estado de esa fecha.
+- `test_el_canario_acepta_una_version_justo_en_la_fecha` — El límite superior es inclusivo: una versión con la fecha exacta no es posterior.
+- `test_el_canario_rechaza_un_espejo_que_ignora_la_fecha` — Con el mapa actual hay versiones recientes: se rechaza y el motivo dice cuántas y la más reciente.
+- `test_una_sola_version_posterior_basta_para_rechazar` — Aunque casi todo sea antiguo, una versión posterior a la fecha delata un mapa que no es de esa fecha.
+- `test_el_canario_rechaza_un_espejo_con_una_copia_antigua_de_la_base` — COTA INFERIOR: un espejo atrasado (última versión de hace 5 años) pasaría la cota superior para una fecha reciente y serviría datos viejos como si fueran de 2024 u hoy. Se detecta porque no hay ninguna versión de los 2 años previos.
+- `test_la_cota_inferior_del_canario_es_inclusiva_en_el_borde_de_la_ventana` — Una versión justo 730 días antes de la fecha cuenta como «reciente»; un segundo antes, no.
+- `test_el_canario_exige_un_minimo_de_elementos_y_lo_trata_como_pasajero` — Una respuesta vacía o recortada no se da por buena (no hay nada que comprobar), pero NO es un motivo definitivo: lanza una excepción, que no se recuerda y se puede reintentar.
+- `test_elementos_sin_timestamp_en_el_canario_son_un_problema_pasajero_no_definitivo` ×2 — Sin `timestamp` no se puede comprobar la fecha: no se acepta, pero tampoco se prueba que el espejo ignore la fecha (puede ser una respuesta defectuosa, no solo que no admita `meta`): lanza una excepción en vez de un motivo definitivo, tanto si faltan en todos los elementos como si falta solo en uno.
+- `test_un_canario_sin_timestamp_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recupera` — A nivel de `pedir`: un espejo que contesta una vez sin `timestamp` (respuesta defectuosa) y luego bien NO queda marcado de por vida; se reintenta en la ronda siguiente y se usa.
+- `test_un_espejo_que_nunca_admite_meta_falla_a_la_vista_tras_agotar_las_rondas` — Un espejo que de verdad no admite `meta` nunca pasa el canario: no se le piden datos y el error final lo dice.
+- `test_el_canario_con_remark_de_error_es_un_problema_pasajero` — Un error de Overpass con HTTP 200 (servidor saturado) no es un canario válido, pero tampoco prueba que el espejo ignore la fecha: lanza una excepción en vez de devolver un motivo definitivo.
+- `test_la_hora_base_del_servidor_es_la_actual_y_aun_asi_una_respuesta_historica_valida_se_acepta` — REGRESIÓN del hallazgo real: overpass-api.de pone la hora ACTUAL en `osm3s.timestamp_osm_base` aunque los datos sean de 2022. La versión anterior de la herramienta comparaba esa hora con la fecha pedida y habría rechazado TODAS las respuestas históricas válidas.
+- `test_un_espejo_que_ignora_la_fecha_se_rechaza_y_se_prueba_el_siguiente` — El primer espejo devuelve el mapa actual para una consulta de 2022: se descarta tras el canario y se usa el segundo. Al espejo malo no se le pide ningún dato real.
 - `test_si_todos_los_espejos_ignoran_la_fecha_falla_en_vez_de_devolver_el_presente` — Nunca se devuelve en silencio el mapa actual como si fuera el de 2022.
+- `test_el_canario_se_pide_una_sola_vez_por_espejo_y_se_recuerda` — Con el mismo diccionario de verificados, varias consultas al mismo espejo solo gastan un canario.
+- `test_un_espejo_marcado_como_que_ignora_la_fecha_no_se_vuelve_a_consultar` — Tras fallar el canario por ignorar la fecha, el espejo queda descartado: no se repite el canario en cada consulta.
+- `test_si_falla_la_red_en_el_canario_el_espejo_no_queda_marcado_y_se_puede_reintentar` — Un error de red durante el canario no es «ignora la fecha»: se reintenta en la ronda siguiente y entonces se acepta.
+- `test_un_canario_pasajero_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recupera` — El único espejo con historia está saturado justo en el canario (remark o respuesta recortada) y responde bien en la ronda 2: no se le debe marcar como «ignora la fecha» de por vida. Es el caso que las rondas existen para cubrir.
+- `test_un_canario_pasajero_no_deja_marcado_el_espejo_mientras_dure_el_fallo` — Mientras el canario siga fallando de forma pasajera, `verificados` queda vacío (nada se recuerda).
+- `test_tras_un_canario_nuevo_se_hace_una_pausa_y_con_el_espejo_ya_verificado_no` — El canario es una petición más: se espera `PAUSA_S` antes de la consulta pesada, una sola vez por espejo.
+- `test_hay_un_canario_por_cada_fecha_que_se_pide_y_se_recuerda_por_separado` — Pedir 2022 y 2024 al mismo espejo gasta DOS canarios (uno por fecha), y cada uno se recuerda aparte; con la misma fecha varias veces solo se gasta uno.
+- `test_un_espejo_atrasado_se_rechaza_para_2024_aunque_hubiera_pasado_el_canario_de_2022` — Un espejo con una copia vieja pasa el canario de 2022 pero no el de 2024: no se le piden los datos de 2024.
+- `test_el_resumen_final_no_falla_con_un_manifiesto_de_la_version_anterior` — Un `manifest.json` heredado con la clave antigua `osm_base` (sin `osm_base_servidor`) no hace reventar el resumen.
+- `test_una_consulta_actual_no_pide_canario` — Para «hoy» (sin fecha) no hay nada que comprobar: no se gasta una consulta de canario.
 - `test_un_error_de_red_en_un_espejo_pasa_al_siguiente` — Un fallo HTTP no detiene la descarga mientras otro espejo responda.
-- `test_descargar_escribe_los_json_y_un_manifiesto_con_fecha_base_y_hash` — Cada trozo queda en su archivo con la fecha base que dijo Overpass y el manifiesto guarda recuento y sha256.
-- `test_un_trozo_que_falla_se_anota_y_los_demas_siguen` — Si ningún espejo da la fecha pedida, ese trozo queda en `fallidos` y no se escribe su archivo.
+- `test_descargar_escribe_los_json_y_un_manifiesto_con_hora_del_servidor_y_hash` — Cada trozo queda en su archivo; el manifiesto guarda recuento, sha256 y la hora del servidor solo como informativa.
+- `test_descargar_pide_un_canario_por_espejo_y_por_fecha_en_toda_la_descarga` — Con 2022 y 2024 (4 consultas fechadas) hay 2 canarios (uno por fecha) y 4 consultas reales, no uno por consulta.
+- `test_un_trozo_que_falla_se_anota_y_los_demas_siguen` — Si ningún espejo respeta la fecha, esos trozos quedan en `fallidos` y no se escribe su archivo.
 - `test_descargar_solo_escribe_dentro_del_directorio_de_salida` — No toca nada fuera de `out_dir` (ni la base de datos).
 - `test_el_dry_run_no_hace_ninguna_llamada_de_red` — `--dry-run` imprime las consultas y no crea ni usa el cliente de Overpass.
 - `test_los_datos_descargados_estan_ignorados_por_git` — El estado histórico se regenera y no se versiona: `data/osm_history/` está en .gitignore.
 - `test_si_todos_fallan_en_la_primera_ronda_se_espera_y_se_reintenta` — Los espejos públicos se saturan y se recuperan: tras una ronda en la que todos fallan se espera y se vuelve a empezar; aquí el primero está «al límite de capacidad» en la ronda 1 y responde en la 2.
 - `test_se_rinde_tras_las_rondas_indicadas_y_solo_espera_entre_ellas` — Con 3 rondas fallidas hay 2 esperas (no una tras la última) y 3 intentos por espejo.
 - `test_el_error_final_dice_por_que_fallo_cada_espejo` — Antes solo se veía el motivo del ÚLTIMO espejo y se ocultaba el de los demás.
-- `test_el_timeout_de_conexion_es_corto_y_el_de_lectura_largo` — Un espejo que no conecta se salta en segundos; solo la lectura (la consulta pesada) puede tardar.
+- `test_el_timeout_de_conexion_es_corto_y_el_de_lectura_largo_tambien_en_el_canario` — Un espejo que no conecta se salta en segundos; solo la lectura (la consulta pesada) puede tardar. Vale para la consulta real y para el canario.
 - `test_descargar_respeta_las_rondas_y_la_espera_que_se_le_indican` — `descargar` pasa `rondas` y `espera_s` a `pedir`: con 2 rondas y un espejo caído hay 2 intentos por trozo (4 en total para los 2 trozos de 2022) y una espera de 5 s por trozo, entre la ronda 1 y la 2.
-- `test_una_respuesta_http_200_con_remark_de_error_no_se_da_por_buena` — Si Overpass se queda sin tiempo o memoria responde 200 con `remark`, la fecha base ya escrita y `elements` vacío o parcial. Guardarlo como éxito daría un 2022 vacío, que parecería una ola de cierres: se descarta y se prueba otro espejo.
+- `test_una_respuesta_http_200_con_remark_de_error_no_se_da_por_buena` — Si Overpass se queda sin tiempo o memoria responde 200 con `remark` y `elements` vacío o parcial. Guardarlo como éxito daría un 2022 vacío, que parecería una ola de cierres: se descarta y se prueba otro espejo.
 - `test_si_todos_los_espejos_devuelven_un_error_de_overpass_no_se_escribe_nada` — El trozo queda en `fallidos` con el motivo y no se crea su archivo (ni un JSON vacío que parezca bueno).
 - `test_respuesta_valida_rechaza_lo_que_no_es_una_respuesta_completa` ×5 — Un `remark`, un `elements` ausente o que no es una lista, o un JSON que no es un objeto, son fallos visibles.
 - `test_una_respuesta_correcta_sin_elementos_si_es_valida` — Una lista `elements` vacía sin `remark` es una respuesta legítima (un trozo sin locales), no un error.
-- `test_relanzar_un_subconjunto_no_borra_lo_ya_descargado_del_manifiesto` — Tras bajar 2022 y luego solo 2024, el manifiesto trae los cuatro archivos con su hash y su fecha base.
+- `test_relanzar_un_subconjunto_no_borra_lo_ya_descargado_del_manifiesto` — Tras bajar 2022 y luego solo 2024, el manifiesto trae los cuatro archivos con su hash y su fecha de descarga.
 - `test_si_el_reintento_de_un_trozo_falla_se_conserva_el_archivo_anterior_y_se_avisa` — El JSON de la ejecución anterior sigue siendo válido: se mantiene en el manifiesto, y el fallo queda anotado con que se conserva el anterior (no queda un archivo en disco sin registrar).
 - `test_el_manifiesto_se_ignora_si_el_anterior_esta_roto_o_apunta_a_archivos_borrados` — Un manifiesto ilegible no impide descargar, y no se heredan entradas de archivos que ya no existen.
+- `test_un_cuerpo_json_cortado_a_la_mitad_es_un_fallo_y_se_prueba_otro_espejo` — Un corte de red deja el JSON a medias y `r.json()` falla: es un fallo del espejo, no una respuesta parcial que se guarde. (Es la forma realista de «respuesta truncada»; con un `remark` o sin `elements` ya se rechazaba.)
+- `test_si_el_cuerpo_llega_cortado_en_todos_los_espejos_no_se_escribe_nada` — El trozo queda en `fallidos` con el motivo y no se crea su archivo (nunca un JSON a medias o vacío).
+- `test_un_timestamp_malformado_en_el_canario_es_un_problema_pasajero` ×9 — Comparar como texto un valor que no es una fecha ISO válida daría un veredicto sin sentido (aceptar o rechazar un espejo por una cadena rara): se trata como respuesta defectuosa, pasajera, igual que la falta de `timestamp`.
+- `test_un_timestamp_malformado_no_descarta_el_espejo_y_la_ronda_siguiente_lo_recupera` — A nivel de `pedir`: una respuesta defectuosa con un timestamp raro no deja marcado el espejo; la ronda siguiente (con el canario bien) lo acepta.
+- `test_una_marca_valida_se_acepta_y_una_inventada_con_la_forma_correcta_no` — `_marca_valida` exige una fecha real, no solo el aspecto `AAAA-MM-DDThh:mm:ssZ`.
+- `test_elements_con_algo_que_no_es_un_objeto_es_una_respuesta_invalida` — Si `elements` trae números o cadenas en vez de objetos no se puede guardar ni interpretar: fallo visible.
+- `test_limpiar_elemento_conserva_solo_los_campos_de_la_lista_blanca` — Se quedan tipo, id, posición y etiquetas; se van versión, fecha, conjunto de cambios, uid y nombre de usuario.
+- `test_los_datos_guardados_no_contienen_datos_de_colaboradores_aunque_el_espejo_los_envie` — Aunque un espejo devolviera `user`/`uid` en una respuesta normal, no llegan al JSON del disco, ni al manifiesto, ni a lo que se imprime. Es una garantía explícita, no un efecto de usar `out center tags`.
+- `test_el_canario_no_guarda_nada_en_disco` — El canario (el único con `out meta`, con usuarios y uid) solo se comprueba en memoria: ningún archivo lo contiene.
+- `test_la_consulta_de_recuento_es_la_misma_consulta_pidiendo_solo_cuantos` — Mismas cláusulas, misma zona y misma fecha; solo cambia la salida: `out count;` en vez de `out center tags;`.
+- `test_la_consulta_de_recuento_se_niega_a_convertir_lo_que_no_es_una_consulta_de_datos` — Si la consulta no termina en `out center tags;` no se inventa un recuento.
+- `test_total_del_servidor_rechaza_respuestas_que_no_son_un_recuento_valido` ×5 — Un recuento ausente, doble o no numérico no se interpreta: es un error (la verificación queda «sin verificar»).
+- `test_total_del_servidor_lee_el_total_que_declara_overpass`
+- `test_una_descarga_completa_se_verifica_y_queda_anotado_en_el_manifiesto` — Si el recuento del servidor coincide con lo guardado, el archivo es `completo` y el manifiesto lo registra con el criterio, las dos cifras y el espejo. Los archivos de datos no se tocan.
+- `test_un_archivo_con_menos_elementos_que_el_servidor_es_incompleto_aunque_su_json_sea_valido` — El caso que no se podía detectar de otro modo: una respuesta parcial pero JSON válido y sin `remark`. El servidor dice 10 y el archivo tiene 4: INCOMPLETO, `ok` falso, y queda anotado.
+- `test_para_un_instante_pasado_la_coincidencia_es_exacta_sin_tolerancia` — El pasado no cambia: una diferencia de UN solo elemento ya es un fallo (también por arriba).
+- `test_para_el_estado_actual_se_admite_una_diferencia_del_uno_por_ciento` — «Hoy» cambia cada minuto: 1000 guardados frente a 1005 en el servidor (0,5 %) vale; 1030 (3 %) no.
+- `test_un_recuento_ilegible_deja_el_archivo_sin_verificar_y_no_lo_da_por_bueno` — Si el servidor no contesta un recuento válido, el archivo queda `sin_verificar` (no `completo`) y `ok` es falso.
+- `test_un_archivo_que_falta_se_informa_y_no_se_da_por_verificado` — Si algún trozo no está descargado, `ok` es falso aunque los demás estén completos.
+- `test_sin_manifiesto_no_hay_nada_que_verificar` — Verificar una carpeta sin descargar da un error claro, no un informe vacío «correcto».
+- `test_no_hay_verificacion_correcta_sin_ningun_archivo_verificado` — `ok` exige al menos un archivo completo: una verificación que no comprobó nada no puede dar luz verde.
+- `test_el_canario_tambien_protege_la_verificacion_de_los_instantes_pasados` — Los recuentos fechados se piden con el mismo control de fecha: un espejo que ignora la fecha no puede 'verificar'.
+- `test_main_con_verificar_no_descarga_y_su_codigo_de_salida_refleja_el_resultado` — `--verificar` solo verifica (no hace la descarga) y sale con 0 si todo está completo y con 1 si no.
+- `test_un_solo_archivo_incompleto_basta_para_que_la_verificacion_no_sea_correcta` — Caso realista: uno completo y otro INCOMPLETO. `ok` debe ser falso aunque haya algún archivo correcto.
+- `test_un_solo_archivo_sin_verificar_basta_para_que_la_verificacion_no_sea_correcta` — Uno completo y otro cuyo recuento no se pudo leer: `ok` es falso (lo no verificado no se da por bueno).
+- `test_un_archivo_alterado_con_el_mismo_numero_de_elementos_no_sale_completo` — Si el JSON cambia después de descargarlo (mismo número de elementos, distinto contenido) el sha256 ya no coincide con el manifiesto: queda MODIFICADO, `ok` es falso y ni siquiera se gasta una consulta de recuento para ese archivo.
+- `test_un_archivo_que_dice_ser_de_otro_instante_franja_o_fecha_queda_modificado` ×4 — Aunque el manifiesto lleve el sha256 del archivo cambiado, si DENTRO dice otro instante, otra franja u otra fecha pedida que la que le corresponde, no puede salir «completo» (p. ej. un trozo de 2024 copiado como si fuera de 2022).
+- `test_un_archivo_con_distinto_numero_de_elementos_que_el_manifiesto_queda_modificado` — El manifiesto dice 4 elementos; si el archivo tiene otros, no es el descargado (aunque el sha256 se hubiera puesto a juego).
+- `test_un_archivo_sin_sha256_en_el_manifiesto_no_se_puede_dar_por_completo` — Un manifiesto sin el hash del archivo no permite asegurar que sea el descargado: MODIFICADO, no «completo».
+- `test_un_archivo_que_no_es_un_json_legible_queda_modificado` — Un archivo corrupto cuyo hash se pusiera a juego tampoco pasa: se comprueba que se pueda leer con `elements`.
+- `test_un_archivo_intacto_deja_anotado_el_sha256_que_se_verifico` — «Completo» queda ligado al hash del archivo verificado (trazabilidad: qué archivo exacto se comprobó).
+- `test_el_resumen_de_main_cuenta_los_archivos_modificados` — `--verificar` informa también de los MODIFICADOS y sale con 1.
+- `test_el_total_del_servidor_debe_ser_una_cadena_de_digitos_ascii` ×13 — `int()` aceptaría «-5», «+5», « 5 » o dígitos de otros alfabetos: un recuento así no es válido y no se interpreta.
+- `test_el_total_del_servidor_acepta_cadenas_de_digitos_ascii` ×3
+- `test_un_archivo_cuyo_elements_no_es_una_lista_queda_modificado_aunque_tenga_la_longitud_esperada` — `elements` como cadena de 4 caracteres tiene `len` 4, como los 4 elementos del manifiesto: se comprueba el tipo.
+- `test_la_huella_solo_contiene_hashes_recuentos_y_fechas_no_datos` — Es lo que se versiona en git: por archivo, sha256, elementos, fecha pedida, espejo y fecha de descarga. Ningún elemento de OSM, ni etiquetas, ni posiciones.
+- `test_la_huella_coincide_con_el_manifiesto_archivo_por_archivo` — Los valores anclados son los del manifiesto verificado (sha256 incluido).
+- `test_no_se_ancla_lo_que_no_esta_verificado_como_completo` — Sin `--verificar` previo (o con algún archivo incompleto) la huella se niega: no se ancla lo no comprobado.
+- `test_no_se_ancla_una_descarga_incompleta` — Si falta algún trozo del plan en el manifiesto, no se escribe la huella.
+- `test_no_se_ancla_un_archivo_con_verificacion_incompleta` — Un solo archivo INCOMPLETO impide anclar toda la descarga.
+- `test_alterar_un_archivo_y_el_manifiesto_a_juego_se_detecta_con_la_huella` — Sin ancla externa, un archivo cambiado con el manifiesto recalculado pasa todas las comprobaciones locales; con la huella versionada, el sha256 del manifiesto ya no coincide con el anclado y queda MODIFICADO.
+- `test_sin_huella_una_alteracion_conjunta_de_archivo_y_manifiesto_no_se_detecta_y_esta_declarado` — LÍMITE DECLARADO (y probado, para que nadie crea lo contrario): sin ancla externa, un manifiesto que vive junto a los datos no puede detectar que se alteraron ambos a la vez. Por eso se avisa y se recomienda versionar la huella.
+- `test_cada_campo_de_la_huella_se_comprueba` ×4 — Si el manifiesto difiere de la huella en cualquiera de sus campos, el archivo queda MODIFICADO.
+- `test_un_archivo_que_no_figura_en_la_huella_queda_modificado` — Un trozo que no está anclado no puede darse por íntegro.
+- `test_una_huella_intacta_deja_pasar_los_archivos_intactos` — Con la huella correcta y los datos sin tocar, todo sale completo (no hay falsos positivos).
+- `test_cargar_huella_sin_archivo_devuelve_none_y_con_archivo_roto_falla_a_la_vista` — Que no exista la huella es un caso normal (aviso); que exista y esté rota no se ignora en silencio.
+- `test_main_huella_escribe_la_huella_y_se_niega_si_no_esta_verificado` — `--huella` escribe docs/HUELLA_OSM_HISTORY.json solo con todo verificado; si no, sale con 1 y lo explica.
+- `test_main_verificar_usa_la_huella_si_existe_y_avisa_si_no` — Sin huella versionada, `--verificar` avisa de que se comprueba solo contra el manifiesto; con huella, la usa.
+- `test_la_huella_real_versionada_tiene_la_forma_prometida` — `docs/HUELLA_OSM_HISTORY.json` (la real, en git) cubre exactamente los 7 trozos del plan, solo con los campos permitidos y sin ningún dato de OSM. En el CI no están los datos descargados, así que aquí solo se comprueba la forma; el contenido se contrasta con `--verificar` donde estén los datos.
+- `test_una_nueva_descarga_no_sobrescribe_los_trozos_anclados_en_la_huella` — Esos datos NO están en git: volver a descargar (`--instantes hoy` o la descarga completa) los pisaría sin remedio y, además, los dejaría «MODIFICADOS» frente a la huella. Con la huella dada, se omiten y se anotan en `omitidos`.
+- `test_con_sobrescribir_si_se_vuelve_a_descargar_lo_anclado` — `sobrescribir=True` (`--sobrescribir`) es la salida explícita para forzar la descarga de lo anclado.
+- `test_un_trozo_que_no_esta_anclado_si_se_descarga_aunque_haya_huella` — Solo se protege lo que figura en la huella y existe en disco: un trozo ausente se descarga normalmente.
+- `test_el_procedimiento_para_reanclar_tras_sobrescribir_tiene_salida` — Sin esta salida era un callejón: tras sobrescribir, la huella vieja marca MODIFICADO y no se podía volver a anclar. Con `--verificar --sin-huella` se verifica sin exigirla, y entonces `--huella` ancla lo nuevo.
+- `test_main_verificar_con_sin_huella_no_exige_la_huella` — `--sin-huella` verifica sin comparar con la huella (y sin el aviso de que no existe).
+- `test_una_interrupcion_al_escribir_no_deja_un_archivo_a_medias_ni_un_completo_caducado` — Ctrl+C o un fallo de disco mientras se reescribe un trozo: el archivo antiguo queda íntegro (escritura atómica) o, si ya se había quitado su entrada, el manifiesto no lo da por «completo»: nunca archivo nuevo + entrada antigua.
+- `test_el_manifiesto_se_guarda_tras_cada_trozo_y_no_solo_al_final` — Si la descarga muere a mitad (aquí, al tercer trozo), el manifiesto ya recoge los dos primeros.
+- `test_exigir_datos_verificados_devuelve_las_rutas_si_todo_esta_completo` — Con los 7 trozos completos, intactos y que coinciden con la huella, devuelve `{archivo: ruta}`.
+- `test_exigir_datos_verificados_se_niega_si_algo_no_esta_verificado` — Descargado pero sin `--verificar`: el análisis no puede usarlo.
+- `test_exigir_datos_verificados_se_niega_si_el_archivo_en_disco_ya_no_es_el_verificado` — Una descarga interrumpida (archivo nuevo junto a un manifiesto antiguo «completo») no pasa: se compara el sha256 del archivo EN DISCO con el verificado.
+- `test_exigir_datos_verificados_lista_todos_los_problemas_y_sin_manifiesto_falla` — Sin descargar nada: error claro. Con varios problemas: se listan todos, no solo el primero.
+- `test_exigir_datos_verificados_detecta_una_alteracion_conjunta_si_se_da_la_huella` — Archivo y manifiesto alterados a juego: con la huella del repo, el análisis se niega.
+- `test_escribir_huella_se_niega_a_anclar_un_archivo_distinto_del_verificado` — Si en disco hay otro archivo (descarga interrumpida) con el manifiesto antiguo «completo», no se ancla su hash viejo.
+- `test_main_con_una_huella_rota_sale_con_error_claro_no_con_un_traceback` — Una huella ilegible no se ignora en silencio, pero tampoco revienta: mensaje y código 1 (en cualquier modo).
+- `test_main_verificar_sin_manifiesto_sale_con_error_claro` — Sin descargar nada o con un manifiesto ilegible: mensaje y código 1, no un traceback.
+- `test_cargar_huella_rechaza_entradas_que_no_son_objetos` ×3 — Una entrada que no sea un objeto reventaría más tarde con un AttributeError: se rechaza al cargar.
+- `test_huella_con_otro_out_no_puede_sobrescribir_la_huella_real` — `--huella --out <otra carpeta>` escribiría hashes de otros datos en docs/HUELLA_OSM_HISTORY.json: se niega y pide un destino explícito.
+- `test_huella_no_se_combina_con_otros_modos` ×4 — Antes `--huella` ignoraba en silencio `--verificar` y `--dry-run`: ahora es un error explícito.
+- `test_sin_huella_solo_vale_con_verificar`
+- `test_la_pausa_que_indica_el_usuario_tambien_se_aplica_tras_el_canario` — Con `pausa_s=7` la pausa tras cada canario nuevo es de 7 s, no la constante de 12 (antes `--pausa 0` seguía esperando).
+- `test_descargar_aplica_su_pausa_tras_el_canario_y_entre_trozos` — Con `pausa_s=7` (lo que sería `--pausa 7`): 7 s tras el canario de 2022 y 7 s entre los dos trozos.
+- `test_escribir_atomico_deja_intacto_el_archivo_si_falla_el_reemplazo` — La escritura es de verdad atómica: se escribe a un temporal y se reemplaza. Si el reemplazo falla (disco, permisos, interrupción), el archivo definitivo conserva su contenido anterior ENTERO (no se queda a medias).
+- `test_escribir_atomico_sin_fallo_deja_el_contenido_nuevo_y_ningun_temporal`
+- `test_escribir_huella_se_niega_si_se_verifico_otro_archivo_distinto_del_que_hay_en_disco` — Aunque el manifiesto y el disco coincidan, si `sha256_verificado` es de OTRO archivo (verificado antes de que cambiara), «completo» no corresponde a lo que hay: no se ancla.
+- `test_main_al_descargar_respeta_lo_anclado_y_con_sobrescribir_lo_vuelve_a_bajar` — De extremo a extremo por la línea de comandos: con la huella versionada, `main` no pisa lo anclado (lo dice y sale con 0); con `--sobrescribir` sí lo descarga.
+- `test_escribir_huella_se_niega_si_el_sha256_del_manifiesto_no_es_el_del_disco` — Aunque `sha256_verificado` coincida con el disco, un `sha256` del manifiesto que no sea el del archivo actual indica un manifiesto desfasado: no se ancla.
+- `test_sin_sha256_verificado_el_analisis_no_acepta_el_archivo` — Una entrada «completo» sin constancia de qué archivo se verificó NO es utilizable: antes el campo ausente se sustituía por el hash del manifiesto y pasaba.
+- `test_sin_sha256_verificado_tampoco_se_ancla` — `escribir_huella` repetía el mismo fallback: ahora exige el campo y que coincida con el disco y el manifiesto.
+- `test_el_procedimiento_para_recuperar_un_manifiesto_sin_sha256_verificado_es_verificar_de_nuevo` — El mensaje manda ejecutar `--verificar` de nuevo, y eso funciona: vuelve a registrar el campo y entonces sí se puede usar y anclar.
 
 ## `tests/test_ensemble_predictor.py`
 
