@@ -29,6 +29,6 @@
     "probable": 165,
     "superviviente": 1228
   },
-  "protocolo": "docs/DISENO_ML_RECOMENDACION.md, sección 3.M (v2.1)",
+  "protocolo": "docs/DISENO_ML_RECOMENDACION.md, sección 3.M (v2.2)",
   "veredicto": "la puerta se cumple: se puede entrenar y evaluar"
 }

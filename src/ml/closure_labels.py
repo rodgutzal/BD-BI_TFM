@@ -1,7 +1,7 @@
 """Etiquetas de «cierre» de la fase 4 (riesgo de cierre exploratorio) y puerta de tamaño muestral.
 
 Implementa, SIN ninguna decisión nueva, el protocolo fijado antes de descargar los datos: sección 3.M de
-`docs/DISENO_ML_RECOMENDACION.md` (v2.1). Cada función cita la regla del protocolo que aplica. Son funciones puras sobre
+`docs/DISENO_ML_RECOMENDACION.md` (v2.2: v2.1 más los detalles de implementación declarados). Cada función cita la regla del protocolo que aplica. Son funciones puras sobre
 listas de elementos de OpenStreetMap (`{"type", "id", "lat"/"lon" o "center", "tags"}`); no leen archivos ni red. Quien las
 llama (`tools/build_closure_labels.py`) es quien debe haber pasado `exigir_datos_verificados` antes de leer los datos.
 

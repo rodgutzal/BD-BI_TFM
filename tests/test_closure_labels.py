@@ -62,6 +62,11 @@ def sin_tocar_docs(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(
         herramienta, "RESULTADO_POR_DEFECTO", tmp_path_factory.mktemp("docs") / "PUERTA_RIESGO_CIERRE.json"
     )
+    real = ROOT / "docs" / "PUERTA_RIESGO_CIERRE.json"
+    antes = real.read_bytes() if real.exists() else None
+    yield
+    despues = real.read_bytes() if real.exists() else None
+    assert despues == antes, "un test ha modificado docs/PUERTA_RIESGO_CIERRE.json"
 
 
 # ---- nombre normalizado ---------------------------------------------------------------------------------------------------
@@ -251,9 +256,8 @@ def test_fuerte_marca_de_ciclo_sin_categoria_activa():
 
 
 def test_fuerte_tambien_con_la_marca_dentro_de_los_archivos_de_hoy_y_otro_prefijo():
-    assert (
-        un_nivel(nodo(1, **CAFE), hoy=[nodo(1, shop="yes", **{"was:amenity": "cafe"})]) != "fuerte"
-    )  # shop=yes es categoría activa
+    # shop=yes es una categoría activa (business): con la marca es «activa + marca», dudoso (no fuerte, y tampoco otro nivel)
+    assert un_nivel(nodo(1, **CAFE), hoy=[nodo(1, shop="yes", **{"was:amenity": "cafe"})]) == "dudoso"
     assert un_nivel(nodo(1, **CAFE), ciclo=[nodo(1, **{"was:amenity": "cafe"})]) == "fuerte"
     assert un_nivel(nodo(1, **CAFE), ciclo=[nodo(1, **{"razed:amenity": "cafe"})]) == "fuerte"
 
@@ -680,3 +684,50 @@ def test_un_way_de_2022_se_empareja_con_el_way_de_hoy_y_no_con_un_nodo_del_mismo
     # el nodo 7 de hoy no es el way 7: el way no figura hoy, y el nodo (mismo nombre, a 0 m) lo convierte en un posible re-mapeo
     assert un_nivel(antes, hoy=[nodo(7, **CAFE)]) == "dudoso"
     assert un_nivel(antes, hoy=[nodo(7, mas_lejos(500, 0), **CAFE)]) == "probable"
+
+
+# ---- guardas de la herramienta ---------------------------------------------------------------------------------------------
+def _rutas_del_plan(tmp_path):
+    rutas = {}
+    for nombre, franja, _, _ in dh.plan():
+        archivo = f"{nombre}_{franja}.json"
+        rutas[archivo] = _escribe(tmp_path, archivo, [nodo(1, **CAFE)])
+    return rutas
+
+
+def test_cargar_fotos_asigna_todos_los_archivos_del_plan_real(tmp_path):
+    """Los nombres salen de `dh.plan()`, no escritos a mano: si la descarga cambia de nombres, este test lo ve."""
+    fotos = herramienta.cargar_fotos(_rutas_del_plan(tmp_path))
+    assert len(fotos["2022"]) == 2 and len(fotos["hoy"]) == 2 and len(fotos["ciclo"]) == 1
+
+
+@pytest.mark.parametrize("prefijo", ["2022-01-01_", "hoy_", "ciclo_de_vida_"])
+def test_cargar_fotos_se_niega_si_un_grupo_queda_vacio(tmp_path, prefijo):
+    """Sin «hoy», todos los locales saldrían «probables» y la puerta se cumpliría sin avisar."""
+    rutas = {a: r for a, r in _rutas_del_plan(tmp_path).items() if not a.startswith(prefijo)}
+    with pytest.raises(ValueError, match="No hay archivos verificados para"):
+        herramienta.cargar_fotos(rutas)
+
+
+def test_cargar_fotos_se_niega_ante_un_archivo_desconocido(tmp_path):
+    rutas = _rutas_del_plan(tmp_path)
+    rutas["actual_0.json"] = _escribe(tmp_path, "actual_0.json", [])
+    with pytest.raises(ValueError, match="no encajan en ningún instante"):
+        herramienta.cargar_fotos(rutas)
+
+
+def test_la_herramienta_con_la_verificacion_real_se_niega_ante_datos_sin_verificar(tmp_path, monkeypatch, capsys):
+    """Sin doble de `exigir_datos_verificados`: archivos y manifiesto sin `verificacion` deben ser rechazados por la función real."""
+    rutas = _rutas_del_plan(tmp_path)
+    manifiesto = {
+        "archivos": {
+            a: {"sha256": dh.sha256_de(r), "elementos": 1, "fecha_pedida": None, "espejo": "x"}
+            for a, r in rutas.items()
+        }
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
+    monkeypatch.setattr(dh, "cargar_huella", lambda ruta: {"archivos": {}})
+    leidos = []
+    monkeypatch.setattr(herramienta, "leer_elementos", lambda ruta: leidos.append(ruta) or [])
+    assert herramienta.main(["--out", str(tmp_path)]) == 1
+    assert "no está verificado como completo" in capsys.readouterr().out and leidos == []

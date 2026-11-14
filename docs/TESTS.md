@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**54 archivos · 1034 funciones de test · 1234 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**54 archivos · 1038 funciones de test · 1240 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -19,7 +19,7 @@
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
-| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 64 | 132+ |
+| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 68 | 138+ |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
 | [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 38 | 49+ |
@@ -346,6 +346,10 @@
 - `test_si_un_elemento_viene_repetido_con_datos_distintos_gana_el_primero` — Determinista: las franjas solapadas traen copias iguales, pero si no lo fueran no depende del azar.
 - `test_si_hoy_y_ciclo_de_vida_discrepan_en_un_tag_manda_hoy` — Hoy dice «Café Luna»; el archivo de ciclo de vida (otra consulta, otro instante) dice «Otro»: manda hoy, así que es superviviente.
 - `test_un_way_de_2022_se_empareja_con_el_way_de_hoy_y_no_con_un_nodo_del_mismo_numero`
+- `test_cargar_fotos_asigna_todos_los_archivos_del_plan_real` — Los nombres salen de `dh.plan()`, no escritos a mano: si la descarga cambia de nombres, este test lo ve.
+- `test_cargar_fotos_se_niega_si_un_grupo_queda_vacio` ×3 — Sin «hoy», todos los locales saldrían «probables» y la puerta se cumpliría sin avisar.
+- `test_cargar_fotos_se_niega_ante_un_archivo_desconocido`
+- `test_la_herramienta_con_la_verificacion_real_se_niega_ante_datos_sin_verificar` — Sin doble de `exigir_datos_verificados`: archivos y manifiesto sin `verificacion` deben ser rechazados por la función real.
 
 ## `tests/test_collector.py`
 

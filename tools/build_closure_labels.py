@@ -28,7 +28,7 @@ from tools import download_osm_history as dh  # noqa: E402
 
 DEFAULT_DIR = dh.SALIDA_POR_DEFECTO
 RESULTADO_POR_DEFECTO = ROOT / "docs" / "PUERTA_RIESGO_CIERRE.json"
-PROTOCOLO = "docs/DISENO_ML_RECOMENDACION.md, sección 3.M (v2.1)"
+PROTOCOLO = "docs/DISENO_ML_RECOMENDACION.md, sección 3.M (v2.2)"
 
 
 def leer_elementos(ruta: Path) -> List[dict]:
@@ -40,12 +40,20 @@ def leer_elementos(ruta: Path) -> List[dict]:
 
 
 def cargar_fotos(rutas: Dict[str, Path]) -> Dict[str, List[dict]]:
-    """Agrupa los trozos verificados por instante: 2022, hoy y ciclo de vida (cada uno en dos franjas, salvo el último)."""
+    """Agrupa los trozos verificados por instante: 2022, hoy y ciclo de vida (cada uno en dos franjas, salvo el último).
+    Se niega si algún grupo queda vacío o algún archivo no encaja en ninguno: con un nombre cambiado en la descarga, «hoy»
+    saldría vacío y todos los locales serían «probables» sin que nada avisara."""
     grupos = {"2022": "2022-01-01_", "hoy": "hoy_", "ciclo": "ciclo_de_vida_"}
-    return {
-        g: [e for a, r in sorted(rutas.items()) if a.startswith(pref) for e in leer_elementos(r)]
-        for g, pref in grupos.items()
-    }
+    asignados = {g: [a for a in sorted(rutas) if a.startswith(pref)] for g, pref in grupos.items()}
+    vacios = [g for g, archivos in asignados.items() if not archivos]
+    if vacios:
+        raise ValueError(f"No hay archivos verificados para: {', '.join(vacios)} (archivos: {sorted(rutas)})")
+    usados = {a for archivos in asignados.values() for a in archivos}
+    # 2024 se verifica con el resto pero NO se usa en esta etapa (control descriptivo posterior)
+    desconocidos = sorted(a for a in rutas if a not in usados and not a.startswith("2024-01-01_"))
+    if desconocidos:
+        raise ValueError(f"Archivos verificados que no encajan en ningún instante conocido: {desconocidos}")
+    return {g: [e for a in archivos for e in leer_elementos(rutas[a])] for g, archivos in asignados.items()}
 
 
 def calcular_puerta(out_dir: Path, huella: Optional[dict]) -> dict:
