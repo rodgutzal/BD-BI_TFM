@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**54 archivos · 1051 funciones de test · 1257 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**57 archivos · 1141 funciones de test · 1362 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -19,7 +19,9 @@
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
-| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 81 | 155+ |
+| [`tests/test_closure_features.py`](#teststest_closure_featurespy) | 22 | 23+ |
+| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 93 | 175+ |
+| [`tests/test_closure_validation.py`](#teststest_closure_validationpy) | 32 | 37+ |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
 | [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 38 | 49+ |
@@ -62,6 +64,7 @@
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
 | [`tests/test_travel_time_predictor.py`](#teststest_travel_time_predictorpy) | 28 | 31 |
+| [`tests/test_validate_closure_risk.py`](#teststest_validate_closure_riskpy) | 24 | 25 |
 | [`tests/test_validate_ensemble_model.py`](#teststest_validate_ensemble_modelpy) | 9 | 9 |
 | [`tests/test_validate_travel_time_model.py`](#teststest_validate_travel_time_modelpy) | 11 | 11 |
 
@@ -276,6 +279,35 @@
 - `test_report_mide_el_tiempo_total_sin_datos` — El informe cuenta los huecos y suma el tiempo total sin datos, sin avisar de sequía actual si los datos son recientes.
 - `test_report_sin_datos` — Sin datos, el informe devuelve cero huecos y escribe «Sin datos».
 
+## `tests/test_closure_features.py`
+
+> Tests de las variables del estudio de riesgo de cierre (fase 4, protocolo 3.M, «Variables principales»).
+>
+> Datos sintéticos: cada test fija una regla del protocolo. No leen `data/osm_history/`.
+
+- `test_las_variables_son_exactamente_las_del_protocolo_y_en_este_orden`
+- `test_los_parametros_son_los_del_protocolo`
+- `test_no_hay_ninguna_variable_del_estado_actual_ni_externa` — El protocolo excluye tiempo de viaje, población por zona y contexto estático actual.
+- `test_el_universo_incluye_elementos_sin_nombre_y_excluye_vacios_sin_categoria_y_sin_posicion`
+- `test_el_universo_cuenta_una_vez_los_repetidos_y_distingue_nodo_y_way`
+- `test_un_universo_vacio_da_tabla_vacia_con_columnas`
+- `test_la_categoria_es_una_columna_por_categoria_y_solo_una`
+- `test_recuentos_de_la_misma_categoria_y_totales_a_250_y_500_m`
+- `test_el_propio_local_no_se_cuenta_a_si_mismo`
+- `test_los_vecinos_sin_nombre_cuentan_y_los_vacios_no`
+- `test_los_radios_son_inclusivos` ×2
+- `test_un_vecino_fuera_de_la_poblacion_cuenta_igualmente` — El vecino puede estar a < 500 m del borde (no es población de estudio) y aun así es competencia.
+- `test_la_distancia_es_al_mas_cercano_de_la_misma_categoria_y_no_al_propio`
+- `test_la_distancia_tiene_un_maximo_de_1000_m_y_sin_vecinos_de_su_categoria_vale_1000`
+- `test_el_mas_cercano_de_la_misma_categoria_incluye_los_sin_nombre`
+- `test_cadena_si_el_nombre_normalizado_se_repite_3_o_mas_veces_incluido_el_propio`
+- `test_la_cadena_cuenta_el_universo_entero_no_solo_la_poblacion` — El tercer homónimo está a 100 m del borde (no es población) pero figura en la foto de 2022: cuenta.
+- `test_los_elementos_sin_nombre_no_forman_cadena_y_los_vacios_homonimos_no_cuentan`
+- `test_la_tabla_conserva_el_orden_de_la_poblacion_y_tiene_las_columnas_exactas`
+- `test_un_local_que_no_esta_en_el_universo_es_un_error`
+- `test_una_poblacion_vacia_da_una_tabla_vacia`
+- `test_solo_se_usa_la_foto_que_se_le_da` — Las variables salen únicamente de los elementos del instante de partida: añadir un elemento de «hoy» cambia el resultado solo si se le pasa a la función (aquí se comprueba que no hay otra fuente).
+
 ## `tests/test_closure_labels.py`
 
 > Tests de las etiquetas de cierre y la puerta de tamaño muestral (fase 4, protocolo 3.M de docs/DISENO_ML_RECOMENDACION.md).
@@ -339,7 +371,7 @@
 - `test_guardar_escribe_solo_agregados_y_nunca_etiquetas_por_local`
 - `test_sin_guardar_no_se_escribe_ningun_archivo_ni_en_el_destino_por_defecto`
 - `test_guardar_sin_destino_escribe_en_el_destino_por_defecto`
-- `test_la_herramienta_agrupa_los_trozos_por_instante_y_no_usa_2024`
+- `test_la_herramienta_agrupa_los_trozos_por_instante_y_las_etiquetas_no_usan_2024`
 - `test_un_elements_que_no_es_lista_se_rechaza`
 - `test_justo_a_500_m_del_borde_se_excluye_la_poblacion_es_a_MAS_de_500`
 - `test_justo_a_60_m_es_el_mismo_sitio_el_umbral_es_inclusivo`
@@ -352,7 +384,7 @@
 - `test_la_marca_del_archivo_de_ciclo_de_vida_se_une_a_los_tags_de_hoy_y_da_dudoso` — Caso distinto del anterior (aquí no hay discrepancia de un tag): la categoría activa viene de «hoy» y la marca de ciclo de vida, solo del otro archivo; la unión da «activa + marca» = dudoso.
 - `test_un_way_de_2022_se_empareja_con_el_way_de_hoy_y_no_con_un_nodo_del_mismo_numero`
 - `test_cargar_fotos_asigna_todos_los_archivos_del_plan_real` — Los nombres salen de `dh.plan()`, no escritos a mano: si la descarga cambia de nombres, este test lo ve.
-- `test_cargar_fotos_se_niega_si_un_grupo_queda_vacio` ×3 — Sin «hoy», todos los locales saldrían «probables» y la puerta se cumpliría sin avisar.
+- `test_cargar_fotos_se_niega_si_un_grupo_queda_vacio` ×4 — Sin «hoy», todos los locales saldrían «probables» y la puerta se cumpliría sin avisar.
 - `test_cargar_fotos_se_niega_ante_un_archivo_desconocido`
 - `test_la_herramienta_con_la_verificacion_real_se_niega_ante_datos_sin_verificar` — Sin doble de `exigir_datos_verificados`: archivos y manifiesto sin `verificacion` deben ser rechazados por la función real.
 - `test_leer_elementos_se_niega_si_los_bytes_no_son_los_verificados`
@@ -363,6 +395,59 @@
 - `test_si_la_verificacion_devuelve_un_fragmento_menos_se_niega_aunque_el_grupo_no_quede_vacio` ×4 — Aunque otro fragmento del grupo siga ahí (así `cargar_fotos` no vería un grupo vacío), falta una parte de la descarga.
 - `test_si_la_verificacion_devuelve_un_archivo_de_mas_se_niega`
 - `test_una_huella_que_no_cubre_exactamente_el_plan_se_niega_y_no_lee_nada` ×2
+- `test_la_sensibilidad_b_solo_conserva_los_locales_a_menos_de_1500_m_de_un_punto_de_busqueda`
+- `test_el_limite_de_cobertura_es_1500_m_inclusivo`
+- `test_un_probable_con_homonimo_en_foursquare_a_150_m_pasa_a_dudoso`
+- `test_el_homonimo_de_foursquare_debe_estar_a_150_m_o_menos_y_tener_el_mismo_nombre_normalizado`
+- `test_las_fichas_sin_nombre_de_foursquare_se_excluyen_en_todos_sus_formatos` ×4 — El local de OSM se llama IGUAL que la ficha: si no se excluyese la ficha, emparejarían (y pasaría a «dudoso»). El recolector guarda las fichas sin nombre como «<Categoría> (sin nombre)».
+- `test_una_ficha_de_foursquare_con_nombre_vacio_se_ignora_sin_fallar` ×3
+- `test_solo_se_excluyen_los_nombres_que_son_o_terminan_en_sin_nombre_como_palabras` ×3 — «Café sin nombre Bar» contiene la expresión pero no termina en ella; «Ponsin Nombre» termina en las letras pero no como palabra aparte: las dos son fichas con nombre y sí emparejan.
+- `test_los_fuertes_y_los_supervivientes_no_cambian_aunque_tengan_homonimo`
+- `test_la_sensibilidad_b_recalcula_las_columnas_de_cierre_y_no_modifica_la_tabla_original`
+- `test_la_sensibilidad_b_se_niega_sin_puntos_de_busqueda`
+- `test_los_parametros_de_la_sensibilidad_b_son_los_del_protocolo`
+- `test_una_ficha_sin_nombre_de_foursquare_no_empareja_ni_con_un_local_que_se_llama_igual` — Un local de OSM llamado «Sin nombre» y una ficha «(sin nombre)» de Foursquare en el mismo sitio NO son homónimos: las fichas sin nombre se excluyen (protocolo).
+
+## `tests/test_closure_validation.py`
+
+> Tests de la validación del estudio de riesgo de cierre (fase 4, protocolo 3.M de docs/DISENO_ML_RECOMENDACION.md).
+>
+> Datos sintéticos: cada test fija una regla del protocolo (modelos fijados, líneas base que solo usan sus variables, validación
+> espacial por bloques con el patrón de semillas de la fase 1, AUC por repetición y luego promedio, remuestreo de bloques,
+> intervalos del 97,5 %, mejor línea base elegida una vez, regla de decisión con desigualdades estrictas).
+
+- `test_los_parametros_fijados_son_los_del_protocolo`
+- `test_cada_modelo_da_probabilidades_validas_y_deterministas`
+- `test_un_modelo_desconocido_es_un_error`
+- `test_la_logistica_es_la_del_protocolo_con_las_cinco_numericas_estandarizadas` — Reproduce a mano: estandarizar las 5 numéricas (no la cadena ni las categorías), L2 por defecto, C=1, max_iter=2000.
+- `test_la_logistica_no_depende_de_la_escala_de_las_numericas_porque_las_estandariza`
+- `test_el_boosting_usa_los_hiperparametros_fijados_y_la_semilla_de_la_repeticion`
+- `test_solo_categoria_usa_la_tasa_de_cierre_de_cada_categoria_del_entrenamiento`
+- `test_solo_categoria_ignora_el_resto_de_variables`
+- `test_solo_densidad_usa_solo_los_cuatro_recuentos_con_log_1_mas_n`
+- `test_la_logistica_y_el_boosting_si_usan_todas_las_variables` — Con señal en TODAS las variables, cambiar cualquiera de ellas cambia las predicciones de los dos candidatos.
+- `test_la_validacion_es_espacial_con_el_patron_de_semillas_de_la_fase_1` — En cada repetición `r`: `default_rng(semilla + r)`, dos desplazamientos `integers(0, 4)` y el mismo `rng` para los pliegues. Ningún bloque (de la cuadrícula desplazada) tiene locales en entrenamiento y en prueba a la vez, y cada local se predice exactamente una vez por repetición.
+- `test_validar_devuelve_una_matriz_por_modelo_sin_huecos_y_es_determinista`
+- `test_validar_se_niega_ante_longitudes_distintas_o_un_entrenamiento_de_una_clase`
+- `test_auc_por_filas_coincide_con_scikit_learn_incluso_con_empates`
+- `test_auc_con_una_sola_clase_es_nan`
+- `test_el_auc_se_calcula_por_repeticion_y_despues_se_promedia_no_se_promedian_las_predicciones` — Dos repeticiones que se ordenan en sentidos opuestos: el promedio de AUC es 0,5 solo si cada AUC es 1 y 0; promediando las predicciones saldría otra cosa (aquí 0,5 también, pero con empates): se comprueba contra el cálculo por repetición.
+- `test_el_remuestreo_es_de_bloques_enteros_y_descarta_las_replicas_de_una_sola_clase` — Un único bloque contiene todos los positivos: las réplicas que no lo eligen tienen una sola clase y se descartan. Si se remuestrearan locales sueltos casi nunca pasaría.
+- `test_el_remuestreo_usa_los_bloques_de_la_cuadricula_sin_desplazar_y_es_reproducible`
+- `test_el_intervalo_es_del_97_5_por_ciento_percentiles_1_25_y_98_75`
+- `test_la_mejor_linea_base_es_la_de_mayor_auc_medio_y_en_empate_la_de_categoria`
+- `test_la_decision_exige_limites_inferiores_estrictamente_mayores` ×6 — (a) límite inferior del AUC > 0,5 y (b) límite inferior de la diferencia > 0; la igualdad NO cumple.
+- `test_basta_con_que_un_candidato_cumpla_ambas_condiciones`
+- `test_con_una_senal_que_las_lineas_base_no_explican_el_resultado_es_utilizable` — La señal está en la distancia a la competencia de la misma categoría, que ninguna línea base trivial usa.
+- `test_sin_senal_no_es_utilizable`
+- `test_una_senal_que_ya_explica_la_categoria_no_basta_porque_hay_que_mejorar_la_linea_base_trivial` — El AUC supera 0,5 (condición a) pero un modelo con todas las variables no mejora a la tasa por categoría (condición b): es el caso que motivó añadir (b) al protocolo.
+- `test_una_senal_que_ya_explica_la_densidad_tampoco_basta` — Mismo caso con la línea base de densidad: la señal está en el recuento a 500 m, que esa base ya usa.
+- `test_la_diferencia_es_pareada_con_el_mismo_remuestreo_y_la_media_es_la_de_los_datos`
+- `test_el_resultado_no_contiene_ningun_dato_por_local`
+- `test_tasa_por_categoria`
+- `test_evaluar_es_utilizable_si_basta_con_un_candidato` — La regla fijada es «al menos un candidato»: con solo uno cumpliendo, el resultado es utilizable.
+- `test_evaluar_remuestrea_los_bloques_de_la_cuadricula_sin_desplazar`
+- `test_la_diferencia_con_la_mejor_linea_base_se_calcula_replica_a_replica` — Pareada: si el candidato es siempre la base + 0,1 en cada réplica, la diferencia es 0,1 en TODAS (intervalo degenerado). Emparejar mal las réplicas (o remuestrear aparte) daría un intervalo ancho.
 
 ## `tests/test_collector.py`
 
@@ -1486,6 +1571,38 @@
 - `test_al_predecir_el_lag_es_la_media_de_las_5_mediciones_mas_recientes` — Regresión: se promediaban las 100 últimas, una variable distinta de la que el modelo vio al entrenar.
 - `test_un_predictor_nuevo_reutiliza_los_modelos_guardados` — Un predictor nuevo carga los modelos ya guardados en disco.
 - `test_el_estado_de_los_modelos` — El estado de los modelos lista todas las rutas; las entrenadas incluyen la importancia de variables y las demás no.
+
+## `tests/test_validate_closure_risk.py`
+
+> Tests de la herramienta del estudio de riesgo de cierre (`tools/validate_closure_risk.py`, fase 4, protocolo 3.M).
+>
+> Datos sintéticos: ninguno lee `data/osm_history/` ni `data/mobility.db`. La verificación real de la descarga se prueba en
+> `tests/test_download_osm_history.py` y la lectura única en `tests/test_closure_labels.py`.
+
+- `test_el_estudio_aplica_primero_la_puerta_y_despues_entrena`
+- `test_los_descriptivos_se_ejecutan_con_al_menos_30_positivos_y_la_c_nunca`
+- `test_los_descriptivos_no_influyen_en_la_conclusion`
+- `test_la_sensibilidad_a_usa_solo_fuertes_contra_supervivientes`
+- `test_cada_analisis_calcula_las_variables_con_la_foto_de_su_instante_de_partida`
+- `test_el_control_de_2024_mide_los_cierres_entre_2024_y_hoy`
+- `test_un_descriptivo_con_menos_de_30_positivos_no_se_ejecuta_y_se_informa_del_recuento`
+- `test_sin_datos_de_foursquare_la_b_no_se_ejecuta_y_se_dice`
+- `test_si_no_se_cumple_la_puerta_no_se_entrena_y_el_resultado_es_no_concluyente`
+- `test_el_resultado_no_contiene_nombres_posiciones_ni_identificadores`
+- `test_preparar_descarta_los_dudosos_y_alinea_variables_etiqueta_y_celda`
+- `test_imprimir_muestra_la_puerta_los_modelos_la_decision_y_los_descriptivos`
+- `test_imprimir_con_la_puerta_sin_cumplir_solo_da_la_conclusion`
+- `test_main_lee_por_la_via_verificada_imprime_y_no_escribe_sin_guardar`
+- `test_main_con_guardar_escribe_solo_agregados_y_los_sha256_de_las_entradas`
+- `test_main_con_guardar_sin_destino_usa_el_de_por_defecto`
+- `test_main_sin_la_base_de_foursquare_sigue_y_dice_que_la_b_no_se_ejecuta`
+- `test_main_se_niega_si_la_verificacion_falla_y_no_estudia_nada`
+- `test_main_con_la_verificacion_real_rechaza_datos_sin_verificar` — Sin doble de la verificación: archivos y manifiesto sin `verificacion` los rechaza la función real.
+- `test_main_sin_huella_se_niega`
+- `test_la_conclusion_sale_solo_del_analisis_principal_y_con_el_texto_fijado` ×2 — Los descriptivos corren después y no pueden tocar la conclusión: se comprueba el texto exacto.
+- `test_el_resultado_identifica_la_entrada_de_foursquare_con_recuento_y_hash`
+- `test_la_huella_de_foursquare_no_depende_del_orden_y_cambia_con_cualquier_fila`
+- `test_sin_foursquare_la_huella_es_vacia`
 
 ## `tests/test_validate_ensemble_model.py`
 

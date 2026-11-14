@@ -42,6 +42,8 @@ MARGEN_BORDE_M = 500.0  # la población excluye lo que está a ≤ 500 m del bor
 UMBRAL_MISMO_NOMBRE_M = 60.0  # re-mapeo: mismo nombre normalizado a ≤ 60 m
 MIN_CIERRES_PRINCIPALES = 60  # puerta de tamaño muestral
 MIN_BLOQUES_CON_CIERRE = 30
+UMBRAL_FOURSQUARE_M = 150.0  # sensibilidad B: homónimo en Foursquare a ≤ 150 m
+COBERTURA_FOURSQUARE_M = 1500.0  # sensibilidad B: solo locales a ≤ 1.500 m de un punto de búsqueda
 
 NIVELES = ("fuerte", "superviviente", "dudoso", "probable")
 LLAVE = Tuple[str, int]
@@ -216,13 +218,58 @@ def etiquetar(elementos_2022: Iterable[dict], elementos_hoy: Iterable[dict], ele
     foto = _foto_de_hoy(elementos_hoy, elementos_ciclo)
     candidatos = _candidatos_por_nombre(foto)
     niveles = [nivel_de_cierre(fila, foto, candidatos) for fila in poblacion.to_dict("records")]
-    poblacion["nivel"] = pd.Categorical(niveles, categories=list(NIVELES))
+    return _con_cierres(poblacion, niveles), descartados
+
+
+def _con_cierres(poblacion: pd.DataFrame, niveles) -> pd.DataFrame:
+    """Añade `nivel`, `cierre_principal` y `cierre_fuerte` a la tabla a partir del nivel de cada local."""
+    poblacion = poblacion.copy()
+    poblacion["nivel"] = pd.Categorical(list(niveles), categories=list(NIVELES))
     nivel = poblacion["nivel"].astype(str)
     poblacion["cierre_principal"] = np.where(
         nivel.isin(["fuerte", "probable"]), 1.0, np.where(nivel == "superviviente", 0.0, np.nan)
     )
     poblacion["cierre_fuerte"] = np.where(nivel == "fuerte", 1.0, np.where(nivel == "superviviente", 0.0, np.nan))
-    return poblacion, descartados
+    return poblacion
+
+
+def _es_ficha_sin_nombre(nombre_normalizado: str) -> bool:
+    """El recolector de Foursquare guarda las fichas sin nombre como «<Categoría> (sin nombre)»: normalizado, el nombre es o
+    termina en «sin nombre»."""
+    return nombre_normalizado == "sin nombre" or nombre_normalizado.endswith(" sin nombre")
+
+
+def sensibilidad_b(etiquetas: pd.DataFrame, foursquare: pd.DataFrame, puntos_busqueda: Iterable[Tuple[float, float]]):
+    """Sensibilidad B (SOLO descriptiva; protocolo): se repite exigiendo además, para ser «probable», que no haya en
+    Foursquare un local del mismo nombre normalizado a ≤ 150 m, y SOLO para locales a ≤ 1.500 m de algún punto de búsqueda de
+    Foursquare (fuera de ahí su cobertura no es comparable). Se excluyen las fichas «(sin nombre)» (también «<Categoría> (sin nombre)», como las guarda el recolector). Un «probable» que sí
+    tiene homónimo en Foursquare pasa a «dudoso» (no entra ni como positivo ni como negativo)."""
+    puntos = list(puntos_busqueda)
+    if not puntos:
+        raise ValueError(
+            "No hay puntos de búsqueda de Foursquare: no se puede acotar la cobertura de la sensibilidad B."
+        )
+    lat_p = np.array([p[0] for p in puntos], dtype=float)[None, :]
+    lon_p = np.array([p[1] for p in puntos], dtype=float)[None, :]
+    d = np.asarray(
+        grid.haversine_m(etiquetas["lat"].to_numpy()[:, None], etiquetas["lon"].to_numpy()[:, None], lat_p, lon_p)
+    )
+    cubiertos = etiquetas[(d <= COBERTURA_FOURSQUARE_M).any(axis=1)].reset_index(drop=True)
+    por_nombre: Dict[str, List[Tuple[float, float]]] = {}
+    for nombre, lat, lon in zip(foursquare["name"], foursquare["latitude"], foursquare["longitude"]):
+        norm = normalizar_nombre(nombre)
+        if norm and not _es_ficha_sin_nombre(norm):
+            por_nombre.setdefault(norm, []).append((float(lat), float(lon)))
+    niveles = []
+    for fila in cubiertos.to_dict("records"):
+        nivel = str(fila["nivel"])
+        if nivel == "probable" and any(
+            float(grid.haversine_m(fila["lat"], fila["lon"], lat, lon)) <= UMBRAL_FOURSQUARE_M
+            for lat, lon in por_nombre.get(fila["nombre_norm"], ())
+        ):
+            nivel = "dudoso"
+        niveles.append(nivel)
+    return _con_cierres(cubiertos.drop(columns=["nivel", "cierre_principal", "cierre_fuerte"]), niveles)
 
 
 def puerta(etiquetas: pd.DataFrame) -> dict:
