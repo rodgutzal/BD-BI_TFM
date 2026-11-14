@@ -73,6 +73,15 @@ def etiquetas_verificadas(out_dir: Path, huella: Optional[dict]):
     if huella is None:
         raise ValueError("falta docs/HUELLA_OSM_HISTORY.json: sin el ancla externa no se leen los datos.")
     rutas = dh.exigir_datos_verificados(out_dir, huella)  # se niega (ValueError) si algo no es utilizable
+    # Correspondencia EXACTA entre lo que devuelve la verificación, el plan de descarga y la huella: no se confía en que la
+    # función de verificación haya devuelto todo (si falta un fragmento, no se calculan etiquetas con una entrada incompleta).
+    esperados = {f"{nombre}_{franja}.json" for nombre, franja, _, _ in dh.plan()}
+    if set(rutas) != esperados or set(huella["archivos"]) != esperados:
+        raise ValueError(
+            "Los archivos verificados no son exactamente los del plan de descarga y los de la huella: "
+            f"faltan {sorted(esperados - set(rutas))}, sobran {sorted(set(rutas) - esperados)}, "
+            f"la huella tiene de más {sorted(set(huella['archivos']) - esperados)} y de menos {sorted(esperados - set(huella['archivos']))}."
+        )
     # Los hashes son los del ancla externa (la huella), no los de un segundo vistazo al manifiesto.
     hashes = {a: huella["archivos"][a]["sha256"] for a in rutas}
     fotos = cargar_fotos(rutas, hashes)

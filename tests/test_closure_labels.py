@@ -864,3 +864,44 @@ def test_leer_elementos_lee_el_archivo_una_sola_vez_y_parsea_esos_mismos_bytes(t
     monkeypatch.setattr(Path, "read_text", lambda self, *a, **k: pytest.fail("no debe releer el archivo con read_text"))
     assert len(herramienta.leer_elementos(ruta, verificado)) == 1
     assert lecturas == ["x.json"]
+
+
+# ---- correspondencia exacta entre lo verificado, el plan y la huella ---------------------------------------------------------
+@pytest.mark.parametrize("quitar", ["2022-01-01_1.json", "hoy_0.json", "ciclo_de_vida_0.json", "2024-01-01_0.json"])
+def test_si_la_verificacion_devuelve_un_fragmento_menos_se_niega_aunque_el_grupo_no_quede_vacio(
+    tmp_path, monkeypatch, quitar
+):
+    """Aunque otro fragmento del grupo siga ahí (así `cargar_fotos` no vería un grupo vacío), falta una parte de la descarga."""
+    llamadas = _entradas_falsas(tmp_path, monkeypatch, [nodo(1, **CAFE)], hoy=[nodo(1, **CAFE)], ciclo=[])
+    completo = dh.exigir_datos_verificados
+    monkeypatch.setattr(
+        dh,
+        "exigir_datos_verificados",
+        lambda *a, **k: {n: r for n, r in completo(*a, **k).items() if n != quitar},
+    )
+    with pytest.raises(ValueError, match="no son exactamente los del plan"):
+        herramienta.etiquetas_verificadas(tmp_path, llamadas.huella)
+
+
+def test_si_la_verificacion_devuelve_un_archivo_de_mas_se_niega(tmp_path, monkeypatch):
+    llamadas = _entradas_falsas(tmp_path, monkeypatch, [nodo(1, **CAFE)], hoy=[], ciclo=[])
+    completo = dh.exigir_datos_verificados
+    extra = _escribe(tmp_path, "otro_0.json", [])
+    monkeypatch.setattr(dh, "exigir_datos_verificados", lambda *a, **k: {**completo(*a, **k), "otro_0.json": extra})
+    with pytest.raises(ValueError, match="sobran"):
+        herramienta.etiquetas_verificadas(tmp_path, llamadas.huella)
+
+
+@pytest.mark.parametrize("cambio", ["falta", "sobra"])
+def test_una_huella_que_no_cubre_exactamente_el_plan_se_niega_y_no_lee_nada(tmp_path, monkeypatch, cambio):
+    llamadas = _entradas_falsas(tmp_path, monkeypatch, [nodo(1, **CAFE)], hoy=[], ciclo=[])
+    huella = {"archivos": dict(llamadas.huella["archivos"])}
+    if cambio == "falta":
+        del huella["archivos"]["hoy_1.json"]
+    else:
+        huella["archivos"]["extra_0.json"] = {"sha256": "0" * 64}
+    leidos = []
+    monkeypatch.setattr(herramienta, "leer_elementos", lambda ruta, sha: leidos.append(ruta) or [])
+    with pytest.raises(ValueError, match="no son exactamente los del plan"):
+        herramienta.etiquetas_verificadas(tmp_path, huella)
+    assert leidos == []

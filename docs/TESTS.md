@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**54 archivos · 1047 funciones de test · 1249 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**54 archivos · 1050 funciones de test · 1256 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -19,7 +19,7 @@
 | [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
-| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 77 | 147+ |
+| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 80 | 154+ |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
 | [`tests/test_dashboards_executive_maps.py`](#teststest_dashboards_executive_mapspy) | 38 | 49+ |
@@ -359,6 +359,9 @@
 - `test_los_hashes_del_resultado_son_los_de_la_huella_y_el_manifiesto_no_se_vuelve_a_leer` — Antes se releía `manifest.json` después de leer los datos (otra ventana): ahora salen del ancla verificada.
 - `test_el_modulo_de_etiquetas_solo_importa_lo_esperado_y_no_llama_a_open` — Guarda por AST (más fuerte que buscar texto): sin módulos de E/S ni red, y sin llamadas a `open`/`read_*`/`load*`.
 - `test_leer_elementos_lee_el_archivo_una_sola_vez_y_parsea_esos_mismos_bytes` — Si parseara releyendo el archivo (`read_text`), reabriría la ventana: cambiaría entre la comprobación y el parseo.
+- `test_si_la_verificacion_devuelve_un_fragmento_menos_se_niega_aunque_el_grupo_no_quede_vacio` ×4 — Aunque otro fragmento del grupo siga ahí (así `cargar_fotos` no vería un grupo vacío), falta una parte de la descarga.
+- `test_si_la_verificacion_devuelve_un_archivo_de_mas_se_niega`
+- `test_una_huella_que_no_cubre_exactamente_el_plan_se_niega_y_no_lee_nada` ×2
 
 ## `tests/test_collector.py`
 
