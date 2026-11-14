@@ -1303,10 +1303,11 @@ def test_main_huella_escribe_la_huella_y_se_niega_si_no_esta_verificado(tmp_path
     """`--huella` escribe docs/HUELLA_OSM_HISTORY.json solo con todo verificado; si no, sale con 1 y lo explica."""
     cliente = ClienteFalso({"https://x": servidor_con_recuento(n=4)})
     dh.descargar(cliente, tmp_path, None, pausa_s=0, log=lambda *_: None)
-    assert dh.main(["--huella", "--out", str(tmp_path)]) == 1 and not huella_en_tmp.exists()
+    destino = ["--huella-destino", str(huella_en_tmp)]
+    assert dh.main(["--huella", "--out", str(tmp_path)] + destino) == 1 and not huella_en_tmp.exists()
     assert "No se escribió la huella" in capsys.readouterr().out
     dh.verificar_descarga(cliente, tmp_path, None, pausa_s=0, log=lambda *_: None, rondas=1, espera_s=0)
-    assert dh.main(["--huella", "--out", str(tmp_path)]) == 0 and huella_en_tmp.exists()
+    assert dh.main(["--huella", "--out", str(tmp_path)] + destino) == 0 and huella_en_tmp.exists()
     assert "7 archivos" in capsys.readouterr().out
 
 
@@ -1336,3 +1337,321 @@ def test_la_huella_real_versionada_tiene_la_forma_prometida():
         assert len(entrada["sha256"]) == 64 and int(entrada["sha256"], 16) >= 0 and entrada["elementos"] > 0
     texto = ruta.read_text(encoding="utf-8")
     assert '"elements"' not in texto and '"tags"' not in texto and '"lat"' not in texto
+
+
+# ---- no perder datos anclados; escritura atómica; manifiesto tras cada trozo ---------------------------------------------
+def test_una_nueva_descarga_no_sobrescribe_los_trozos_anclados_en_la_huella(tmp_path):
+    """Esos datos NO están en git: volver a descargar (`--instantes hoy` o la descarga completa) los pisaría sin remedio y,
+    además, los dejaría «MODIFICADOS» frente a la huella. Con la huella dada, se omiten y se anotan en `omitidos`."""
+    _descargado_y_verificado(tmp_path, n=4)
+    huella = dh.escribir_huella(tmp_path, tmp_path / "H.json")
+    antes = {p.name: dh.sha256_de(p) for p in tmp_path.glob("*.json") if p.name not in ("manifest.json", "H.json")}
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=9)})  # datos DISTINTOS (9 elementos por trozo)
+    m = dh.descargar(cliente, tmp_path, ["hoy"], pausa_s=0, log=lambda *_: None, huella=huella)
+    assert sorted(m["omitidos"]) == ["ciclo_de_vida_0.json", "hoy_0.json", "hoy_1.json"] and m["fallidos"] == []
+    assert cliente.session.llamadas == []  # ni siquiera se les pidió nada al servidor
+    despues = {p.name: dh.sha256_de(p) for p in tmp_path.glob("*.json") if p.name not in ("manifest.json", "H.json")}
+    assert despues == antes
+
+
+def test_con_sobrescribir_si_se_vuelve_a_descargar_lo_anclado(tmp_path):
+    """`sobrescribir=True` (`--sobrescribir`) es la salida explícita para forzar la descarga de lo anclado."""
+    _descargado_y_verificado(tmp_path, n=4)
+    huella = dh.escribir_huella(tmp_path, tmp_path / "H.json")
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=9)})
+    m = dh.descargar(cliente, tmp_path, ["hoy"], pausa_s=0, log=lambda *_: None, huella=huella, sobrescribir=True)
+    assert m["omitidos"] == [] and m["archivos"]["hoy_0.json"]["elementos"] == 9
+
+
+def test_un_trozo_que_no_esta_anclado_si_se_descarga_aunque_haya_huella(tmp_path):
+    """Solo se protege lo que figura en la huella y existe en disco: un trozo ausente se descarga normalmente."""
+    _descargado_y_verificado(tmp_path, n=4)
+    huella = dh.escribir_huella(tmp_path, tmp_path / "H.json")
+    (tmp_path / "hoy_1.json").unlink()
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=4)})
+    m = dh.descargar(cliente, tmp_path, ["hoy"], pausa_s=0, log=lambda *_: None, huella=huella)
+    assert "hoy_1.json" not in m["omitidos"] and (tmp_path / "hoy_1.json").exists()
+
+
+def test_el_procedimiento_para_reanclar_tras_sobrescribir_tiene_salida(tmp_path, huella_en_tmp):
+    """Sin esta salida era un callejón: tras sobrescribir, la huella vieja marca MODIFICADO y no se podía volver a anclar.
+    Con `--verificar --sin-huella` se verifica sin exigirla, y entonces `--huella` ancla lo nuevo."""
+    _descargado_y_verificado(tmp_path, n=4)
+    huella = dh.escribir_huella(tmp_path, huella_en_tmp)
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=9)})
+    dh.descargar(cliente, tmp_path, ["hoy"], pausa_s=0, log=lambda *_: None, huella=huella, sobrescribir=True)
+    con_huella = dh.verificar_descarga(
+        cliente, tmp_path, ["hoy"], pausa_s=0, log=lambda *_: None, rondas=1, espera_s=0, huella=huella
+    )
+    assert not con_huella["ok"] and len(con_huella["alterados"]) == 3  # la huella vieja ya no describe estos datos
+    assert dh.verificar_descarga(cliente, tmp_path, ["hoy"], pausa_s=0, log=lambda *_: None, rondas=1, espera_s=0)["ok"]
+    assert dh.main(["--huella", "--out", str(tmp_path), "--huella-destino", str(huella_en_tmp)]) == 0
+    assert dh.cargar_huella(huella_en_tmp)["archivos"]["hoy_0.json"]["elementos"] == 9
+
+
+def test_main_verificar_con_sin_huella_no_exige_la_huella(tmp_path, huella_en_tmp, monkeypatch, capsys):
+    """`--sin-huella` verifica sin comparar con la huella (y sin el aviso de que no existe)."""
+    _descargado_y_verificado(tmp_path)
+    dh.escribir_huella(tmp_path, huella_en_tmp)
+    _alterar_archivo_y_manifiesto_a_juego(tmp_path)
+    monkeypatch.setattr(dh, "OverpassClient", lambda **kw: ClienteFalso({"https://x": servidor_con_recuento(n=4)}))
+    base = ["--verificar", "--out", str(tmp_path), "--pausa", "0", "--rondas", "1", "--espera", "0"]
+    assert dh.main(base) == 1  # con huella: detecta la alteración conjunta
+    assert dh.main(base + ["--sin-huella"]) == 0  # sin ella: no la exige
+    assert "AVISO" not in capsys.readouterr().out.split("Verificación:")[-1]
+
+
+def test_una_interrupcion_al_escribir_no_deja_un_archivo_a_medias_ni_un_completo_caducado(tmp_path, monkeypatch):
+    """Ctrl+C o un fallo de disco mientras se reescribe un trozo: el archivo antiguo queda íntegro (escritura atómica) o, si
+    ya se había quitado su entrada, el manifiesto no lo da por «completo»: nunca archivo nuevo + entrada antigua."""
+    _descargado_y_verificado(tmp_path, n=4)
+    original = (tmp_path / "hoy_0.json").read_text(encoding="utf-8")
+
+    def interrumpe(ruta, texto):
+        if Path(ruta).name == "hoy_0.json":
+            (Path(ruta).with_name("hoy_0.json.tmp")).write_text(
+                texto[:20], encoding="utf-8"
+            )  # a medias, en el temporal
+            raise KeyboardInterrupt
+        return real(ruta, texto)
+
+    real = dh._escribir_atomico
+    monkeypatch.setattr(dh, "_escribir_atomico", interrumpe)
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=9)})
+    with pytest.raises(KeyboardInterrupt):
+        dh.descargar(cliente, tmp_path, ["hoy"], pausa_s=0, log=lambda *_: None)
+    assert (tmp_path / "hoy_0.json").read_text(encoding="utf-8") == original  # el archivo definitivo sigue entero
+    manifiesto = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert "hoy_0.json" not in manifiesto["archivos"]  # y no queda una entrada «completo» caducada
+    with pytest.raises(ValueError, match="hoy_0.json: no está descargado"):
+        dh.exigir_datos_verificados(tmp_path)
+
+
+def test_el_manifiesto_se_guarda_tras_cada_trozo_y_no_solo_al_final(tmp_path, monkeypatch):
+    """Si la descarga muere a mitad (aquí, al tercer trozo), el manifiesto ya recoge los dos primeros."""
+    llamadas = {"n": 0}
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=4)})
+    real = dh.pedir
+
+    def pedir_que_muere(*a, **k):
+        llamadas["n"] += 1
+        if llamadas["n"] == 3:
+            raise KeyboardInterrupt
+        return real(*a, **k)
+
+    monkeypatch.setattr(dh, "pedir", pedir_que_muere)
+    with pytest.raises(KeyboardInterrupt):
+        dh.descargar(cliente, tmp_path, ["2022-01-01", "2024-01-01"], pausa_s=0, log=lambda *_: None)
+    manifiesto = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert sorted(manifiesto["archivos"]) == ["2022-01-01_0.json", "2022-01-01_1.json"]
+
+
+# ---- lo que debe llamar el análisis ---------------------------------------------------------------------------------
+def test_exigir_datos_verificados_devuelve_las_rutas_si_todo_esta_completo(tmp_path):
+    """Con los 7 trozos completos, intactos y que coinciden con la huella, devuelve `{archivo: ruta}`."""
+    _descargado_y_verificado(tmp_path)
+    huella = dh.escribir_huella(tmp_path, tmp_path / "H.json")
+    rutas = dh.exigir_datos_verificados(tmp_path, huella)
+    assert sorted(rutas) == sorted(f"{n}_{f}.json" for n, f, _, _ in dh.plan())
+    assert all(p.exists() for p in rutas.values())
+
+
+def test_exigir_datos_verificados_se_niega_si_algo_no_esta_verificado(tmp_path):
+    """Descargado pero sin `--verificar`: el análisis no puede usarlo."""
+    dh.descargar(
+        ClienteFalso({"https://x": servidor_con_recuento(n=4)}), tmp_path, None, pausa_s=0, log=lambda *_: None
+    )
+    with pytest.raises(ValueError, match="no está verificado como completo"):
+        dh.exigir_datos_verificados(tmp_path)
+
+
+def test_exigir_datos_verificados_se_niega_si_el_archivo_en_disco_ya_no_es_el_verificado(tmp_path):
+    """Una descarga interrumpida (archivo nuevo junto a un manifiesto antiguo «completo») no pasa: se compara el sha256 del
+    archivo EN DISCO con el verificado."""
+    _descargado_y_verificado(tmp_path)
+    ruta = tmp_path / "2022-01-01_0.json"
+    contenido = json.loads(ruta.read_text(encoding="utf-8"))
+    contenido["elements"] = contenido["elements"][:2]
+    ruta.write_text(json.dumps(contenido), encoding="utf-8")  # el manifiesto sigue diciendo 4 elementos y «completo»
+    with pytest.raises(ValueError, match="2022-01-01_0.json: el sha256 del archivo"):
+        dh.exigir_datos_verificados(tmp_path)
+
+
+def test_exigir_datos_verificados_lista_todos_los_problemas_y_sin_manifiesto_falla(tmp_path):
+    """Sin descargar nada: error claro. Con varios problemas: se listan todos, no solo el primero."""
+    with pytest.raises(ValueError, match="primero hay que descargar"):
+        dh.exigir_datos_verificados(tmp_path)
+    _descargado_y_verificado(tmp_path)
+    (tmp_path / "hoy_0.json").unlink()
+    manifiesto = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    manifiesto["archivos"]["2022-01-01_1.json"]["verificacion"]["estado"] = "INCOMPLETO"
+    (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
+    with pytest.raises(ValueError) as e:
+        dh.exigir_datos_verificados(tmp_path)
+    assert "hoy_0.json: no está descargado" in str(e.value) and "2022-01-01_1.json: no está verificado" in str(e.value)
+
+
+def test_exigir_datos_verificados_detecta_una_alteracion_conjunta_si_se_da_la_huella(tmp_path):
+    """Archivo y manifiesto alterados a juego: con la huella del repo, el análisis se niega."""
+    _descargado_y_verificado(tmp_path)
+    huella = dh.escribir_huella(tmp_path, tmp_path / "H.json")
+    _alterar_archivo_y_manifiesto_a_juego(tmp_path)
+    # Un manifiesto actualizado solo en `sha256` deja `sha256_verificado` atrás: ya eso se detecta, incluso sin huella.
+    with pytest.raises(ValueError, match="se verificó otro archivo distinto"):
+        dh.exigir_datos_verificados(tmp_path)
+    # Un atacante COHERENTE actualiza también `sha256_verificado`: entonces solo la huella versionada lo delata.
+    manifiesto = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    entrada = manifiesto["archivos"]["2022-01-01_0.json"]
+    entrada["verificacion"]["sha256_verificado"] = entrada["sha256"]
+    (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
+    dh.exigir_datos_verificados(tmp_path)  # sin ancla externa pasa (límite declarado)
+    with pytest.raises(ValueError, match="huella versionada"):
+        dh.exigir_datos_verificados(tmp_path, huella)
+
+
+def test_escribir_huella_se_niega_a_anclar_un_archivo_distinto_del_verificado(tmp_path):
+    """Si en disco hay otro archivo (descarga interrumpida) con el manifiesto antiguo «completo», no se ancla su hash viejo."""
+    _descargado_y_verificado(tmp_path)
+    (tmp_path / "hoy_0.json").write_text(json.dumps({"instante": "hoy", "elements": []}), encoding="utf-8")
+    with pytest.raises(ValueError, match="hoy_0.json: el archivo en disco no es el que se verificó"):
+        dh.escribir_huella(tmp_path, tmp_path / "H.json")
+
+
+# ---- main: errores coherentes y protección de la huella real -----------------------------------------------------------
+def test_main_con_una_huella_rota_sale_con_error_claro_no_con_un_traceback(tmp_path, huella_en_tmp, capsys):
+    """Una huella ilegible no se ignora en silencio, pero tampoco revienta: mensaje y código 1 (en cualquier modo)."""
+    huella_en_tmp.parent.mkdir(parents=True)
+    huella_en_tmp.write_text("{ rota", encoding="utf-8")
+    assert dh.main(["--verificar", "--out", str(tmp_path)]) == 1
+    salida = capsys.readouterr().out  # una sola lectura: capsys vacía el búfer al leerlo
+    assert "ERROR" in salida and "no se ignora en silencio" in salida
+    assert dh.main(["--out", str(tmp_path)]) == 1  # también al descargar
+    assert "no se ignora en silencio" in capsys.readouterr().out
+
+
+def test_main_verificar_sin_manifiesto_sale_con_error_claro(tmp_path, monkeypatch, capsys):
+    """Sin descargar nada o con un manifiesto ilegible: mensaje y código 1, no un traceback."""
+    monkeypatch.setattr(dh, "OverpassClient", lambda **kw: ClienteFalso({"https://x": servidor_con_recuento(n=4)}))
+    assert dh.main(["--verificar", "--out", str(tmp_path)]) == 1
+    salida = capsys.readouterr().out
+    assert "no se pudo verificar" in salida and "primero hay que descargar" in salida
+    (tmp_path / "manifest.json").write_text("{ no es json", encoding="utf-8")
+    assert dh.main(["--verificar", "--out", str(tmp_path)]) == 1
+
+
+@pytest.mark.parametrize("contenido", [{"archivos": {"a": 1}}, {"archivos": {"a": [1]}}, {"archivos": {"a": "x"}}])
+def test_cargar_huella_rechaza_entradas_que_no_son_objetos(tmp_path, contenido):
+    """Una entrada que no sea un objeto reventaría más tarde con un AttributeError: se rechaza al cargar."""
+    (tmp_path / "h.json").write_text(json.dumps(contenido), encoding="utf-8")
+    with pytest.raises(ValueError, match="no se ignora en silencio"):
+        dh.cargar_huella(tmp_path / "h.json")
+
+
+def test_huella_con_otro_out_no_puede_sobrescribir_la_huella_real(tmp_path, huella_en_tmp, capsys):
+    """`--huella --out <otra carpeta>` escribiría hashes de otros datos en docs/HUELLA_OSM_HISTORY.json: se niega y pide un
+    destino explícito."""
+    _descargado_y_verificado(tmp_path)
+    assert dh.main(["--huella", "--out", str(tmp_path)]) == 1 and not huella_en_tmp.exists()
+    assert "--huella-destino" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("otro", [["--verificar"], ["--dry-run"], ["--sobrescribir"], ["--sin-huella"]])
+def test_huella_no_se_combina_con_otros_modos(tmp_path, huella_en_tmp, capsys, otro):
+    """Antes `--huella` ignoraba en silencio `--verificar` y `--dry-run`: ahora es un error explícito."""
+    assert dh.main(["--huella", "--out", str(tmp_path), "--huella-destino", str(huella_en_tmp)] + otro) == 1
+    assert "no se combina" in capsys.readouterr().out
+
+
+def test_sin_huella_solo_vale_con_verificar(tmp_path, capsys):
+    assert dh.main(["--sin-huella", "--out", str(tmp_path)]) == 1
+    assert "solo tiene sentido con --verificar" in capsys.readouterr().out
+
+
+# ---- --pausa también manda tras el canario -------------------------------------------------------------------------------
+def test_la_pausa_que_indica_el_usuario_tambien_se_aplica_tras_el_canario(tmp_path, monkeypatch):
+    """Con `pausa_s=7` la pausa tras cada canario nuevo es de 7 s, no la constante de 12 (antes `--pausa 0` seguía esperando)."""
+    monkeypatch.setattr(dh, "PAUSA_S", 12)  # la constante por defecto es distinta de la que indica el usuario
+    pausas = []
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=4)})
+    dh.pedir(cliente, "q", FECHA, espera_s=0, dormir=pausas.append, pausa_canario_s=7)
+    assert pausas == [7]
+    pausas.clear()
+    dh.pedir(
+        ClienteFalso({"https://x": servidor_con_recuento(n=4)}),
+        "q",
+        FECHA,
+        espera_s=0,
+        dormir=pausas.append,
+        pausa_canario_s=0,
+    )
+    assert pausas == []  # `--pausa 0`: ninguna espera tras el canario
+
+
+def test_descargar_aplica_su_pausa_tras_el_canario_y_entre_trozos(tmp_path, monkeypatch):
+    """Con `pausa_s=7` (lo que sería `--pausa 7`): 7 s tras el canario de 2022 y 7 s entre los dos trozos."""
+    esperas = []
+    monkeypatch.setattr(dh.time, "sleep", esperas.append)
+    cliente = ClienteFalso({"https://x": servidor_con_recuento(n=4)})
+    dh.descargar(cliente, tmp_path, ["2022-01-01"], pausa_s=7, log=lambda *_: None)
+    assert esperas == [7, 7]  # canario + entre el trozo 0 y el 1 (ninguna tras el último)
+
+
+def test_escribir_atomico_deja_intacto_el_archivo_si_falla_el_reemplazo(tmp_path, monkeypatch):
+    """La escritura es de verdad atómica: se escribe a un temporal y se reemplaza. Si el reemplazo falla (disco, permisos,
+    interrupción), el archivo definitivo conserva su contenido anterior ENTERO (no se queda a medias)."""
+    ruta = tmp_path / "datos.json"
+    ruta.write_text("ANTERIOR COMPLETO", encoding="utf-8")
+
+    def falla(origen, destino):
+        raise OSError("disco lleno")
+
+    monkeypatch.setattr(dh.os, "replace", falla)
+    with pytest.raises(OSError, match="disco lleno"):
+        dh._escribir_atomico(ruta, "NUEVO CONTENIDO LARGO")
+    assert ruta.read_text(encoding="utf-8") == "ANTERIOR COMPLETO"
+
+
+def test_escribir_atomico_sin_fallo_deja_el_contenido_nuevo_y_ningun_temporal(tmp_path):
+    ruta = tmp_path / "datos.json"
+    dh._escribir_atomico(ruta, "uno")
+    dh._escribir_atomico(ruta, "dos")
+    assert ruta.read_text(encoding="utf-8") == "dos" and [p.name for p in tmp_path.iterdir()] == ["datos.json"]
+
+
+def test_escribir_huella_se_niega_si_se_verifico_otro_archivo_distinto_del_que_hay_en_disco(tmp_path):
+    """Aunque el manifiesto y el disco coincidan, si `sha256_verificado` es de OTRO archivo (verificado antes de que
+    cambiara), «completo» no corresponde a lo que hay: no se ancla."""
+    _descargado_y_verificado(tmp_path)
+    manifiesto = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    manifiesto["archivos"]["hoy_0.json"]["verificacion"]["sha256_verificado"] = "0" * 64
+    (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
+    with pytest.raises(ValueError, match="hoy_0.json: el archivo en disco no es el que se verificó"):
+        dh.escribir_huella(tmp_path, tmp_path / "H.json")
+
+
+def test_main_al_descargar_respeta_lo_anclado_y_con_sobrescribir_lo_vuelve_a_bajar(
+    tmp_path, huella_en_tmp, monkeypatch, capsys
+):
+    """De extremo a extremo por la línea de comandos: con la huella versionada, `main` no pisa lo anclado (lo dice y sale con
+    0); con `--sobrescribir` sí lo descarga."""
+    _descargado_y_verificado(tmp_path, n=4)
+    dh.escribir_huella(tmp_path, huella_en_tmp)
+    antes = dh.sha256_de(tmp_path / "hoy_0.json")
+    monkeypatch.setattr(dh, "OverpassClient", lambda **kw: ClienteFalso({"https://x": servidor_con_recuento(n=9)}))
+    base = ["--out", str(tmp_path), "--instantes", "hoy", "--pausa", "0", "--rondas", "1", "--espera", "0"]
+    assert dh.main(base) == 0
+    salida = capsys.readouterr().out
+    assert "OMITIDO hoy_0.json" in salida and dh.sha256_de(tmp_path / "hoy_0.json") == antes
+    assert dh.main(base + ["--sobrescribir"]) == 0
+    assert dh.sha256_de(tmp_path / "hoy_0.json") != antes and "OMITIDO" not in capsys.readouterr().out
+
+
+def test_escribir_huella_se_niega_si_el_sha256_del_manifiesto_no_es_el_del_disco(tmp_path):
+    """Aunque `sha256_verificado` coincida con el disco, un `sha256` del manifiesto que no sea el del archivo actual indica un
+    manifiesto desfasado: no se ancla."""
+    _descargado_y_verificado(tmp_path)
+    manifiesto = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    manifiesto["archivos"]["hoy_1.json"]["sha256"] = "f" * 64
+    (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
+    with pytest.raises(ValueError, match="hoy_1.json: el archivo en disco no es el que se verificó"):
+        dh.escribir_huella(tmp_path, tmp_path / "H.json")

@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 941 funciones de test · 1068 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 967 funciones de test · 1099 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 99 | 136+ |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 125 | 167+ |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -565,6 +565,32 @@
 - `test_main_huella_escribe_la_huella_y_se_niega_si_no_esta_verificado` — `--huella` escribe docs/HUELLA_OSM_HISTORY.json solo con todo verificado; si no, sale con 1 y lo explica.
 - `test_main_verificar_usa_la_huella_si_existe_y_avisa_si_no` — Sin huella versionada, `--verificar` avisa de que se comprueba solo contra el manifiesto; con huella, la usa.
 - `test_la_huella_real_versionada_tiene_la_forma_prometida` — `docs/HUELLA_OSM_HISTORY.json` (la real, en git) cubre exactamente los 7 trozos del plan, solo con los campos permitidos y sin ningún dato de OSM. En el CI no están los datos descargados, así que aquí solo se comprueba la forma; el contenido se contrasta con `--verificar` donde estén los datos.
+- `test_una_nueva_descarga_no_sobrescribe_los_trozos_anclados_en_la_huella` — Esos datos NO están en git: volver a descargar (`--instantes hoy` o la descarga completa) los pisaría sin remedio y, además, los dejaría «MODIFICADOS» frente a la huella. Con la huella dada, se omiten y se anotan en `omitidos`.
+- `test_con_sobrescribir_si_se_vuelve_a_descargar_lo_anclado` — `sobrescribir=True` (`--sobrescribir`) es la salida explícita para forzar la descarga de lo anclado.
+- `test_un_trozo_que_no_esta_anclado_si_se_descarga_aunque_haya_huella` — Solo se protege lo que figura en la huella y existe en disco: un trozo ausente se descarga normalmente.
+- `test_el_procedimiento_para_reanclar_tras_sobrescribir_tiene_salida` — Sin esta salida era un callejón: tras sobrescribir, la huella vieja marca MODIFICADO y no se podía volver a anclar. Con `--verificar --sin-huella` se verifica sin exigirla, y entonces `--huella` ancla lo nuevo.
+- `test_main_verificar_con_sin_huella_no_exige_la_huella` — `--sin-huella` verifica sin comparar con la huella (y sin el aviso de que no existe).
+- `test_una_interrupcion_al_escribir_no_deja_un_archivo_a_medias_ni_un_completo_caducado` — Ctrl+C o un fallo de disco mientras se reescribe un trozo: el archivo antiguo queda íntegro (escritura atómica) o, si ya se había quitado su entrada, el manifiesto no lo da por «completo»: nunca archivo nuevo + entrada antigua.
+- `test_el_manifiesto_se_guarda_tras_cada_trozo_y_no_solo_al_final` — Si la descarga muere a mitad (aquí, al tercer trozo), el manifiesto ya recoge los dos primeros.
+- `test_exigir_datos_verificados_devuelve_las_rutas_si_todo_esta_completo` — Con los 7 trozos completos, intactos y que coinciden con la huella, devuelve `{archivo: ruta}`.
+- `test_exigir_datos_verificados_se_niega_si_algo_no_esta_verificado` — Descargado pero sin `--verificar`: el análisis no puede usarlo.
+- `test_exigir_datos_verificados_se_niega_si_el_archivo_en_disco_ya_no_es_el_verificado` — Una descarga interrumpida (archivo nuevo junto a un manifiesto antiguo «completo») no pasa: se compara el sha256 del archivo EN DISCO con el verificado.
+- `test_exigir_datos_verificados_lista_todos_los_problemas_y_sin_manifiesto_falla` — Sin descargar nada: error claro. Con varios problemas: se listan todos, no solo el primero.
+- `test_exigir_datos_verificados_detecta_una_alteracion_conjunta_si_se_da_la_huella` — Archivo y manifiesto alterados a juego: con la huella del repo, el análisis se niega.
+- `test_escribir_huella_se_niega_a_anclar_un_archivo_distinto_del_verificado` — Si en disco hay otro archivo (descarga interrumpida) con el manifiesto antiguo «completo», no se ancla su hash viejo.
+- `test_main_con_una_huella_rota_sale_con_error_claro_no_con_un_traceback` — Una huella ilegible no se ignora en silencio, pero tampoco revienta: mensaje y código 1 (en cualquier modo).
+- `test_main_verificar_sin_manifiesto_sale_con_error_claro` — Sin descargar nada o con un manifiesto ilegible: mensaje y código 1, no un traceback.
+- `test_cargar_huella_rechaza_entradas_que_no_son_objetos` ×3 — Una entrada que no sea un objeto reventaría más tarde con un AttributeError: se rechaza al cargar.
+- `test_huella_con_otro_out_no_puede_sobrescribir_la_huella_real` — `--huella --out <otra carpeta>` escribiría hashes de otros datos en docs/HUELLA_OSM_HISTORY.json: se niega y pide un destino explícito.
+- `test_huella_no_se_combina_con_otros_modos` ×4 — Antes `--huella` ignoraba en silencio `--verificar` y `--dry-run`: ahora es un error explícito.
+- `test_sin_huella_solo_vale_con_verificar`
+- `test_la_pausa_que_indica_el_usuario_tambien_se_aplica_tras_el_canario` — Con `pausa_s=7` la pausa tras cada canario nuevo es de 7 s, no la constante de 12 (antes `--pausa 0` seguía esperando).
+- `test_descargar_aplica_su_pausa_tras_el_canario_y_entre_trozos` — Con `pausa_s=7` (lo que sería `--pausa 7`): 7 s tras el canario de 2022 y 7 s entre los dos trozos.
+- `test_escribir_atomico_deja_intacto_el_archivo_si_falla_el_reemplazo` — La escritura es de verdad atómica: se escribe a un temporal y se reemplaza. Si el reemplazo falla (disco, permisos, interrupción), el archivo definitivo conserva su contenido anterior ENTERO (no se queda a medias).
+- `test_escribir_atomico_sin_fallo_deja_el_contenido_nuevo_y_ningun_temporal`
+- `test_escribir_huella_se_niega_si_se_verifico_otro_archivo_distinto_del_que_hay_en_disco` — Aunque el manifiesto y el disco coincidan, si `sha256_verificado` es de OTRO archivo (verificado antes de que cambiara), «completo» no corresponde a lo que hay: no se ancla.
+- `test_main_al_descargar_respeta_lo_anclado_y_con_sobrescribir_lo_vuelve_a_bajar` — De extremo a extremo por la línea de comandos: con la huella versionada, `main` no pisa lo anclado (lo dice y sale con 0); con `--sobrescribir` sí lo descarga.
+- `test_escribir_huella_se_niega_si_el_sha256_del_manifiesto_no_es_el_del_disco` — Aunque `sha256_verificado` coincida con el disco, un `sha256` del manifiesto que no sea el del archivo actual indica un manifiesto desfasado: no se ancla.
 
 ## `tests/test_ensemble_predictor.py`
 

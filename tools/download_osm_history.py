@@ -9,7 +9,7 @@ Qué hace y qué NO hace:
   - Guarda JSON en `--out` (por defecto `data/osm_history/`, ignorado por git) y un `manifest.json` con la fecha de
     descarga, el espejo usado, la hora base del servidor (solo informativa) y el sha256 de cada archivo. NO toca la base.
   - COMPRUEBA que cada espejo respeta cada fecha `[date:]` que se le pide, con un CANARIO por espejo y por fecha: una
-    consulta pequeña de una zona muy editada con `out meta` (el `timestamp` de cada elemento), comprobada por las dos caras:
+    consulta pequeña de una zona muy editada con `out center meta` (el `timestamp` de cada elemento), comprobada por las dos caras:
     ningún elemento puede tener una versión posterior a la fecha (un espejo que ignora la fecha devuelve el mapa actual) y
     debe haber alguna de los 2 años anteriores (un espejo con una copia ANTIGUA de la base daría datos viejos como si fueran
     de 2024 u hoy). El espejo que falla se rechaza y se prueba el siguiente. (No se puede usar `osm3s.timestamp_osm_base`:
@@ -26,6 +26,12 @@ Qué hace y qué NO hace:
     El manifiesto vive junto a los datos y por sí solo no detecta que se alteren ambos a la vez: por eso `--huella` escribe
     `docs/HUELLA_OSM_HISTORY.json` (solo hashes, recuentos y fechas, sin datos) para VERSIONARLA en git como ancla externa, y
     `--verificar` la exige si existe.
+  - Los trozos ANCLADOS en la huella no se sobrescriben al volver a descargar (esos datos no están en git y se perderían):
+    se omiten y se avisa, salvo con `--sobrescribir`. Para volver a anclar tras sobrescribir: `--sobrescribir`, luego
+    `--verificar --sin-huella`, luego `--huella`, y versionar el cambio de la huella (queda visible en git). Los archivos se
+    escriben de forma atómica y el manifiesto se guarda tras cada trozo, así que una interrupción no deja un «completo» caducado.
+  - EL ANÁLISIS debe empezar llamando a `exigir_datos_verificados(out_dir, huella)`: solo devuelve las rutas si los 7 trozos
+    son utilizables (completos, el archivo en disco es el verificado y coincide con la huella); si no, lanza `ValueError`.
   - Pausa entre peticiones, tiempo máximo de servidor y el área partida en franjas, como `download_osm_context.py`.
   - `--dry-run` muestra las consultas sin hacer NINGUNA llamada de red.
 
@@ -37,6 +43,7 @@ Uso (desde la raíz del proyecto):
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import time
@@ -259,6 +266,7 @@ def pedir(
     espera_s: Optional[float] = None,
     dormir=None,
     verificados: Optional[Dict[Tuple[str, str], Optional[str]]] = None,
+    pausa_canario_s: Optional[float] = None,
 ) -> Tuple[dict, str]:
     """Envía la consulta probando cada espejo en orden; devuelve (JSON, espejo). Para un instante pasado, antes de usar un
     espejo se le pasa el canario de esa fecha (una sola vez: el resultado queda en `verificados`) y se descarta el que ignore la fecha.
@@ -268,6 +276,7 @@ def pedir(
     espera_s = ESPERA_RONDAS_S if espera_s is None else espera_s
     dormir = time.sleep if dormir is None else dormir
     verificados = {} if verificados is None else verificados
+    pausa_canario_s = PAUSA_S if pausa_canario_s is None else pausa_canario_s
     errores: Dict[str, str] = {}
     for ronda in range(rondas):
         errores = {}
@@ -277,8 +286,8 @@ def pedir(
                     clave = (endpoint, fecha_pedida)  # un canario por espejo y por fecha
                     if clave not in verificados:  # un problema pasajero sube como excepción y no se marca
                         verificados[clave] = verificar_espejo(cliente, endpoint, fecha_pedida)
-                        if PAUSA_S:  # el canario es una petición más: pausa antes de la consulta pesada
-                            dormir(PAUSA_S)
+                        if pausa_canario_s:  # el canario es una petición más: pausa antes de la consulta pesada
+                            dormir(pausa_canario_s)
                     if verificados[clave]:
                         raise ValueError(verificados[clave])
                 r = cliente.session.post(
@@ -302,6 +311,22 @@ def sha256_de(ruta: Path) -> str:
     return hashlib.sha256(Path(ruta).read_bytes()).hexdigest()
 
 
+def _escribir_atomico(ruta: Path, texto: str) -> None:
+    """Escribe el archivo entero o no lo escribe: primero a un temporal y luego `os.replace`. Una interrupción (Ctrl+C, disco
+    lleno) no deja un JSON a medias con el nombre definitivo."""
+    ruta = Path(ruta)
+    temporal = ruta.with_name(ruta.name + ".tmp")
+    temporal.write_text(texto, encoding="utf-8")
+    os.replace(temporal, ruta)
+
+
+def _guardar_manifiesto(out_dir: Path, manifiesto: dict) -> None:
+    _escribir_atomico(
+        Path(out_dir) / "manifest.json",
+        json.dumps(manifiesto, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+    )
+
+
 def descargar(
     cliente,
     out_dir: Path,
@@ -310,9 +335,19 @@ def descargar(
     log=print,
     rondas: Optional[int] = None,
     espera_s: Optional[float] = None,
+    huella: Optional[dict] = None,
+    sobrescribir: bool = False,
 ) -> dict:
     """Descarga cada trozo a `out_dir/<instante>_<franja>.json` y escribe `manifest.json`. Devuelve el manifiesto.
-    NO escribe nada fuera de `out_dir`."""
+    NO escribe nada fuera de `out_dir`.
+
+    - Los archivos se escriben de forma ATÓMICA y el manifiesto se guarda tras CADA trozo; antes de reescribir un trozo se
+      quita su entrada del manifiesto, de modo que una interrupción nunca deja un archivo nuevo junto a una entrada
+      antigua que siga diciendo «completo».
+    - Si se da la `huella` versionada, NO se sobrescribe un trozo ANCLADO en ella (esos datos no están en git y se perderían):
+      se omite y se anota en `omitidos`, salvo con `sobrescribir=True` (`--sobrescribir`). Tras sobrescribir hay que volver a
+      verificar (`--verificar --sin-huella`) y regenerar la huella (`--huella`), y el cambio de la huella queda visible en git.
+    """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     trabajo = plan(instantes)
@@ -331,17 +366,29 @@ def descargar(
         "area": {"sur": grid.SOUTH, "norte": grid.NORTH, "oeste": grid.WEST, "este": grid.EAST},
         "archivos": {a: d for a, d in previos.items() if (out_dir / a).exists()},
         "fallidos": [],
+        "omitidos": [],
     }
     # (espejo, fecha) -> None si el espejo respeta esa fecha, o el motivo definitivo si no (se verifica una vez por par)
     verificados: Dict[Tuple[str, str], Optional[str]] = {}
     for k, (nombre, franja, fecha, consulta) in enumerate(trabajo):
         t0 = time.perf_counter()
         archivo = f"{nombre}_{franja}.json"
+        ruta = out_dir / archivo
+        if huella is not None and not sobrescribir and archivo in huella.get("archivos", {}) and ruta.exists():
+            manifiesto["omitidos"].append(archivo)
+            log(f"   {nombre} [{franja}]: ANCLADO en la huella, no se sobrescribe (usa --sobrescribir para forzarlo)")
+            continue
         try:
-            datos, endpoint = pedir(cliente, consulta, fecha, rondas, espera_s, verificados=verificados)
+            datos, endpoint = pedir(
+                cliente, consulta, fecha, rondas, espera_s, verificados=verificados, pausa_canario_s=pausa_s
+            )
             elementos = [limpiar_elemento(e) for e in datos["elements"]]  # solo los campos de la lista blanca
-            ruta = out_dir / archivo
-            ruta.write_text(
+            # Se quita la entrada antigua ANTES de tocar el archivo: si algo se interrumpe, no queda un «completo» caducado.
+            conservado = manifiesto["archivos"].pop(archivo, None)
+            if conservado is not None:
+                _guardar_manifiesto(out_dir, manifiesto)
+            _escribir_atomico(
+                ruta,
                 json.dumps(
                     {
                         "instante": nombre,
@@ -352,7 +399,6 @@ def descargar(
                         "elements": elementos,
                     }
                 ),
-                encoding="utf-8",
             )
             manifiesto["archivos"][archivo] = {
                 "elementos": len(elementos),
@@ -362,6 +408,7 @@ def descargar(
                 "descargado_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "sha256": sha256_de(ruta),
             }
+            _guardar_manifiesto(out_dir, manifiesto)  # tras CADA trozo, no solo al final
             log(f"   {nombre} [{franja}]: {len(elementos):6} elementos ({time.perf_counter() - t0:.0f} s)")
         except RuntimeError as e:
             conservado = archivo in manifiesto["archivos"]  # de una ejecución anterior, sigue siendo válido
@@ -375,9 +422,7 @@ def descargar(
             log(f"   {nombre} [{franja}]: FALLÓ ({e})")
         if k < len(trabajo) - 1:
             time.sleep(pausa_s)
-    (out_dir / "manifest.json").write_text(
-        json.dumps(manifiesto, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    _guardar_manifiesto(out_dir, manifiesto)
     return manifiesto
 
 
@@ -498,7 +543,13 @@ def verificar_descarga(
         en_archivo = manifiesto["archivos"][archivo]["elementos"]  # ya comprobado: coincide con el archivo
         try:
             datos, endpoint = pedir(
-                cliente, consulta_de_recuento(consulta), fecha, rondas, espera_s, verificados=verificados
+                cliente,
+                consulta_de_recuento(consulta),
+                fecha,
+                rondas,
+                espera_s,
+                verificados=verificados,
+                pausa_canario_s=pausa_s,
             )
             total = total_del_servidor(datos)
         except (RuntimeError, ValueError) as e:
@@ -547,8 +598,10 @@ def cargar_huella(ruta: Path = HUELLA_POR_DEFECTO) -> Optional[dict]:
         return None
     try:
         huella = json.loads(ruta.read_text(encoding="utf-8"))
-        if not isinstance(huella["archivos"], dict):
-            raise TypeError("`archivos` no es un objeto")
+        if not isinstance(huella["archivos"], dict) or not all(
+            isinstance(v, dict) for v in huella["archivos"].values()
+        ):
+            raise TypeError("`archivos` no es un objeto de objetos")
     except (OSError, ValueError, KeyError, TypeError) as e:
         raise ValueError(f"La huella {ruta} no se puede leer ({type(e).__name__}): no se ignora en silencio.") from None
     return huella
@@ -565,10 +618,21 @@ def escribir_huella(out_dir: Path, destino: Path = HUELLA_POR_DEFECTO) -> dict:
         entrada = manifiesto["archivos"].get(archivo)
         if entrada is None:
             raise ValueError(f"Falta {archivo} en el manifiesto: no se ancla una descarga incompleta.")
-        estado = (entrada.get("verificacion") or {}).get("estado")
+        verificacion = entrada.get("verificacion") or {}
+        estado = verificacion.get("estado")
         if estado != "completo":
             raise ValueError(
                 f"{archivo} no está verificado como completo (estado: {estado}): ejecuta --verificar antes."
+            )
+        # «completo» vale para el archivo que se verificó: si en disco hay otro (p. ej. una descarga interrumpida), no se ancla.
+        en_disco = sha256_de(Path(out_dir) / archivo) if (Path(out_dir) / archivo).exists() else None
+        if (
+            en_disco is None
+            or en_disco != entrada.get("sha256")
+            or en_disco != verificacion.get("sha256_verificado", en_disco)
+        ):
+            raise ValueError(
+                f"{archivo}: el archivo en disco no es el que se verificó como completo: ejecuta --verificar antes."
             )
         archivos[archivo] = {campo: entrada.get(campo) for campo in CAMPOS_DE_LA_HUELLA}
     huella = {
@@ -581,6 +645,43 @@ def escribir_huella(out_dir: Path, destino: Path = HUELLA_POR_DEFECTO) -> dict:
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(json.dumps(huella, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
     return huella
+
+
+def exigir_datos_verificados(out_dir: Path, huella: Optional[dict] = None) -> Dict[str, Path]:
+    """LO QUE DEBE LLAMAR EL ANÁLISIS antes de leer los datos: devuelve `{archivo: ruta}` de los trozos del plan solo si TODOS
+    son utilizables, y si no lanza `ValueError` listando los problemas. Un trozo es utilizable si está en el manifiesto con
+    `verificacion.estado == "completo"`, el archivo existe y su sha256 EN DISCO es el que se verificó (y el del manifiesto) y,
+    si se da la `huella`, coincide con ella. Así la regla «el análisis usa solo archivos completos» no depende de la memoria
+    de nadie: una descarga interrumpida, un archivo cambiado o sin verificar no pasa."""
+    out_dir = Path(out_dir)
+    ruta_manifiesto = out_dir / "manifest.json"
+    if not ruta_manifiesto.exists():
+        raise ValueError(f"No hay {ruta_manifiesto}: primero hay que descargar y verificar.")
+    manifiesto = json.loads(ruta_manifiesto.read_text(encoding="utf-8"))
+    problemas: List[str] = []
+    utilizables: Dict[str, Path] = {}
+    for nombre, franja, fecha, _ in plan():
+        archivo = f"{nombre}_{franja}.json"
+        entrada = (manifiesto.get("archivos") or {}).get(archivo)
+        ruta = out_dir / archivo
+        if entrada is None or not ruta.exists():
+            problemas.append(f"{archivo}: no está descargado")
+            continue
+        verificacion = entrada.get("verificacion") or {}
+        if verificacion.get("estado") != "completo":
+            problemas.append(f"{archivo}: no está verificado como completo (estado: {verificacion.get('estado')})")
+            continue
+        motivo = comprobar_identidad(ruta, entrada, nombre, franja, fecha, huella)
+        if motivo:
+            problemas.append(f"{archivo}: {motivo}")
+            continue
+        if verificacion.get("sha256_verificado", entrada["sha256"]) != entrada["sha256"]:
+            problemas.append(f"{archivo}: se verificó otro archivo distinto del que hay ahora")
+            continue
+        utilizables[archivo] = ruta
+    if problemas:
+        raise ValueError("Los datos no son utilizables para el análisis:\n  " + "\n  ".join(problemas))
+    return utilizables
 
 
 def main(argv: Optional[list] = None) -> int:
@@ -597,20 +698,51 @@ def main(argv: Optional[list] = None) -> int:
         help="no descarga: comprueba que lo ya descargado está completo comparando con el recuento que da el servidor",
     )
     ap.add_argument(
+        "--sin-huella",
+        action="store_true",
+        help="con --verificar: no exige la huella versionada (necesario tras --sobrescribir, para poder volver a anclar)",
+    )
+    ap.add_argument(
+        "--sobrescribir",
+        action="store_true",
+        help="descarga también los trozos que ya están anclados en la huella (si no, se omiten para no perder datos)",
+    )
+    ap.add_argument(
         "--huella",
         action="store_true",
-        help="escribe docs/HUELLA_OSM_HISTORY.json (hashes y recuentos, sin datos) para versionarla como ancla externa; "
+        help="escribe la huella (hashes y recuentos, sin datos) para versionarla como ancla externa; "
         "solo si todo está verificado como completo",
+    )
+    ap.add_argument(
+        "--huella-destino",
+        default=None,
+        help="dónde escribir la huella; por defecto docs/HUELLA_OSM_HISTORY.json, y solo con --out por defecto",
     )
     args = ap.parse_args(argv)
 
+    if args.huella and (args.verificar or args.dry_run or args.sobrescribir or args.sin_huella):
+        print(
+            "--huella no se combina con --verificar, --dry-run, --sobrescribir ni --sin-huella: ejecútalos por separado."
+        )
+        return 1
+    if args.sin_huella and not args.verificar:
+        print("--sin-huella solo tiene sentido con --verificar.")
+        return 1
+
     if args.huella:
+        destino = Path(args.huella_destino) if args.huella_destino else HUELLA_POR_DEFECTO
+        if not args.huella_destino and Path(args.out).resolve() != SALIDA_POR_DEFECTO.resolve():
+            print(
+                "--huella con un --out distinto del habitual no puede sobrescribir la huella real del repo: "
+                "indica un destino explícito con --huella-destino."
+            )
+            return 1
         try:
-            huella = escribir_huella(Path(args.out), HUELLA_POR_DEFECTO)
+            huella = escribir_huella(Path(args.out), destino)
         except (ValueError, OSError, KeyError) as e:
             print(f"No se escribió la huella: {e}")
             return 1
-        print(f"Huella escrita en {HUELLA_POR_DEFECTO} ({len(huella['archivos'])} archivos). Versiónala con git.")
+        print(f"Huella escrita en {destino} ({len(huella['archivos'])} archivos). Versiónala con git.")
         return 0
 
     trabajo = plan(args.instantes)
@@ -623,22 +755,31 @@ def main(argv: Optional[list] = None) -> int:
         print("\n(dry-run: no se hizo ninguna llamada de red)")
         return 0
 
+    try:
+        huella = None if args.sin_huella else cargar_huella(HUELLA_POR_DEFECTO)
+    except ValueError as e:  # huella rota: no se ignora en silencio ni sale como un traceback
+        print(f"ERROR: {e}")
+        return 1
+
     if args.verificar:
-        huella = cargar_huella(HUELLA_POR_DEFECTO)
-        if huella is None:
+        if huella is None and not args.sin_huella:
             print(
                 "AVISO: no hay huella versionada (docs/HUELLA_OSM_HISTORY.json): se comprueba contra el manifiesto, que vive "
                 "junto a los datos y por sí solo no detecta una alteración conjunta."
             )
-        resumen = verificar_descarga(
-            OverpassClient(timeout=TIMEOUT_HTTP_S, max_retries=1),
-            Path(args.out),
-            args.instantes,
-            args.pausa,
-            rondas=args.rondas,
-            espera_s=args.espera,
-            huella=huella,
-        )
+        try:
+            resumen = verificar_descarga(
+                OverpassClient(timeout=TIMEOUT_HTTP_S, max_retries=1),
+                Path(args.out),
+                args.instantes,
+                args.pausa,
+                rondas=args.rondas,
+                espera_s=args.espera,
+                huella=huella,
+            )
+        except (FileNotFoundError, ValueError, KeyError, OSError) as e:  # sin manifiesto, manifiesto ilegible...
+            print(f"ERROR: no se pudo verificar: {type(e).__name__}: {e}")
+            return 1
         print(
             f"\nVerificación: {len(resumen['correctos'])} completos, {len(resumen['incorrectos'])} INCOMPLETOS, "
             f"{len(resumen['sin_verificar'])} sin verificar, {len(resumen['sin_archivo'])} sin archivo, "
@@ -653,12 +794,16 @@ def main(argv: Optional[list] = None) -> int:
         args.pausa,
         rondas=args.rondas,
         espera_s=args.espera,
+        huella=huella,
+        sobrescribir=args.sobrescribir,
     )
     print("\nResumen:")
     for archivo, d in manifiesto["archivos"].items():
         print(
             f"   {archivo:24} {d['elementos']:7} elementos | hora del servidor {d.get('osm_base_servidor', d.get('osm_base'))} | {d['espejo']}"
         )
+    for archivo in manifiesto.get("omitidos", []):
+        print(f"   OMITIDO {archivo}: anclado en la huella (usa --sobrescribir para volver a descargarlo)")
     for f in manifiesto["fallidos"]:
         print(f"   FALLÓ {f['archivo']}: {f['error']}")
     return 0 if not manifiesto["fallidos"] else 1
