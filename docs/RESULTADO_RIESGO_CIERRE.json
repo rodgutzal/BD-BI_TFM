@@ -1,0 +1,502 @@
+{
+  "conclusion": "NO utilizable: ningún candidato cumple la regla fijada; queda como hallazgo del TFM y no se expone nada al usuario",
+  "descriptivos": {
+    "A_solo_fuertes": {
+      "auc": {
+        "boosting": {
+          "ic": [
+            0.428284111421425,
+            0.6114858209787243
+          ],
+          "media": 0.5164741556660382
+        },
+        "logistica": {
+          "ic": [
+            0.42744238076984475,
+            0.6297021218865938
+          ],
+          "media": 0.5150651465798045
+        },
+        "solo_categoria": {
+          "ic": [
+            0.46586636108142865,
+            0.5927661889248146
+          ],
+          "media": 0.5252067975312875
+        },
+        "solo_densidad": {
+          "ic": [
+            0.3943414240864986,
+            0.5935415987903415
+          ],
+          "media": 0.4873982084690554
+        }
+      },
+      "bloques": 72,
+      "decision": {
+        "boosting": {
+          "a": false,
+          "b": false,
+          "cumple": false
+        },
+        "logistica": {
+          "a": false,
+          "b": false,
+          "cumple": false
+        }
+      },
+      "diferencia_con_la_mejor_linea_base": {
+        "boosting": {
+          "ic": [
+            -0.09835585667386063,
+            0.0681787898709975
+          ],
+          "media": -0.008732641865249358
+        },
+        "logistica": {
+          "ic": [
+            -0.0730673029446853,
+            0.06936464212022711
+          ],
+          "media": -0.010141650951483006
+        }
+      },
+      "ejecutado": true,
+      "mejor_linea_base": "solo_categoria",
+      "n": 1266,
+      "positivos": 38,
+      "remuestreos": {
+        "descartados_por_una_sola_clase": 0,
+        "pedidos": 2000
+      },
+      "tasa_por_categoria": [
+        {
+          "categoria": "school",
+          "cierres": 0,
+          "locales": 67,
+          "tasa": 0.0
+        },
+        {
+          "categoria": "hospital",
+          "cierres": 0,
+          "locales": 43,
+          "tasa": 0.0
+        },
+        {
+          "categoria": "food_drink",
+          "cierres": 20,
+          "locales": 451,
+          "tasa": 0.04434589800443459
+        },
+        {
+          "categoria": "leisure",
+          "cierres": 0,
+          "locales": 25,
+          "tasa": 0.0
+        },
+        {
+          "categoria": "sport",
+          "cierres": 0,
+          "locales": 19,
+          "tasa": 0.0
+        },
+        {
+          "categoria": "mall",
+          "cierres": 0,
+          "locales": 11,
+          "tasa": 0.0
+        },
+        {
+          "categoria": "business",
+          "cierres": 18,
+          "locales": 650,
+          "tasa": 0.027692307692307693
+        }
+      ],
+      "utilizable": false
+    },
+    "B_con_foursquare": {
+      "auc": {
+        "boosting": {
+          "ic": [
+            0.4716708674300749,
+            0.5673154641778476
+          ],
+          "media": 0.516158457208743
+        },
+        "logistica": {
+          "ic": [
+            0.4558719716809547,
+            0.6140328740923058
+          ],
+          "media": 0.5188633630469012
+        },
+        "solo_categoria": {
+          "ic": [
+            0.4800320279267006,
+            0.6097630861263473
+          ],
+          "media": 0.5406845485314721
+        },
+        "solo_densidad": {
+          "ic": [
+            0.3910894944904565,
+            0.5185536066729206
+          ],
+          "media": 0.4521389429573885
+        }
+      },
+      "bloques": 46,
+      "decision": {
+        "boosting": {
+          "a": false,
+          "b": false,
+          "cumple": false
+        },
+        "logistica": {
+          "a": false,
+          "b": false,
+          "cumple": false
+        }
+      },
+      "diferencia_con_la_mejor_linea_base": {
+        "boosting": {
+          "ic": [
+            -0.08119002559959111,
+            0.023041164535424905
+          ],
+          "media": -0.024526091322729093
+        },
+        "logistica": {
+          "ic": [
+            -0.09014051175274784,
+            0.04159601274637953
+          ],
+          "media": -0.021821185484570904
+        }
+      },
+      "ejecutado": true,
+      "mejor_linea_base": "solo_categoria",
+      "n": 1179,
+      "positivos": 158,
+      "remuestreos": {
+        "descartados_por_una_sola_clase": 0,
+        "pedidos": 2000
+      },
+      "tasa_por_categoria": [
+        {
+          "categoria": "school",
+          "cierres": 13,
+          "locales": 55,
+          "tasa": 0.23636363636363636
+        },
+        {
+          "categoria": "hospital",
+          "cierres": 1,
+          "locales": 37,
+          "tasa": 0.02702702702702703
+        },
+        {
+          "categoria": "food_drink",
+          "cierres": 80,
+          "locales": 469,
+          "tasa": 0.17057569296375266
+        },
+        {
+          "categoria": "leisure",
+          "cierres": 3,
+          "locales": 26,
+          "tasa": 0.11538461538461539
+        },
+        {
+          "categoria": "sport",
+          "cierres": 0,
+          "locales": 14,
+          "tasa": 0.0
+        },
+        {
+          "categoria": "mall",
+          "cierres": 2,
+          "locales": 13,
+          "tasa": 0.15384615384615385
+        },
+        {
+          "categoria": "business",
+          "cierres": 59,
+          "locales": 565,
+          "tasa": 0.10442477876106195
+        }
+      ],
+      "utilizable": false
+    },
+    "C_contexto_estatico_2022": {
+      "ejecutado": false,
+      "motivo": "el contexto estático de 2022 no se ha descargado con fecha (exigiría ampliar la herramienta de descarga)"
+    },
+    "control_2024_a_hoy": {
+      "auc": {
+        "boosting": {
+          "ic": [
+            0.46790670101951254,
+            0.5876027274858382
+          ],
+          "media": 0.5254462645724781
+        },
+        "logistica": {
+          "ic": [
+            0.47643954530463634,
+            0.5873191828156934
+          ],
+          "media": 0.522935862353338
+        },
+        "solo_categoria": {
+          "ic": [
+            0.4853541529827846,
+            0.6095939694702894
+          ],
+          "media": 0.5484437905311692
+        },
+        "solo_densidad": {
+          "ic": [
+            0.44700671898915684,
+            0.5688019418800896
+          ],
+          "media": 0.5015490872286988
+        }
+      },
+      "bloques": 76,
+      "decision": {
+        "boosting": {
+          "a": false,
+          "b": false,
+          "cumple": false
+        },
+        "logistica": {
+          "a": false,
+          "b": false,
+          "cumple": false
+        }
+      },
+      "diferencia_con_la_mejor_linea_base": {
+        "boosting": {
+          "ic": [
+            -0.06415689263868407,
+            0.031258246811904034
+          ],
+          "media": -0.02299752595869109
+        },
+        "logistica": {
+          "ic": [
+            -0.07773285390996093,
+            0.02190373052438462
+          ],
+          "media": -0.025507928177831207
+        }
+      },
+      "ejecutado": true,
+      "mejor_linea_base": "solo_categoria",
+      "n": 1627,
+      "positivos": 185,
+      "remuestreos": {
+        "descartados_por_una_sola_clase": 0,
+        "pedidos": 2000
+      },
+      "tasa_por_categoria": [
+        {
+          "categoria": "school",
+          "cierres": 14,
+          "locales": 84,
+          "tasa": 0.16666666666666666
+        },
+        {
+          "categoria": "hospital",
+          "cierres": 4,
+          "locales": 57,
+          "tasa": 0.07017543859649122
+        },
+        {
+          "categoria": "food_drink",
+          "cierres": 89,
+          "locales": 613,
+          "tasa": 0.14518760195758565
+        },
+        {
+          "categoria": "leisure",
+          "cierres": 7,
+          "locales": 36,
+          "tasa": 0.19444444444444445
+        },
+        {
+          "categoria": "sport",
+          "cierres": 1,
+          "locales": 21,
+          "tasa": 0.047619047619047616
+        },
+        {
+          "categoria": "mall",
+          "cierres": 4,
+          "locales": 15,
+          "tasa": 0.26666666666666666
+        },
+        {
+          "categoria": "business",
+          "cierres": 66,
+          "locales": 801,
+          "tasa": 0.08239700374531835
+        }
+      ],
+      "utilizable": false
+    }
+  },
+  "entradas_sha256": {
+    "2022-01-01_0.json": "8807fb5a32b3d8a5ce9d9e7002ae3e10a4bb84a1880501dea9aae318ceba2780",
+    "2022-01-01_1.json": "c734cdd0f0c91ca311bfb1d86dfff77d3aaade8ae5f18a9896a1fdfde7790a44",
+    "2024-01-01_0.json": "f64b8dfd815bf5cb0cc534ac9e8907dfa44f3a6be7da0ab677ac49b9640c0348",
+    "2024-01-01_1.json": "08db0ff1e9d460d2e4da46797f9481386088b86d29dc4931a114286eb147b0b7",
+    "ciclo_de_vida_0.json": "4d1cd13fc64cb870a193c3c9621ebf95c69cad9a23f72c65856ebb7b07a27e8f",
+    "hoy_0.json": "eb5bff85efbc04317d2d1f8e1290da1b21fb4e9ce8398c98025437de73d8de20",
+    "hoy_1.json": "da17dcf509fb44af24006c8b0bc493338b929f0f220e43fec05ebbd60feabc04"
+  },
+  "foursquare": {
+    "filas": 682,
+    "sha256": "252c87db5e4f6124c8f1d18f492c3a362243f4235ec5a181f0346c5c46f99dc1"
+  },
+  "principal": {
+    "auc": {
+      "boosting": {
+        "ic": [
+          0.4796613044594225,
+          0.5661962273640205
+        ],
+        "media": 0.5223231334542129
+      },
+      "logistica": {
+        "ic": [
+          0.4807116797210446,
+          0.5897732236757567
+        ],
+        "media": 0.5261813834822933
+      },
+      "solo_categoria": {
+        "ic": [
+          0.4788964474819626,
+          0.5801677680304851
+        ],
+        "media": 0.5275615362397907
+      },
+      "solo_densidad": {
+        "ic": [
+          0.42432724121423815,
+          0.5169032343387322
+        ],
+        "media": 0.46734387285184764
+      }
+    },
+    "bloques": 74,
+    "decision": {
+      "boosting": {
+        "a": false,
+        "b": false,
+        "cumple": false
+      },
+      "logistica": {
+        "a": false,
+        "b": false,
+        "cumple": false
+      }
+    },
+    "diferencia_con_la_mejor_linea_base": {
+      "boosting": {
+        "ic": [
+          -0.04957618688720628,
+          0.03978539133805974
+        ],
+        "media": -0.005238402785577856
+      },
+      "logistica": {
+        "ic": [
+          -0.04934283676851209,
+          0.046453210448200846
+        ],
+        "media": -0.001380152757497477
+      }
+    },
+    "mejor_linea_base": "solo_categoria",
+    "n": 1431,
+    "positivos": 203,
+    "remuestreos": {
+      "descartados_por_una_sola_clase": 0,
+      "pedidos": 2000
+    },
+    "tasa_por_categoria": [
+      {
+        "categoria": "school",
+        "cierres": 14,
+        "locales": 81,
+        "tasa": 0.1728395061728395
+      },
+      {
+        "categoria": "hospital",
+        "cierres": 5,
+        "locales": 48,
+        "tasa": 0.10416666666666667
+      },
+      {
+        "categoria": "food_drink",
+        "cierres": 97,
+        "locales": 528,
+        "tasa": 0.18371212121212122
+      },
+      {
+        "categoria": "leisure",
+        "cierres": 6,
+        "locales": 31,
+        "tasa": 0.1935483870967742
+      },
+      {
+        "categoria": "sport",
+        "cierres": 0,
+        "locales": 19,
+        "tasa": 0.0
+      },
+      {
+        "categoria": "mall",
+        "cierres": 3,
+        "locales": 14,
+        "tasa": 0.21428571428571427
+      },
+      {
+        "categoria": "business",
+        "cierres": 78,
+        "locales": 710,
+        "tasa": 0.10985915492957747
+      }
+    ],
+    "utilizable": false
+  },
+  "protocolo": "docs/DISENO_ML_RECOMENDACION.md, sección 3.M (v2.3)",
+  "puerta": {
+    "bloques_con_cierre": 45,
+    "cierres_principales": 203,
+    "descartados_de_la_poblacion": {
+      "borde_o_fuera": 99,
+      "local_vacio": 0,
+      "sin_categoria": 0,
+      "sin_coordenadas": 0,
+      "sin_nombre": 240
+    },
+    "minimos": {
+      "bloques_con_cierre": 30,
+      "cierres_principales": 60
+    },
+    "pasa": true,
+    "poblacion": 1772,
+    "por_nivel": {
+      "dudoso": 341,
+      "fuerte": 38,
+      "probable": 165,
+      "superviviente": 1228
+    },
+    "veredicto": "la puerta se cumple: se puede entrenar y evaluar"
+  }
+}
