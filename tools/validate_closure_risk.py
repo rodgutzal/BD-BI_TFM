@@ -20,6 +20,7 @@ Uso (desde la raíz del proyecto; los datos están en `data/osm_history/`, ignor
 """
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -71,6 +72,18 @@ def _descriptivo(etiquetas, elementos, columna, n_remuestreos, repeticiones) -> 
     return resultado
 
 
+def huella_de_foursquare(foursquare: Optional[pd.DataFrame]) -> dict:
+    """Recuento y sha256 (independiente del orden) de las filas de Foursquare usadas por la sensibilidad B: la base está viva
+    y la entrada de B debe quedar identificada, igual que las de OpenStreetMap. Solo agregados: ni nombres ni posiciones.
+    """
+    if foursquare is None or len(foursquare) == 0:
+        return {"filas": 0, "sha256": None}
+    filas = sorted(
+        f"{n}|{la!r}|{lo!r}" for n, la, lo in zip(foursquare["name"], foursquare["latitude"], foursquare["longitude"])
+    )
+    return {"filas": int(len(foursquare)), "sha256": hashlib.sha256("\n".join(filas).encode("utf-8")).hexdigest()}
+
+
 def estudio(
     fotos: Dict[str, list],
     foursquare: Optional[pd.DataFrame],
@@ -82,7 +95,7 @@ def estudio(
     etiquetas, descartados = closure_labels.etiquetar(fotos["2022"], fotos["hoy"], fotos["ciclo"])
     puerta = closure_labels.puerta(etiquetas)
     puerta["descartados_de_la_poblacion"] = descartados
-    resultado: dict = {"protocolo": PROTOCOLO, "puerta": puerta}
+    resultado: dict = {"protocolo": PROTOCOLO, "puerta": puerta, "foursquare": huella_de_foursquare(foursquare)}
     if not puerta["pasa"]:
         resultado["principal"] = None
         resultado["conclusion"] = "no concluyente: no se entrena (no se cumple la puerta de tamaño muestral)"

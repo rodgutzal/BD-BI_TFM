@@ -361,3 +361,32 @@ def test_la_conclusion_sale_solo_del_analisis_principal_y_con_el_texto_fijado(mo
         else "NO utilizable: ningún candidato cumple la regla fijada; queda como hallazgo del TFM y no se expone nada al usuario"
     )
     assert r["conclusion"] == esperado and "descriptivos" in r
+
+
+def test_el_resultado_identifica_la_entrada_de_foursquare_con_recuento_y_hash(estudio_completo):
+    _, puntos, r = estudio_completo
+    esperado = estudio_tool.huella_de_foursquare(foursquare_de(puntos))
+    assert r["foursquare"] == esperado and esperado["filas"] == 40 and len(esperado["sha256"]) == 64
+
+
+def test_la_huella_de_foursquare_no_depende_del_orden_y_cambia_con_cualquier_fila():
+    base = pd.DataFrame(
+        [("A", 35.9, 14.5), ("B", 35.91, 14.51), ("C", 35.92, 14.52)], columns=["name", "latitude", "longitude"]
+    )
+    barajada = base.iloc[[2, 0, 1]].reset_index(drop=True)
+    assert estudio_tool.huella_de_foursquare(base) == estudio_tool.huella_de_foursquare(barajada)
+    otro_nombre = base.copy()
+    otro_nombre.loc[0, "name"] = "Z"
+    otra_posicion = base.copy()
+    otra_posicion.loc[1, "latitude"] = 35.9100001
+    menos = base.iloc[:2]
+    hashes = {estudio_tool.huella_de_foursquare(x)["sha256"] for x in (base, otro_nombre, otra_posicion, menos)}
+    assert len(hashes) == 4
+
+
+def test_sin_foursquare_la_huella_es_vacia():
+    assert estudio_tool.huella_de_foursquare(None) == {"filas": 0, "sha256": None}
+    assert estudio_tool.huella_de_foursquare(pd.DataFrame(columns=["name", "latitude", "longitude"])) == {
+        "filas": 0,
+        "sha256": None,
+    }

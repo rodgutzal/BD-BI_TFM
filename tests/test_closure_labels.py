@@ -992,11 +992,30 @@ def test_el_homonimo_de_foursquare_debe_estar_a_150_m_o_menos_y_tener_el_mismo_n
     )
 
 
-@pytest.mark.parametrize("nombre", ["(sin nombre)", "(Sin Nombre)", "", None, "!!!"])
-def test_las_fichas_sin_nombre_de_foursquare_se_excluyen(nombre):
+@pytest.mark.parametrize("ficha", ["(sin nombre)", "(Sin Nombre)", "Restaurant (sin nombre)", "Retail (sin nombre)"])
+def test_las_fichas_sin_nombre_de_foursquare_se_excluyen_en_todos_sus_formatos(ficha):
+    """El local de OSM se llama IGUAL que la ficha: si no se excluyese la ficha, emparejarían (y pasaría a «dudoso»). El
+    recolector guarda las fichas sin nombre como «<Categoría> (sin nombre)»."""
+    p = mas_lejos(0, 0)
+    tabla, _ = cl.etiquetar([nodo(1, p, amenity="cafe", name=ficha)], [], [])
+    assert str(tabla.loc[0, "nivel"]) == "probable"
+    assert str(cl.sensibilidad_b(tabla, _fsq((ficha, *p)), [p]).loc[0, "nivel"]) == "probable"
+
+
+@pytest.mark.parametrize("nombre", ["", None, "!!!"])
+def test_una_ficha_de_foursquare_con_nombre_vacio_se_ignora_sin_fallar(nombre):
     tabla, p = _etiquetas_para_b()
-    resultado = cl.sensibilidad_b(tabla, _fsq((nombre, *p[3]), ("Local 3 sin parecido", *p[3])), [p[3]]).set_index("id")
+    resultado = cl.sensibilidad_b(tabla, _fsq((nombre, *p[3]), ("Otra cosa", *p[3])), [p[3]]).set_index("id")
     assert str(resultado.loc[3, "nivel"]) == "probable"
+
+
+@pytest.mark.parametrize("nombre", ["Sin nombre Bar", "Café sin nombre Bar", "Ponsin Nombre"])
+def test_solo_se_excluyen_los_nombres_que_son_o_terminan_en_sin_nombre_como_palabras(nombre):
+    """«Café sin nombre Bar» contiene la expresión pero no termina en ella; «Ponsin Nombre» termina en las letras pero no como
+    palabra aparte: las dos son fichas con nombre y sí emparejan."""
+    p = mas_lejos(0, 0)
+    tabla, _ = cl.etiquetar([nodo(1, p, amenity="cafe", name=nombre)], [], [])
+    assert str(cl.sensibilidad_b(tabla, _fsq((nombre, *p)), [p]).loc[0, "nivel"]) == "dudoso"
 
 
 def test_los_fuertes_y_los_supervivientes_no_cambian_aunque_tengan_homonimo():

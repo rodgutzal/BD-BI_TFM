@@ -233,10 +233,16 @@ def _con_cierres(poblacion: pd.DataFrame, niveles) -> pd.DataFrame:
     return poblacion
 
 
+def _es_ficha_sin_nombre(nombre_normalizado: str) -> bool:
+    """El recolector de Foursquare guarda las fichas sin nombre como «<Categoría> (sin nombre)»: normalizado, el nombre es o
+    termina en «sin nombre»."""
+    return nombre_normalizado == "sin nombre" or nombre_normalizado.endswith(" sin nombre")
+
+
 def sensibilidad_b(etiquetas: pd.DataFrame, foursquare: pd.DataFrame, puntos_busqueda: Iterable[Tuple[float, float]]):
     """Sensibilidad B (SOLO descriptiva; protocolo): se repite exigiendo además, para ser «probable», que no haya en
     Foursquare un local del mismo nombre normalizado a ≤ 150 m, y SOLO para locales a ≤ 1.500 m de algún punto de búsqueda de
-    Foursquare (fuera de ahí su cobertura no es comparable). Se excluyen las fichas «(sin nombre)». Un «probable» que sí
+    Foursquare (fuera de ahí su cobertura no es comparable). Se excluyen las fichas «(sin nombre)» (también «<Categoría> (sin nombre)», como las guarda el recolector). Un «probable» que sí
     tiene homónimo en Foursquare pasa a «dudoso» (no entra ni como positivo ni como negativo)."""
     puntos = list(puntos_busqueda)
     if not puntos:
@@ -252,7 +258,7 @@ def sensibilidad_b(etiquetas: pd.DataFrame, foursquare: pd.DataFrame, puntos_bus
     por_nombre: Dict[str, List[Tuple[float, float]]] = {}
     for nombre, lat, lon in zip(foursquare["name"], foursquare["latitude"], foursquare["longitude"]):
         norm = normalizar_nombre(nombre)
-        if norm and norm != "sin nombre":
+        if norm and not _es_ficha_sin_nombre(norm):
             por_nombre.setdefault(norm, []).append((float(lat), float(lon)))
     niveles = []
     for fila in cubiertos.to_dict("records"):

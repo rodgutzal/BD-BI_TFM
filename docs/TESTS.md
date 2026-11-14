@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**57 archivos · 1136 funciones de test · 1354 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**57 archivos · 1141 funciones de test · 1362 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -20,7 +20,7 @@
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_closure_features.py`](#teststest_closure_featurespy) | 22 | 23+ |
-| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 91 | 170+ |
+| [`tests/test_closure_labels.py`](#teststest_closure_labelspy) | 93 | 175+ |
 | [`tests/test_closure_validation.py`](#teststest_closure_validationpy) | 32 | 37+ |
 | [`tests/test_collector.py`](#teststest_collectorpy) | 38 | 38+ |
 | [`tests/test_config.py`](#teststest_configpy) | 4 | 4 |
@@ -64,7 +64,7 @@
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
 | [`tests/test_travel_time_predictor.py`](#teststest_travel_time_predictorpy) | 28 | 31 |
-| [`tests/test_validate_closure_risk.py`](#teststest_validate_closure_riskpy) | 21 | 22 |
+| [`tests/test_validate_closure_risk.py`](#teststest_validate_closure_riskpy) | 24 | 25 |
 | [`tests/test_validate_ensemble_model.py`](#teststest_validate_ensemble_modelpy) | 9 | 9 |
 | [`tests/test_validate_travel_time_model.py`](#teststest_validate_travel_time_modelpy) | 11 | 11 |
 
@@ -399,7 +399,9 @@
 - `test_el_limite_de_cobertura_es_1500_m_inclusivo`
 - `test_un_probable_con_homonimo_en_foursquare_a_150_m_pasa_a_dudoso`
 - `test_el_homonimo_de_foursquare_debe_estar_a_150_m_o_menos_y_tener_el_mismo_nombre_normalizado`
-- `test_las_fichas_sin_nombre_de_foursquare_se_excluyen` ×5
+- `test_las_fichas_sin_nombre_de_foursquare_se_excluyen_en_todos_sus_formatos` ×4 — El local de OSM se llama IGUAL que la ficha: si no se excluyese la ficha, emparejarían (y pasaría a «dudoso»). El recolector guarda las fichas sin nombre como «<Categoría> (sin nombre)».
+- `test_una_ficha_de_foursquare_con_nombre_vacio_se_ignora_sin_fallar` ×3
+- `test_solo_se_excluyen_los_nombres_que_son_o_terminan_en_sin_nombre_como_palabras` ×3 — «Café sin nombre Bar» contiene la expresión pero no termina en ella; «Ponsin Nombre» termina en las letras pero no como palabra aparte: las dos son fichas con nombre y sí emparejan.
 - `test_los_fuertes_y_los_supervivientes_no_cambian_aunque_tengan_homonimo`
 - `test_la_sensibilidad_b_recalcula_las_columnas_de_cierre_y_no_modifica_la_tabla_original`
 - `test_la_sensibilidad_b_se_niega_sin_puntos_de_busqueda`
@@ -1598,6 +1600,9 @@
 - `test_main_con_la_verificacion_real_rechaza_datos_sin_verificar` — Sin doble de la verificación: archivos y manifiesto sin `verificacion` los rechaza la función real.
 - `test_main_sin_huella_se_niega`
 - `test_la_conclusion_sale_solo_del_analisis_principal_y_con_el_texto_fijado` ×2 — Los descriptivos corren después y no pueden tocar la conclusión: se comprueba el texto exacto.
+- `test_el_resultado_identifica_la_entrada_de_foursquare_con_recuento_y_hash`
+- `test_la_huella_de_foursquare_no_depende_del_orden_y_cambia_con_cualquier_fila`
+- `test_sin_foursquare_la_huella_es_vacia`
 
 ## `tests/test_validate_ensemble_model.py`
 
