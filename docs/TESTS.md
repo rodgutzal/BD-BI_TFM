@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**53 archivos · 967 funciones de test · 1099 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**53 archivos · 970 funciones de test · 1102 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -26,7 +26,7 @@
 | [`tests/test_database.py`](#teststest_databasepy) | 4 | 4 |
 | [`tests/test_database_windows.py`](#teststest_database_windowspy) | 12 | 12 |
 | [`tests/test_demographics.py`](#teststest_demographicspy) | 15 | 15 |
-| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 125 | 167+ |
+| [`tests/test_download_osm_history.py`](#teststest_download_osm_historypy) | 128 | 170+ |
 | [`tests/test_ensemble_predictor.py`](#teststest_ensemble_predictorpy) | 17 | 17 |
 | [`tests/test_forecasting.py`](#teststest_forecastingpy) | 9 | 9 |
 | [`tests/test_formatter_pins.py`](#teststest_formatter_pinspy) | 4 | 4 |
@@ -591,6 +591,9 @@
 - `test_escribir_huella_se_niega_si_se_verifico_otro_archivo_distinto_del_que_hay_en_disco` — Aunque el manifiesto y el disco coincidan, si `sha256_verificado` es de OTRO archivo (verificado antes de que cambiara), «completo» no corresponde a lo que hay: no se ancla.
 - `test_main_al_descargar_respeta_lo_anclado_y_con_sobrescribir_lo_vuelve_a_bajar` — De extremo a extremo por la línea de comandos: con la huella versionada, `main` no pisa lo anclado (lo dice y sale con 0); con `--sobrescribir` sí lo descarga.
 - `test_escribir_huella_se_niega_si_el_sha256_del_manifiesto_no_es_el_del_disco` — Aunque `sha256_verificado` coincida con el disco, un `sha256` del manifiesto que no sea el del archivo actual indica un manifiesto desfasado: no se ancla.
+- `test_sin_sha256_verificado_el_analisis_no_acepta_el_archivo` — Una entrada «completo» sin constancia de qué archivo se verificó NO es utilizable: antes el campo ausente se sustituía por el hash del manifiesto y pasaba.
+- `test_sin_sha256_verificado_tampoco_se_ancla` — `escribir_huella` repetía el mismo fallback: ahora exige el campo y que coincida con el disco y el manifiesto.
+- `test_el_procedimiento_para_recuperar_un_manifiesto_sin_sha256_verificado_es_verificar_de_nuevo` — El mensaje manda ejecutar `--verificar` de nuevo, y eso funciona: vuelve a registrar el campo y entonces sí se puede usar y anclar.
 
 ## `tests/test_ensemble_predictor.py`
 

@@ -1655,3 +1655,41 @@ def test_escribir_huella_se_niega_si_el_sha256_del_manifiesto_no_es_el_del_disco
     (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
     with pytest.raises(ValueError, match="hoy_1.json: el archivo en disco no es el que se verificó"):
         dh.escribir_huella(tmp_path, tmp_path / "H.json")
+
+
+# ---- `sha256_verificado` es obligatorio: sin él no consta qué archivo se verificó -----------------------------------------
+def _sin_sha256_verificado(tmp_path, archivo="hoy_0.json"):
+    """Quita el campo (como en un manifiesto de una versión anterior de la herramienta, o editado)."""
+    manifiesto = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    del manifiesto["archivos"][archivo]["verificacion"]["sha256_verificado"]
+    (tmp_path / "manifest.json").write_text(json.dumps(manifiesto), encoding="utf-8")
+
+
+def test_sin_sha256_verificado_el_analisis_no_acepta_el_archivo(tmp_path):
+    """Una entrada «completo» sin constancia de qué archivo se verificó NO es utilizable: antes el campo ausente se sustituía
+    por el hash del manifiesto y pasaba."""
+    _descargado_y_verificado(tmp_path)
+    _sin_sha256_verificado(tmp_path)
+    with pytest.raises(ValueError, match="hoy_0.json: el manifiesto no registra qué archivo se verificó"):
+        dh.exigir_datos_verificados(tmp_path)
+
+
+def test_sin_sha256_verificado_tampoco_se_ancla(tmp_path):
+    """`escribir_huella` repetía el mismo fallback: ahora exige el campo y que coincida con el disco y el manifiesto."""
+    _descargado_y_verificado(tmp_path)
+    _sin_sha256_verificado(tmp_path)
+    with pytest.raises(ValueError, match="hoy_0.json: el archivo en disco no es el que se verificó"):
+        dh.escribir_huella(tmp_path, tmp_path / "H.json")
+    assert not (tmp_path / "H.json").exists()
+
+
+def test_el_procedimiento_para_recuperar_un_manifiesto_sin_sha256_verificado_es_verificar_de_nuevo(tmp_path):
+    """El mensaje manda ejecutar `--verificar` de nuevo, y eso funciona: vuelve a registrar el campo y entonces sí se puede
+    usar y anclar."""
+    _descargado_y_verificado(tmp_path)
+    _sin_sha256_verificado(tmp_path)
+    with pytest.raises(ValueError):
+        dh.exigir_datos_verificados(tmp_path)
+    assert _verificar(tmp_path, n=4, instantes=("2022-01-01", "2024-01-01", "hoy"))["ok"]
+    assert len(dh.exigir_datos_verificados(tmp_path)) == 7
+    assert len(dh.escribir_huella(tmp_path, tmp_path / "H.json")["archivos"]) == 7

@@ -626,13 +626,12 @@ def escribir_huella(out_dir: Path, destino: Path = HUELLA_POR_DEFECTO) -> dict:
             )
         # «completo» vale para el archivo que se verificó: si en disco hay otro (p. ej. una descarga interrumpida), no se ancla.
         en_disco = sha256_de(Path(out_dir) / archivo) if (Path(out_dir) / archivo).exists() else None
-        if (
-            en_disco is None
-            or en_disco != entrada.get("sha256")
-            or en_disco != verificacion.get("sha256_verificado", en_disco)
-        ):
+        # `sha256_verificado` es OBLIGATORIO: sin él no consta qué archivo se verificó (un manifiesto de una versión anterior
+        # de la herramienta, o editado), y «completo» no se puede ligar a nada.
+        if en_disco is None or en_disco != entrada.get("sha256") or en_disco != verificacion.get("sha256_verificado"):
             raise ValueError(
-                f"{archivo}: el archivo en disco no es el que se verificó como completo: ejecuta --verificar antes."
+                f"{archivo}: el archivo en disco no es el que se verificó como completo (o el manifiesto no registra "
+                "qué archivo se verificó): ejecuta --verificar de nuevo."
             )
         archivos[archivo] = {campo: entrada.get(campo) for campo in CAMPOS_DE_LA_HUELLA}
     huella = {
@@ -675,7 +674,12 @@ def exigir_datos_verificados(out_dir: Path, huella: Optional[dict] = None) -> Di
         if motivo:
             problemas.append(f"{archivo}: {motivo}")
             continue
-        if verificacion.get("sha256_verificado", entrada["sha256"]) != entrada["sha256"]:
+        if "sha256_verificado" not in verificacion:
+            problemas.append(
+                f"{archivo}: el manifiesto no registra qué archivo se verificó: ejecuta --verificar de nuevo"
+            )
+            continue
+        if verificacion["sha256_verificado"] != entrada["sha256"]:
             problemas.append(f"{archivo}: se verificó otro archivo distinto del que hay ahora")
             continue
         utilizables[archivo] = ruta
