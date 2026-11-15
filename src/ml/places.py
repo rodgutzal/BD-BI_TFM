@@ -111,7 +111,7 @@ def parse_boundaries(elementos: Sequence[dict], nivel: int = NIVEL_LOCALIDAD) ->
         (exteriores, sobran_ext), (interiores, sobran_int) = _cerrar_anillos(tramos["outer"]), _cerrar_anillos(
             tramos["inner"]
         )
-        if exteriores:
+        if exteriores or sobran_ext:  # sin ningún anillo cerrado se conserva, vacía y marcada, para que se avise
             salida.append(Localidad(el["id"], nombre, exteriores, interiores, sobran_ext + sobran_int))
     return salida
 

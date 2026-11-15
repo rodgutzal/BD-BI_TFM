@@ -61,8 +61,12 @@ def test_los_tramos_se_unen_en_un_anillo_cerrado_aunque_lleguen_desordenados_y_a
     assert anillo[0] == anillo[-1] and {(SUR, OESTE), (SUR, E), (N, E), (N, OESTE)} <= set(anillo)
 
 
-def test_un_tramo_que_no_cierra_se_descarta():
-    assert places.parse_boundaries([relacion(1, "Abierto", [via((SUR, OESTE), (SUR, E), (N, E))])]) == []
+def test_una_relacion_sin_ningun_anillo_cerrado_se_conserva_vacia_y_marcada():
+    """QA de Codex (menor): antes se descartaba en silencio y la herramienta no podía avisar de ella."""
+    (abierto,) = places.parse_boundaries([relacion(1, "Abierto", [via((SUR, OESTE), (SUR, E), (N, E))])])
+    assert abierto.exteriores == [] and abierto.tramos_descartados == 1
+    assert not places.contained_mask(np.array([35.905]), np.array([14.505]), abierto).any()  # no contiene nada
+    assert places.assign_places([35.905], [14.505], [abierto])["localidad"].iloc[0] == ""  # ni asigna por cercanía
 
 
 def test_solo_se_toman_las_relaciones_del_nivel_pedido_con_nombre():
