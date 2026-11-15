@@ -1194,7 +1194,7 @@
 > de Overpass, punto en polígono con huecos, asignación por cercanía en la costa y archivos con manifiesto. Sin red.
 
 - `test_los_tramos_se_unen_en_un_anillo_cerrado_aunque_lleguen_desordenados_y_al_reves`
-- `test_un_tramo_que_no_cierra_se_descarta`
+- `test_una_relacion_sin_ningun_anillo_cerrado_se_conserva_vacia_y_marcada` — QA de Codex (menor): antes se descartaba en silencio y la herramienta no podía avisar de ella.
 - `test_solo_se_toman_las_relaciones_del_nivel_pedido_con_nombre`
 - `test_el_nombre_en_ingles_gana_al_local`
 - `test_un_punto_dentro_se_asigna_y_uno_lejos_queda_vacio`
