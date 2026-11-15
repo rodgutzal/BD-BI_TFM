@@ -389,8 +389,14 @@ def test_una_categoria_sin_brecha_no_habla_del_modelo_aunque_otras_categorias_lo
 
 
 # ---- celdas de la zona, lentes por zona y exportación a CSV ------------------------------------------------------
+def clave_tabla(at, categoria="food_drink"):
+    """La clave de la tabla de celdas lleva la huella de sus filas (ver firma_tabla): se busca la vigente."""
+    (clave,) = [k for k in at.session_state.filtered_state if k.startswith(f"pano_top_{categoria}_")]
+    return clave
+
+
 def marcar(at, filas, categoria="food_drink"):
-    at.session_state[f"pano_top_{categoria}"] = {"selection": {"rows": list(filas), "columns": []}}
+    at.session_state[clave_tabla(at, categoria)] = {"selection": {"rows": list(filas), "columns": []}}
 
 
 def boton(at, empieza):
@@ -441,7 +447,7 @@ def test_la_descarga_solo_aparece_tras_confirmar_la_seleccion():
     from src.ml import panorama_view as pv
 
     at = abrir_con_zona("food_drink", "Valletta")
-    at.session_state["pano_top_food_drink"] = {"selection": {"rows": [0, 2], "columns": []}}
+    marcar(at, [0, 2])
     at.run()
     assert descargas(at) == []  # marcadas, sin confirmar
     marcar(at, [0, 2])  # AppTest no conserva la selección de una tabla entre ejecuciones: se repite al pulsar
@@ -456,7 +462,7 @@ def test_la_descarga_solo_aparece_tras_confirmar_la_seleccion():
         ps.load_places(ROOT / "data" / "ml"),
     )
     esperadas = list(pv.candidate_cells(vista, "Valletta").index[[0, 2]])
-    assert at.session_state["pano_conf_food_drink"] == esperadas
+    assert at.session_state["pano_conf_food_drink"]["ids"] == esperadas
 
 
 def test_si_la_seleccion_cambia_despues_de_confirmar_se_avisa():
@@ -491,3 +497,49 @@ def test_la_pagina_pone_las_celdas_bajo_la_zona_recomendada_y_las_lentes_bajo_el
     assert pos["Celdas de la zona"] < pos["Desglose por zona"] < pos["Lentes del panorama por zona"]
     zona = pagina.metric[0].value
     assert f"Celdas de la zona {zona}" in m[pos["Celdas de la zona"]]
+
+
+def test_cambiar_el_perfil_descarta_la_seleccion_confirmada():
+    """Regresión del code-review: el CSV se genera con el perfil vigente, así que una confirmación hecha con otro perfil
+    mezclaría la selección vieja con lentes nuevas. Se descarta y se avisa."""
+    at = abrir_con_zona("food_drink", "Valletta")
+    marcar(at, [0])
+    at.run()
+    marcar(at, [0])
+    boton(at, "Confirmar selección (1)").click().run()
+    assert len(descargas(at)) == 1
+    multiselect(at, "Competencia indirecta (sustitutos)").set_value([]).run()
+    assert not at.exception and descargas(at) == []
+    assert any("Se descartó la selección confirmada" in c for c in textos(at.caption))
+    assert "pano_conf_food_drink" not in at.session_state
+
+
+def test_si_la_tabla_cambia_la_seleccion_de_filas_no_se_arrastra():
+    """Regresión del code-review: la selección es por posición de fila. Marcar la 20 con «ver todas» y apagar el interruptor
+    dejaba una posición fuera de la tabla (IndexError); ahora la tabla cambia de clave y empieza sin filas marcadas."""
+    at = abrir_con_zona("food_drink", "Valletta")
+    at.toggle[0].set_value(True).run()
+    marcar(at, [20])
+    at.run()
+    assert boton(at, "Confirmar selección (1)")
+    at.toggle[0].set_value(False).run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert boton(at, "Confirmar selección (0)").proto.disabled
+
+
+def test_una_zona_desconocida_no_rompe_la_seccion():
+    at = abrir_con_zona("food_drink", "Atlantis")
+    assert any("Celdas de todas las zonas" in m for m in textos(at.markdown))
+
+
+def test_el_hover_del_mapa_escapa_el_html_de_la_localidad():
+    """La localidad viene de una fuente externa y editable: no se interpola como HTML en el hover de Plotly."""
+    from src.ml import panorama_view as pv
+    from streamlit_app.dashboards import panorama_section as ps
+
+    guardado, counts, _ = ps.load_data(ROOT / "data" / "ml")
+    vista = pv.compute_view(counts, bp.get_default_profile("food_drink"), guardado, "food_drink")
+    vista["localidad"] = "<img src=x>&Co"
+    fig = ps.build_map(vista, pv.available_layers(vista)[0], None)
+    texto = next(t for t in fig.data if t.name not in ("sin datos",)).hovertext[0]
+    assert "<img" not in texto and "&lt;img src=x&gt;&amp;Co" in texto

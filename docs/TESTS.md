@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1193 funciones de test · 1414 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1202 funciones de test · 1423 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -46,8 +46,8 @@
 | [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 36 | 36 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
-| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 33 | 33 |
-| [`tests/test_ml_places.py`](#teststest_ml_placespy) | 16 | 16 |
+| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 35 | 35 |
+| [`tests/test_ml_places.py`](#teststest_ml_placespy) | 19 | 19 |
 | [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 43 | 56 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
@@ -60,7 +60,7 @@
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 35 | 35+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 39 | 39+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -1185,6 +1185,8 @@
 - `test_zone_summary_tiene_una_fila_por_zona_con_las_estrella_que_hay`
 - `test_export_frame_lleva_el_perfil_y_solo_las_celdas_pedidas`
 - `test_export_csv_se_puede_releer_con_acentos`
+- `test_export_csv_conserva_las_coordenadas_con_precision_de_celda` — Regresión del code-review: con %.6g lat/lon perdían ~10 m (35,897432 → 35,8974).
+- `test_candidates_table_funciona_sin_la_columna_de_localidad`
 
 ## `tests/test_ml_places.py`
 
@@ -1207,6 +1209,9 @@
 - `test_el_dry_run_no_llama_a_la_red`
 - `test_la_herramienta_asigna_desde_una_respuesta_guardada` — Con una respuesta local (sin red) escribe el CSV y el manifiesto en el directorio indicado, sin tocar el panorama.
 - `test_sin_localidades_en_la_respuesta_no_se_escribe_nada`
+- `test_una_isla_dentro_de_un_hueco_de_la_misma_relacion_cuenta_como_dentro` — Regresión del code-review: los huecos se restaban de la unión de todos los anillos exteriores y borraban la isla.
+- `test_los_tramos_que_no_cierran_se_cuentan_para_avisar`
+- `test_la_publicada_no_tiene_limites_incompletos`
 
 ## `tests/test_ml_text_classifier.py`
 
@@ -1526,6 +1531,10 @@
 - `test_si_la_seleccion_cambia_despues_de_confirmar_se_avisa`
 - `test_el_toggle_amplia_la_tabla_de_15_filas_a_todas`
 - `test_la_pagina_pone_las_celdas_bajo_la_zona_recomendada_y_las_lentes_bajo_el_desglose`
+- `test_cambiar_el_perfil_descarta_la_seleccion_confirmada` — Regresión del code-review: el CSV se genera con el perfil vigente, así que una confirmación hecha con otro perfil mezclaría la selección vieja con lentes nuevas. Se descarta y se avisa.
+- `test_si_la_tabla_cambia_la_seleccion_de_filas_no_se_arrastra` — Regresión del code-review: la selección es por posición de fila. Marcar la 20 con «ver todas» y apagar el interruptor dejaba una posición fuera de la tabla (IndexError); ahora la tabla cambia de clave y empieza sin filas marcadas.
+- `test_una_zona_desconocida_no_rompe_la_seccion`
+- `test_el_hover_del_mapa_escapa_el_html_de_la_localidad` — La localidad viene de una fuente externa y editable: no se interpola como HTML en el hover de Plotly.
 
 ## `tests/test_strip_panorama_gap.py`
 

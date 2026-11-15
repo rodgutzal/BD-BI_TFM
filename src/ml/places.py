@@ -34,11 +34,19 @@ Punto = Tuple[float, float]  # (lat, lon)
 class Localidad:
     """Límite de una localidad: anillos exteriores y huecos como listas de (lat, lon) cerradas."""
 
-    def __init__(self, osm_id: int, nombre: str, exteriores: List[List[Punto]], interiores: List[List[Punto]]):
+    def __init__(
+        self,
+        osm_id: int,
+        nombre: str,
+        exteriores: List[List[Punto]],
+        interiores: List[List[Punto]],
+        tramos_descartados: int = 0,
+    ):
         self.osm_id = int(osm_id)
         self.nombre = nombre
         self.exteriores = exteriores
         self.interiores = interiores
+        self.tramos_descartados = tramos_descartados  # >0: el límite está incompleto (tramos que no cerraron)
 
     def __repr__(self) -> str:
         return f"Localidad({self.osm_id}, {self.nombre!r}, {len(self.exteriores)} ext, {len(self.interiores)} int)"
@@ -47,10 +55,12 @@ class Localidad:
 # ---------------------------------------------------------------------------
 # Geometría
 # ---------------------------------------------------------------------------
-def _cerrar_anillos(segmentos: Sequence[Sequence[Punto]]) -> List[List[Punto]]:
-    """Une tramos (las `way` de una relación) en anillos cerrados. Descarta lo que no se puede cerrar."""
+def _cerrar_anillos(segmentos: Sequence[Sequence[Punto]]) -> Tuple[List[List[Punto]], int]:
+    """Une tramos (las `way` de una relación) en anillos cerrados. Devuelve (anillos, cuántos conjuntos de tramos no se
+    pudieron cerrar y se descartaron)."""
     pendientes = [list(s) for s in segmentos if len(s) >= 2]
     anillos: List[List[Punto]] = []
+    descartados = 0
     while pendientes:
         actual = pendientes.pop()
         while actual[0] != actual[-1]:
@@ -71,7 +81,9 @@ def _cerrar_anillos(segmentos: Sequence[Sequence[Punto]]) -> List[List[Punto]]:
                 break  # ningún tramo continúa este: no se cierra
         if len(actual) >= 4 and actual[0] == actual[-1]:
             anillos.append(actual)
-    return anillos
+        else:
+            descartados += 1
+    return anillos, descartados
 
 
 def nombre_de(etiquetas: Dict[str, str]) -> str:
@@ -96,9 +108,11 @@ def parse_boundaries(elementos: Sequence[dict], nivel: int = NIVEL_LOCALIDAD) ->
             rol = m.get("role")
             if m.get("type") == "way" and geom and rol in tramos:
                 tramos[rol].append([(float(p["lat"]), float(p["lon"])) for p in geom])
-        exteriores, interiores = _cerrar_anillos(tramos["outer"]), _cerrar_anillos(tramos["inner"])
+        (exteriores, sobran_ext), (interiores, sobran_int) = _cerrar_anillos(tramos["outer"]), _cerrar_anillos(
+            tramos["inner"]
+        )
         if exteriores:
-            salida.append(Localidad(el["id"], nombre, exteriores, interiores))
+            salida.append(Localidad(el["id"], nombre, exteriores, interiores, sobran_ext + sobran_int))
     return salida
 
 
@@ -121,9 +135,13 @@ def contained_mask(lat: np.ndarray, lon: np.ndarray, loc: Localidad) -> np.ndarr
     lat, lon = np.asarray(lat, dtype=float), np.asarray(lon, dtype=float)
     dentro = np.zeros(len(lat), dtype=bool)
     for anillo in loc.exteriores:
-        dentro |= _dentro_de_anillo(lat, lon, anillo)
-    for hueco in loc.interiores:
-        dentro &= ~_dentro_de_anillo(lat, lon, hueco)
+        en_anillo = _dentro_de_anillo(lat, lon, anillo)
+        # Cada hueco solo resta del anillo exterior que lo contiene (el de su primer vértice): restarlo de la unión de todos
+        # borraría una isla o un exclave de la misma relación que quede dentro del hueco.
+        for hueco in loc.interiores:
+            if _dentro_de_anillo(np.array([hueco[0][0]]), np.array([hueco[0][1]]), anillo)[0]:
+                en_anillo &= ~_dentro_de_anillo(lat, lon, hueco)
+        dentro |= en_anillo
     return dentro
 
 

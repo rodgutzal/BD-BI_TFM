@@ -219,3 +219,25 @@ def test_sin_localidades_en_la_respuesta_no_se_escribe_nada(tmp_path, capsys):
     crudo.write_text(json.dumps({"elements": []}), encoding="utf-8")
     assert tool.main(["--data-dir", str(destino), "--crudo", str(crudo)]) == 1
     assert not (destino / places.ARCHIVOS["places"]).exists()
+
+
+def test_una_isla_dentro_de_un_hueco_de_la_misma_relacion_cuenta_como_dentro():
+    """Regresión del code-review: los huecos se restaban de la unión de todos los anillos exteriores y borraban la isla."""
+    hueco_ = hueco((35.903, 14.503), (35.903, 14.507), (35.907, 14.507), (35.907, 14.503), (35.903, 14.503))
+    isla = via((35.9045, 14.5045), (35.9045, 14.5055), (35.9055, 14.5055), (35.9055, 14.5045), (35.9045, 14.5045))
+    (loc,) = places.parse_boundaries([relacion(1, "Con isla", [TRAMO_A, TRAMO_B, hueco_, isla])])
+    # en el cuerpo, en el hueco vacío, en la isla (dentro del hueco)
+    r = places.contained_mask(np.array([35.9015, 35.9035, 35.905]), np.array([14.5015, 14.5035, 14.505]), loc)
+    assert list(r) == [True, False, True]
+
+
+def test_los_tramos_que_no_cierran_se_cuentan_para_avisar():
+    completa = relacion(1, "Completa", [TRAMO_A, TRAMO_B])
+    rota = relacion(2, "Rota", [TRAMO_A, TRAMO_B, via((35.95, 14.55), (35.96, 14.56))])  # un tramo suelto
+    por_nombre = {l.nombre: l.tramos_descartados for l in places.parse_boundaries([completa, rota])}
+    assert por_nombre == {"Completa": 0, "Rota": 1}
+
+
+def test_la_publicada_no_tiene_limites_incompletos():
+    manifiesto = json.loads((DATA_ML / places.ARCHIVOS["manifest"]).read_text(encoding="utf-8"))
+    assert manifiesto["localidades_incompletas"] == []

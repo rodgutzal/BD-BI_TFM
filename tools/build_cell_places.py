@@ -86,6 +86,9 @@ def main(argv: Optional[list] = None) -> int:
     if not localidades:
         print("Overpass no devolvió ninguna localidad: no se escribe nada.")
         return 1
+    incompletas = sorted(l.nombre for l in localidades if l.tramos_descartados)
+    if incompletas:
+        print(f"AVISO: límites incompletos (tramos sin cerrar) en: {', '.join(incompletas)}")
     asignacion = places.assign_places(celdas["lat"], celdas["lon"], localidades)
     tabla = pd.concat([celdas[["cell_id"]], asignacion], axis=1)
     manifiesto = places.write_places(
@@ -97,6 +100,7 @@ def main(argv: Optional[list] = None) -> int:
             "base_osm": datos.get("osm3s", {}).get("timestamp_osm_base", ""),
             "ejecutado": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "localidades": len(localidades),
+            "localidades_incompletas": incompletas,
             "nivel_admin": places.NIVEL_LOCALIDAD,
         },
     )

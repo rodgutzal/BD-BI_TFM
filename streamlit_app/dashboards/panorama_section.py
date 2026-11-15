@@ -9,6 +9,8 @@ Los datos vienen de data/ml/ (tabla precalculada por tools/build_panorama.py en 
 entrena nada ni se importa scikit-learn. Al ajustar el perfil, las lentes se recalculan desde los conteos precalculados.
 """
 
+import hashlib
+import html
 import sys
 from pathlib import Path
 from typing import Optional
@@ -19,6 +21,7 @@ import streamlit as st
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
+from src.locations import LOCATIONS
 from src.ml import panorama
 from src.ml import panorama_view as pv
 from src.ml import places
@@ -116,7 +119,7 @@ def build_map(vista, capa: str, seleccionada: Optional[str]):
     valores, titulo = pv.layer_values(vista, capa)
     con, sin = vista[valores.notna()], vista[valores.isna()]
     textos = [
-        f"{i} · {getattr(r, 'localidad', '') or r.zona_cercana}<br>{titulo}: {v:.2f}<br>Confianza: {r.confianza_nivel}"
+        f"{i} · {html.escape(getattr(r, 'localidad', '') or r.zona_cercana)}<br>{titulo}: {v:.2f}<br>Confianza: {r.confianza_nivel}"
         for i, r, v in zip(con.index, con.itertuples(), valores[con.index])
     ]
     fig = go.Figure()
@@ -235,9 +238,15 @@ COLUMNAS_TABLA = {
 }
 
 
+def firma_tabla(tabla) -> str:
+    """Huella corta de las celdas (y su orden) de la tabla, para la clave de su selección."""
+    return hashlib.md5("|".join(map(str, tabla.index)).encode("utf-8")).hexdigest()[:10]
+
+
 def render_candidate_cells(vista, perfil, categoria: str, zona: Optional[str], destino=None):
     """Tabla de celdas de la zona recomendada (o de todas, sin zona) con las tres lentes, enlace al mapa y exportación a
     CSV en dos pasos: el usuario marca filas, pulsa «Confirmar selección» y solo entonces aparece la descarga."""
+    zona = zona if zona in LOCATIONS else None  # una zona que el panorama no conoce no debe romper la sección
     with destino if destino is not None else st.container():
         ambito = f"la zona {zona}" if zona else "todas las zonas"
         st.markdown(f"#### 📍 Celdas de {ambito}: dónde mirar primero")
@@ -262,7 +271,9 @@ def render_candidate_cells(vista, perfil, categoria: str, zona: Optional[str], d
             "El resto va ordenado por mercado, de mayor a menor. **No es un puntaje**: pulsa el título de una columna para "
             "ordenar por otra lente."
         )
-        clave = f"pano_top_{categoria}"
+        # La clave lleva las celdas (y su orden) que muestra la tabla: la selección es por POSICIÓN de fila, así que si la
+        # tabla cambia (zona, perfil, «ver todas») se empieza sin filas marcadas en vez de marcar otras celdas.
+        clave = f"pano_top_{categoria}_{firma_tabla(tabla)}"
         evento = st.dataframe(
             tabla,
             column_config=COLUMNAS_TABLA,
@@ -271,18 +282,28 @@ def render_candidate_cells(vista, perfil, categoria: str, zona: Optional[str], d
             key=clave,
             width="stretch",
         )
-        marcadas = list(tabla.index[list(evento.selection.rows)]) if evento is not None else []
+        posiciones = [p for p in (evento.selection.rows if evento is not None else []) if 0 <= p < len(tabla)]
+        marcadas = list(tabla.index[posiciones])
         confirmada_clave = f"pano_conf_{categoria}"
+        firma_confirmacion = f"{zona}|{perfil!r}"
         if st.button(
             f"Confirmar selección ({len(marcadas)}) y preparar CSV",
             disabled=not marcadas,
             key=f"pano_confirmar_{categoria}",
             help="Marca una o más filas de la tabla; el CSV se prepara solo al confirmar.",
         ):
-            st.session_state[confirmada_clave] = marcadas
+            st.session_state[confirmada_clave] = {"ids": marcadas, "firma": firma_confirmacion}
         if not marcadas:
             st.caption("Marca filas de la tabla para exportarlas.")
-        confirmadas = [c for c in st.session_state.get(confirmada_clave, []) if c in vista.index]
+        guardada = st.session_state.get(confirmada_clave)
+        if guardada and guardada["firma"] != firma_confirmacion:
+            # Cambió la zona o el perfil: el CSV mezclaría la selección vieja con lentes de otro perfil.
+            del st.session_state[confirmada_clave]
+            st.caption(
+                "Se descartó la selección confirmada porque cambiaron la zona o el perfil: vuelve a elegir y confirmar."
+            )
+            guardada = None
+        confirmadas = [c for c in (guardada["ids"] if guardada else []) if c in vista.index]
         if confirmadas:
             if set(marcadas) != set(confirmadas):
                 st.caption(

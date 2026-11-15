@@ -216,11 +216,13 @@ def candidate_cells(vista: pd.DataFrame, zona: Optional[str] = None) -> pd.DataF
 
 
 def candidates_table(sub: pd.DataFrame) -> pd.DataFrame:
-    """Tabla legible de `candidate_cells`, indexada por cell_id."""
+    """Tabla legible de `candidate_cells`, indexada por cell_id. Sin la columna `localidad` (vista sin `attach_places`)
+    rotula con la zona de referencia."""
+    localidades = sub["localidad"] if "localidad" in sub else pd.Series("", index=sub.index)
     tabla = pd.DataFrame(
         {
             "★": sub["oportunidad"].map({True: "★", False: ""}),
-            "Lugar": [loc if loc else f"cerca de {zona}" for loc, zona in zip(sub["localidad"], sub["zona_cercana"])],
+            "Lugar": [loc if loc else f"cerca de {zona}" for loc, zona in zip(localidades, sub["zona_cercana"])],
             "Competencia directa": sub["competencia_directa"],
             "Mercado (0-1)": sub["mercado_total"],
             "Proveedores": sub["proveedores_total"],
@@ -275,7 +277,12 @@ def export_frame(vista: pd.DataFrame, ids: Sequence[str], perfil: BusinessProfil
 
 
 def export_csv(df: pd.DataFrame) -> bytes:
-    """CSV en UTF-8 con BOM (Excel lee bien los acentos)."""
+    """CSV en UTF-8 con BOM (Excel lee bien los acentos). Las coordenadas van con 6 decimales (~0,1 m): con `%.6g` como el
+    resto de cifras perderían ~10 m."""
+    df = df.copy()
+    for col in ("lat", "lon"):
+        if col in df:
+            df[col] = df[col].map("{:.6f}".format)
     return df.to_csv(float_format="%.6g", lineterminator="\n").encode("utf-8-sig")
 
 

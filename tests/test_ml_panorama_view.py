@@ -384,3 +384,22 @@ def test_export_csv_se_puede_releer_con_acentos(vista_comida):
     assert datos.startswith(b"\xef\xbb\xbf")  # BOM para Excel
     releido = pd.read_csv(__import__("io").BytesIO(datos), encoding="utf-8-sig", index_col="cell_id")
     assert list(releido.index) == ids and releido["localidad"].notna().all()
+
+
+def test_export_csv_conserva_las_coordenadas_con_precision_de_celda(vista_comida):
+    """Regresión del code-review: con %.6g lat/lon perdían ~10 m (35,897432 → 35,8974)."""
+    ids = list(vista_comida.index[:3])
+    datos = pv.export_csv(pv.export_frame(vista_comida, ids, FOOD))
+    releido = pd.read_csv(
+        __import__("io").BytesIO(datos), encoding="utf-8-sig", index_col="cell_id", dtype={"lat": str, "lon": str}
+    )
+    assert all(len(v.split(".")[1]) == 6 for v in releido["lat"]) and all(
+        len(v.split(".")[1]) == 6 for v in releido["lon"]
+    )
+    assert np.allclose(releido["lat"].astype(float), vista_comida.loc[ids, "lat"], atol=1e-6)
+
+
+def test_candidates_table_funciona_sin_la_columna_de_localidad(vista_comida):
+    sin = vista_comida.drop(columns="localidad")
+    tabla = pv.candidates_table(pv.candidate_cells(sin, "Valletta").head(3))
+    assert tabla["Lugar"].str.startswith("cerca de ").all()
