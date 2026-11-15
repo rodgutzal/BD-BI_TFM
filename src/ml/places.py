@@ -1,0 +1,234 @@
+"""Nombre de la localidad de cada celda (consejos locales de Malta, de OpenStreetMap).
+
+El panorama solo decía «zona más cercana»: una de las 7 zonas monitorizadas, a veces a casi 6 km, que no es un lugar
+sino el punto de referencia más próximo. Aquí cada celda recibe el nombre de la localidad (relación administrativa
+`admin_level=8` de OSM) que contiene el centro de la celda. Es un dato PRECALCULADO (tools/build_cell_places.py hace
+UNA consulta a Overpass y escribe data/ml/cell_places.csv); la pantalla no consulta la red.
+
+Este módulo solo usa numpy y pandas. Si el archivo falta o no coincide con su manifiesto, `read_places` devuelve None y
+la pantalla vuelve a rotular con la zona de referencia.
+
+Archivos (`write_places`), en un directorio:
+  cell_places.csv            cell_id, localidad, osm_relacion, criterio: «dentro» (el centro de la celda cae en la
+                             localidad), «cercana» (centro en el mar pero el borde a ≤ 250 m) o vacío (ninguna)
+  cell_places_manifest.json  procedencia, atribución y sha256 del CSV
+"""
+
+import json
+from pathlib import Path
+from typing import Dict, List, Optional, Sequence, Tuple
+
+import numpy as np
+import pandas as pd
+
+from src.ml.inputs_bundle import file_hash
+
+NIVEL_LOCALIDAD = 8  # consejos locales de Malta en OpenStreetMap
+FORMATO = 1
+ARCHIVOS = {"places": "cell_places.csv", "manifest": "cell_places_manifest.json"}
+ATRIBUCION = "© colaboradores de OpenStreetMap, ODbL (https://www.openstreetmap.org/copyright)"
+
+Punto = Tuple[float, float]  # (lat, lon)
+
+
+class Localidad:
+    """Límite de una localidad: anillos exteriores y huecos como listas de (lat, lon) cerradas."""
+
+    def __init__(self, osm_id: int, nombre: str, exteriores: List[List[Punto]], interiores: List[List[Punto]]):
+        self.osm_id = int(osm_id)
+        self.nombre = nombre
+        self.exteriores = exteriores
+        self.interiores = interiores
+
+    def __repr__(self) -> str:
+        return f"Localidad({self.osm_id}, {self.nombre!r}, {len(self.exteriores)} ext, {len(self.interiores)} int)"
+
+
+# ---------------------------------------------------------------------------
+# Geometría
+# ---------------------------------------------------------------------------
+def _cerrar_anillos(segmentos: Sequence[Sequence[Punto]]) -> List[List[Punto]]:
+    """Une tramos (las `way` de una relación) en anillos cerrados. Descarta lo que no se puede cerrar."""
+    pendientes = [list(s) for s in segmentos if len(s) >= 2]
+    anillos: List[List[Punto]] = []
+    while pendientes:
+        actual = pendientes.pop()
+        while actual[0] != actual[-1]:
+            for i, s in enumerate(pendientes):
+                if s[0] == actual[-1]:
+                    actual = actual + s[1:]
+                elif s[-1] == actual[-1]:
+                    actual = actual + s[::-1][1:]
+                elif s[-1] == actual[0]:
+                    actual = s[:-1] + actual
+                elif s[0] == actual[0]:
+                    actual = s[::-1][:-1] + actual
+                else:
+                    continue
+                pendientes.pop(i)
+                break
+            else:
+                break  # ningún tramo continúa este: no se cierra
+        if len(actual) >= 4 and actual[0] == actual[-1]:
+            anillos.append(actual)
+    return anillos
+
+
+def nombre_de(etiquetas: Dict[str, str]) -> str:
+    """Nombre en inglés si existe (Marsaskala, no «Wied il-Għajn»), si no el nombre local."""
+    return (etiquetas.get("name:en") or etiquetas.get("name") or "").strip()
+
+
+def parse_boundaries(elementos: Sequence[dict], nivel: int = NIVEL_LOCALIDAD) -> List[Localidad]:
+    """Localidades de una respuesta de Overpass (`out geom` de relaciones administrativas). Ignora las de otro nivel,
+    las sin nombre y los miembros sin geometría."""
+    salida: List[Localidad] = []
+    for el in elementos:
+        etiquetas = el.get("tags", {})
+        if el.get("type") != "relation" or str(etiquetas.get("admin_level")) != str(nivel):
+            continue
+        nombre = nombre_de(etiquetas)
+        if not nombre:
+            continue
+        tramos = {"outer": [], "inner": []}
+        for m in el.get("members", []):
+            geom = m.get("geometry")
+            rol = m.get("role")
+            if m.get("type") == "way" and geom and rol in tramos:
+                tramos[rol].append([(float(p["lat"]), float(p["lon"])) for p in geom])
+        exteriores, interiores = _cerrar_anillos(tramos["outer"]), _cerrar_anillos(tramos["inner"])
+        if exteriores:
+            salida.append(Localidad(el["id"], nombre, exteriores, interiores))
+    return salida
+
+
+def _dentro_de_anillo(lat: np.ndarray, lon: np.ndarray, anillo: Sequence[Punto]) -> np.ndarray:
+    """Punto en polígono por conteo de cruces de un rayo hacia el este (lon crece)."""
+    a = np.asarray(anillo, dtype=float)
+    y1, x1, y2, x2 = a[:-1, 0], a[:-1, 1], a[1:, 0], a[1:, 1]
+    dentro = np.zeros(len(lat), dtype=bool)
+    for j in range(len(y1)):
+        if y1[j] == y2[j]:
+            continue
+        cruza = (y1[j] > lat) != (y2[j] > lat)
+        x_corte = x1[j] + (lat - y1[j]) * (x2[j] - x1[j]) / (y2[j] - y1[j])
+        dentro ^= cruza & (lon < x_corte)
+    return dentro
+
+
+def contained_mask(lat: np.ndarray, lon: np.ndarray, loc: Localidad) -> np.ndarray:
+    """¿Cada punto está dentro de la localidad (algún anillo exterior y ningún hueco)?"""
+    lat, lon = np.asarray(lat, dtype=float), np.asarray(lon, dtype=float)
+    dentro = np.zeros(len(lat), dtype=bool)
+    for anillo in loc.exteriores:
+        dentro |= _dentro_de_anillo(lat, lon, anillo)
+    for hueco in loc.interiores:
+        dentro &= ~_dentro_de_anillo(lat, lon, hueco)
+    return dentro
+
+
+def distance_to_boundary_m(lat: np.ndarray, lon: np.ndarray, loc: Localidad) -> np.ndarray:
+    """Distancia (m) de cada punto al borde de la localidad (al segmento más cercano de cualquiera de sus anillos),
+    con una proyección plana local: sobra para distancias de unos cientos de metros."""
+    lat, lon = np.asarray(lat, dtype=float), np.asarray(lon, dtype=float)
+    k_lat = 111_320.0
+    k_lon = k_lat * np.cos(np.radians(lat.mean() if len(lat) else 0.0))
+    mejor = np.full(len(lat), np.inf)
+    for anillo in list(loc.exteriores) + list(loc.interiores):
+        a = np.asarray(anillo, dtype=float)
+        ay, ax, by, bx = a[:-1, 0] * k_lat, a[:-1, 1] * k_lon, a[1:, 0] * k_lat, a[1:, 1] * k_lon
+        dy, dx = by - ay, bx - ax
+        largo2 = np.where(dx * dx + dy * dy == 0, 1.0, dx * dx + dy * dy)
+        py, px = (lat * k_lat)[:, None], (lon * k_lon)[:, None]
+        t = np.clip(((px - ax) * dx + (py - ay) * dy) / largo2, 0.0, 1.0)
+        d = np.hypot(px - (ax + t * dx), py - (ay + t * dy))
+        mejor = np.minimum(mejor, d.min(axis=1))
+    return mejor
+
+
+def assign_places(lat, lon, localidades: Sequence[Localidad], tolerancia_m: float = 250.0) -> pd.DataFrame:
+    """Localidad de cada punto: columnas `localidad`, `osm_relacion` y `criterio`.
+
+    `criterio` es «dentro» si el punto cae en el polígono de la localidad. Los límites de los consejos locales siguen la
+    costa, así que el CENTRO de una celda costera puede caer en el mar aunque la celda tenga tierra: si no está dentro de
+    ninguna, se asigna la localidad cuyo borde esté a `tolerancia_m` o menos (por defecto, el lado de la celda) y el
+    criterio es «cercana». Más lejos queda vacío (mar o fuera de los límites). Si un punto cae en más de una localidad
+    (solapes en el borde), gana la de menor id, para que sea determinista."""
+    lat, lon = np.asarray(lat, dtype=float), np.asarray(lon, dtype=float)
+    ordenadas = sorted(localidades, key=lambda l: l.osm_id)
+    nombre = np.full(len(lat), "", dtype=object)
+    rel = np.full(len(lat), "", dtype=object)
+    criterio = np.full(len(lat), "", dtype=object)
+    libre = np.ones(len(lat), dtype=bool)
+    for loc in ordenadas:
+        dentro = contained_mask(lat, lon, loc) & libre
+        nombre[dentro], rel[dentro], criterio[dentro] = loc.nombre, str(loc.osm_id), "dentro"
+        libre &= ~dentro
+    if libre.any():
+        idx = np.nonzero(libre)[0]
+        mejor_d = np.full(len(idx), np.inf)
+        for loc in ordenadas:
+            d = distance_to_boundary_m(lat[idx], lon[idx], loc)
+            mejor = d < mejor_d
+            mejor_d = np.where(mejor, d, mejor_d)
+            nombre[idx[mejor]], rel[idx[mejor]] = loc.nombre, str(loc.osm_id)
+        cerca = mejor_d <= tolerancia_m
+        criterio[idx[cerca]] = "cercana"
+        nombre[idx[~cerca]], rel[idx[~cerca]] = "", ""
+    return pd.DataFrame({"localidad": nombre, "osm_relacion": rel, "criterio": criterio})
+
+
+# ---------------------------------------------------------------------------
+# Archivos
+# ---------------------------------------------------------------------------
+def write_places(out_dir, tabla: pd.DataFrame, procedencia: Dict) -> Dict:
+    """Escribe cell_places.csv (columnas cell_id, localidad, osm_relacion, criterio) y su manifiesto; devuelve el
+    manifiesto."""
+    directorio = Path(out_dir)
+    directorio.mkdir(parents=True, exist_ok=True)
+    ruta = directorio / ARCHIVOS["places"]
+    tabla = tabla[["cell_id", "localidad", "osm_relacion", "criterio"]].sort_values("cell_id")
+    tabla.to_csv(ruta, index=False, lineterminator="\n", encoding="utf-8")
+    completo = dict(procedencia)
+    completo.update(
+        {
+            "formato": FORMATO,
+            "atribucion": ATRIBUCION,
+            "filas": int(len(tabla)),
+            "sin_localidad": int((tabla["localidad"] == "").sum()),
+            "por_cercania": int((tabla["criterio"] == "cercana").sum()),
+            "sha256": file_hash(ruta),
+        }
+    )
+    (directorio / ARCHIVOS["manifest"]).write_text(
+        json.dumps(completo, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+    )
+    return completo
+
+
+def verify_places(out_dir) -> List[str]:
+    """Problemas de cell_places.csv respecto a su manifiesto (lista vacía = íntegro)."""
+    directorio = Path(out_dir)
+    try:
+        manifiesto = json.loads((directorio / ARCHIVOS["manifest"]).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return [f"no se pudo leer el manifiesto de localidades: {e}"]
+    ruta = directorio / ARCHIVOS["places"]
+    if manifiesto.get("formato") != FORMATO:
+        return [f"formato {manifiesto.get('formato')!r}, se esperaba {FORMATO}"]
+    if not ruta.exists():
+        return [f"falta {ARCHIVOS['places']}"]
+    if file_hash(ruta) != manifiesto.get("sha256"):
+        return [f"{ARCHIVOS['places']}: el contenido no coincide con el hash del manifiesto"]
+    return []
+
+
+def read_places(out_dir) -> Optional[pd.Series]:
+    """Serie cell_id → localidad (cadena vacía si ninguna), o None si el archivo falta o no coincide con su manifiesto.
+    Sin localidades la pantalla sigue funcionando con la zona de referencia."""
+    if verify_places(out_dir):
+        return None
+    tabla = pd.read_csv(Path(out_dir) / ARCHIVOS["places"], dtype=str, keep_default_na=False, na_values=[]).set_index(
+        "cell_id"
+    )
+    return tabla["localidad"]

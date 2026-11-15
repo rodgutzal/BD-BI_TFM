@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 from src.ml import business_profiles as bp  # noqa: E402
 from src.ml import grid, panorama  # noqa: E402
 from src.ml import panorama_view as pv  # noqa: E402
+from src.ml import places
 from src.ml.cell_counts import CellCounts, selector, selector_except  # noqa: E402
 
 DATA_ML = ROOT / "data" / "ml"
@@ -277,3 +278,109 @@ def test_el_modulo_no_importa_scikit_learn():
         "sys.exit(1 if any(m.split('.')[0] == 'sklearn' for m in sys.modules) else 0)"
     )
     assert subprocess.run([sys.executable, "-c", codigo, str(ROOT)]).returncode == 0
+
+
+# ---- lugar, celdas por zona y exportación ----------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def vista_comida(datos):
+    guardado, conteos = datos
+    return pv.attach_places(pv.compute_view(conteos, FOOD, guardado, "food_drink"), places.read_places(DATA_ML))
+
+
+def test_el_radio_de_la_zona_es_el_del_puntaje_por_zona():
+    """Las celdas de una zona se toman con el mismo radio con el que el puntaje cuenta su competencia."""
+    from src.location_scoring import DEFAULT_POI_RADIUS_M
+
+    assert pv.RADIO_ZONA_M == DEFAULT_POI_RADIUS_M
+
+
+def test_attach_places_rotula_con_la_localidad_y_sin_ella_queda_vacia(vista_comida):
+    assert vista_comida["localidad"].ne("").mean() > 0.95
+    sin = pv.attach_places(vista_comida.drop(columns="localidad"), None)
+    assert (sin["localidad"] == "").all()
+    fila = vista_comida[vista_comida["localidad"] != ""].iloc[0]
+    assert pv.cell_label(fila.name, fila).startswith(f"{fila['localidad']} · {fila.name} (zona de referencia: ")
+    assert pv.cell_label(fila.name, sin.loc[fila.name]).startswith(f"{fila.name} · {fila['zona_cercana']} (")
+
+
+def test_zone_cells_son_las_del_radio_y_una_celda_puede_estar_en_dos_zonas(vista_comida):
+    from src.locations import LOCATIONS
+
+    msida = pv.zone_cells(vista_comida, "Msida")
+    d = grid.haversine_m(
+        LOCATIONS["Msida"].latitude,
+        LOCATIONS["Msida"].longitude,
+        vista_comida["lat"].to_numpy(),
+        vista_comida["lon"].to_numpy(),
+    )
+    assert msida.sum() == (d <= pv.RADIO_ZONA_M).sum() > 0
+    assert (msida & pv.zone_cells(vista_comida, "Gzira")).any()  # están a menos de 1,5 km: se solapan
+    with pytest.raises(ValueError):
+        pv.zone_cells(vista_comida, "Atlantis")
+
+
+def test_candidate_cells_pone_las_estrella_primero_y_excluye_la_confianza_baja(vista_comida):
+    sub = pv.candidate_cells(vista_comida, "Valletta")
+    assert (
+        len(sub) > 0
+        and (sub["confianza_nivel"] != "baja").all()
+        and pv.zone_cells(vista_comida, "Valletta")[sub.index].all()
+    )
+    estrella = list(sub["oportunidad"])
+    assert estrella == sorted(estrella, reverse=True)  # primero las ★, luego el resto
+    resto = sub.loc[~sub["oportunidad"], "mercado_total"].dropna()
+    assert resto.is_monotonic_decreasing  # y por mercado de mayor a menor
+    assert set(pv.candidate_cells(vista_comida, "Valletta").index) <= set(pv.candidate_cells(vista_comida, None).index)
+
+
+def test_candidates_table_trae_lugar_lentes_y_enlace(vista_comida):
+    tabla = pv.candidates_table(pv.candidate_cells(vista_comida, "Valletta").head(5))
+    assert list(tabla.columns) == [
+        "★",
+        "Lugar",
+        "Competencia directa",
+        "Mercado (0-1)",
+        "Proveedores",
+        "Confianza",
+        "Mapa",
+    ]
+    assert tabla.index.name == "Celda" and tabla["Mapa"].str.startswith("https://www.openstreetmap.org/?mlat=").all()
+    assert (tabla["Lugar"] != "").all()
+
+
+def test_zone_summary_tiene_una_fila_por_zona_con_las_estrella_que_hay(vista_comida):
+    from src.locations import LOCATIONS
+
+    resumen = pv.zone_summary(vista_comida)
+    assert list(resumen.index) == list(LOCATIONS)
+    assert (resumen["Celdas activas"] > 0).all()
+    assert (resumen["Celdas ★"] <= resumen["Celdas activas"]).all()
+    for zona in resumen.index:  # coincide con contarlas a mano
+        dentro = pv.zone_cells(vista_comida, zona)
+        assert resumen.loc[zona, "Celdas ★"] == pv.opportunity_mask(vista_comida)[dentro].sum()
+
+
+def test_export_frame_lleva_el_perfil_y_solo_las_celdas_pedidas(vista_comida):
+    ids = list(pv.candidate_cells(vista_comida, "Valletta").index[:3])
+    df = pv.export_frame(vista_comida, ids + ["r99c99"], FOOD)  # un id que no existe se ignora
+    assert list(df.index) == ids and df.index.name == "cell_id"
+    assert (df["perfil"] == FOOD.nombre).all() and not df["perfil_personalizado"].any()
+    assert {
+        "localidad",
+        "lat",
+        "lon",
+        "competencia_directa",
+        "mercado_total",
+        "confianza_nivel",
+        "enlace_mapa",
+        "fuente",
+    } <= set(df.columns)
+    assert df["fuente"].str.contains("OpenStreetMap").all()
+
+
+def test_export_csv_se_puede_releer_con_acentos(vista_comida):
+    ids = list(pv.candidate_cells(vista_comida, None).index[:4])
+    datos = pv.export_csv(pv.export_frame(vista_comida, ids, FOOD))
+    assert datos.startswith(b"\xef\xbb\xbf")  # BOM para Excel
+    releido = pd.read_csv(__import__("io").BytesIO(datos), encoding="utf-8-sig", index_col="cell_id")
+    assert list(releido.index) == ids and releido["localidad"].notna().all()

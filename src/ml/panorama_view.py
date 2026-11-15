@@ -13,6 +13,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
+from src.locations import LOCATIONS
+from src.ml import grid
 from src.ml.business_profiles import (
     PROVEEDORES_POI,
     SEGMENTOS_POI,
@@ -165,7 +167,116 @@ def opportunity_mask(vista: pd.DataFrame) -> pd.Series:
 
 
 def cell_label(cell_id: str, fila: pd.Series) -> str:
+    """Etiqueta de la celda: con localidad (si la vista la trae) «Qormi · r23c20 (zona de referencia: Msida, 1500 m)»;
+    sin ella, como antes."""
+    localidad = fila.get("localidad", "") if hasattr(fila, "get") else ""
+    if isinstance(localidad, str) and localidad:
+        return f"{localidad} · {cell_id} (zona de referencia: {fila['zona_cercana']}, {fila['dist_zona_m']:.0f} m)"
     return f"{cell_id} · {fila['zona_cercana']} ({fila['dist_zona_m']:.0f} m del centro de zona)"
+
+
+# ---------------------------------------------------------------------------
+# Lugar, celdas por zona y exportación
+# ---------------------------------------------------------------------------
+RADIO_ZONA_M = 1500.0  # el mismo radio con el que el puntaje por zona cuenta su competencia (location_scoring)
+MAX_FILAS_TABLA = 15
+FUENTE_DATOS = "© colaboradores de OpenStreetMap (ODbL)"
+
+
+def attach_places(vista: pd.DataFrame, lugares: Optional[pd.Series]) -> pd.DataFrame:
+    """Añade `localidad` (consejo local de OSM que contiene la celda; vacía si no se conoce). Sin `lugares` (archivo
+    ausente o alterado) todas quedan vacías y la pantalla rotula con la zona de referencia."""
+    out = vista.copy()
+    out["localidad"] = lugares.reindex(out.index).fillna("") if lugares is not None else ""
+    return out
+
+
+def map_link(lat: float, lon: float) -> str:
+    return f"https://www.openstreetmap.org/?mlat={lat:.5f}&mlon={lon:.5f}#map=18/{lat:.5f}/{lon:.5f}"
+
+
+def zone_cells(vista: pd.DataFrame, zona: str) -> pd.Series:
+    """Máscara de las celdas cuyo centro está a `RADIO_ZONA_M` o menos del centro de la zona. Una celda puede caer en
+    varias zonas (Msida, Gzira, Sliema y St Julian's están a menos de 1,5 km entre sí): no se reparte."""
+    if zona not in LOCATIONS:
+        raise ValueError(f"Zona desconocida: {zona!r}")
+    loc = LOCATIONS[zona]
+    d = grid.haversine_m(loc.latitude, loc.longitude, vista["lat"].to_numpy(), vista["lon"].to_numpy())
+    return pd.Series(d <= RADIO_ZONA_M, index=vista.index)
+
+
+def candidate_cells(vista: pd.DataFrame, zona: Optional[str] = None) -> pd.DataFrame:
+    """Celdas para revisar primero: las de la zona (todas si `zona` es None) con confianza no baja, ★ primero y luego por
+    mercado de mayor a menor. NO es un puntaje: ★ es el filtro de siempre y el resto, solo el orden de una lente. Trae
+    `oportunidad` (bool)."""
+    dentro = zone_cells(vista, zona) if zona else pd.Series(True, index=vista.index)
+    sub = vista[dentro & (vista["confianza_nivel"] != "baja")].copy()
+    sub["oportunidad"] = opportunity_mask(vista).reindex(sub.index)
+    return sub.sort_values(["oportunidad", "mercado_total"], ascending=[False, False], kind="stable")
+
+
+def candidates_table(sub: pd.DataFrame) -> pd.DataFrame:
+    """Tabla legible de `candidate_cells`, indexada por cell_id."""
+    tabla = pd.DataFrame(
+        {
+            "★": sub["oportunidad"].map({True: "★", False: ""}),
+            "Lugar": [loc if loc else f"cerca de {zona}" for loc, zona in zip(sub["localidad"], sub["zona_cercana"])],
+            "Competencia directa": sub["competencia_directa"],
+            "Mercado (0-1)": sub["mercado_total"],
+            "Proveedores": sub["proveedores_total"],
+            "Confianza": sub["confianza_nivel"],
+            "Mapa": [map_link(la, lo) for la, lo in zip(sub["lat"], sub["lon"])],
+        },
+        index=sub.index,
+    )
+    tabla.index.name = "Celda"
+    return tabla
+
+
+def zone_summary(vista: pd.DataFrame) -> pd.DataFrame:
+    """Las lentes resumidas por zona (celdas a `RADIO_ZONA_M` o menos): celdas activas, cuántas son ★, mediana de cada
+    lente y confianza media. Indexada por zona. Mediana, no suma: las zonas tienen distinto número de celdas."""
+    estrella = opportunity_mask(vista)
+    filas = {}
+    for zona in LOCATIONS:
+        dentro = zone_cells(vista, zona)
+        sub = vista[dentro]
+        filas[zona] = {
+            "Celdas activas": int(dentro.sum()),
+            "Celdas ★": int(estrella[dentro].sum()),
+            "Competencia directa (mediana)": sub["competencia_directa"].median(),
+            "Mercado (índice mediano)": sub["mercado_total"].median(),
+            "Proveedores (mediana)": sub["proveedores_total"].median(),
+            "Confianza (media, 0-1)": sub["confianza"].mean(),
+        }
+    out = pd.DataFrame.from_dict(filas, orient="index")
+    out.index.name = "Zona"
+    return out
+
+
+def export_frame(vista: pd.DataFrame, ids: Sequence[str], perfil: BusinessProfile) -> pd.DataFrame:
+    """Filas de `ids` listas para exportar: identificación, lentes y percentiles del perfil usado, confianza y enlace."""
+    sub = vista.loc[[i for i in ids if i in vista.index]]
+    lentes = [
+        c for c in sub.columns if c.startswith(("competencia_", "mercado_", "proveedores_")) and sub[c].notna().any()
+    ]
+    pcts = [c for c in sub.columns if c.startswith("pct_")]
+    out = pd.DataFrame(index=sub.index)
+    out["localidad"] = sub["localidad"] if "localidad" in sub else ""
+    out["zona_referencia"], out["dist_zona_m"] = sub["zona_cercana"], sub["dist_zona_m"]
+    out["lat"], out["lon"] = sub["lat"], sub["lon"]
+    out = pd.concat([out, sub[lentes + pcts + ["confianza", "confianza_nivel", "pois_vecindad"]]], axis=1)
+    out["oportunidad_estrella"] = opportunity_mask(vista).reindex(sub.index)
+    out["perfil"], out["perfil_personalizado"] = perfil.nombre, bool(perfil.personalizado)
+    out["enlace_mapa"] = [map_link(la, lo) for la, lo in zip(sub["lat"], sub["lon"])]
+    out["fuente"] = FUENTE_DATOS
+    out.index.name = "cell_id"
+    return out
+
+
+def export_csv(df: pd.DataFrame) -> bytes:
+    """CSV en UTF-8 con BOM (Excel lee bien los acentos)."""
+    return df.to_csv(float_format="%.6g", lineterminator="\n").encode("utf-8-sig")
 
 
 def layer_values(vista: pd.DataFrame, capa: str) -> Tuple[pd.Series, str]:
