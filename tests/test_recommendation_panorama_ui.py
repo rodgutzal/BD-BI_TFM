@@ -453,7 +453,6 @@ def test_la_descarga_solo_aparece_tras_confirmar_la_seleccion():
     marcar(at, [0, 2])  # AppTest no conserva la selección de una tabla entre ejecuciones: se repite al pulsar
     boton(at, "Confirmar selección (2)").click().run()
     assert not at.exception and descargas(at) == ["⬇️ Descargar CSV de 2 celda(s) confirmada(s)"]
-    from src.ml import panorama
     from streamlit_app.dashboards import panorama_section as ps
 
     guardado, counts, _ = ps.load_data(ROOT / "data" / "ml")
