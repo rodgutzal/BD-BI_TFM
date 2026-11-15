@@ -9,6 +9,8 @@ Los datos vienen de data/ml/ (tabla precalculada por tools/build_panorama.py en 
 entrena nada ni se importa scikit-learn. Al ajustar el perfil, las lentes se recalculan desde los conteos precalculados.
 """
 
+import hashlib
+import html
 import sys
 from pathlib import Path
 from typing import Optional
@@ -19,8 +21,10 @@ import streamlit as st
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
+from src.locations import LOCATIONS
 from src.ml import panorama
 from src.ml import panorama_view as pv
+from src.ml import places
 from src.ml.business_profiles import DEFAULT_PROFILES
 
 DATA_ML = ROOT_DIR / "data" / "ml"
@@ -35,6 +39,20 @@ def _cargar_guardado(ruta: str, firma: str):
 @st.cache_resource(show_spinner=False)
 def _cargar_conteos(ruta: str, firma: str):
     return panorama.read_counts(ruta)
+
+
+@st.cache_data(show_spinner=False)
+def _cargar_lugares(ruta: str, firma: str):
+    return places.read_places(ruta)
+
+
+def load_places(ruta: Path):
+    """Serie cell_id → localidad de data/ml/cell_places.csv, o None si falta o no coincide con su manifiesto (entonces las
+    celdas se rotulan con la zona de referencia, como antes)."""
+    manifiesto = ruta / places.ARCHIVOS["manifest"]
+    if not manifiesto.exists():
+        return None
+    return _cargar_lugares(str(ruta), manifiesto.read_text(encoding="utf-8"))
 
 
 def load_data(ruta: Path):
@@ -101,7 +119,7 @@ def build_map(vista, capa: str, seleccionada: Optional[str]):
     valores, titulo = pv.layer_values(vista, capa)
     con, sin = vista[valores.notna()], vista[valores.isna()]
     textos = [
-        f"{i} · {r.zona_cercana}<br>{titulo}: {v:.2f}<br>Confianza: {r.confianza_nivel}"
+        f"{i} · {html.escape(getattr(r, 'localidad', '') or r.zona_cercana)}<br>{titulo}: {v:.2f}<br>Confianza: {r.confianza_nivel}"
         for i, r, v in zip(con.index, con.itertuples(), valores[con.index])
     ]
     fig = go.Figure()
@@ -170,9 +188,12 @@ def _valor(x, formato="{:.2f}"):
 
 
 def render_cell_card(fila, perfil, brecha_disponible: bool, perfil_personalizado: bool):
+    localidad = fila.get("localidad", "")
+    lugar = f"{localidad} · " if isinstance(localidad, str) and localidad else ""
     st.markdown(
-        f"##### Ficha de la celda {fila.name} · zona más cercana: {fila['zona_cercana']} ({fila['dist_zona_m']:.0f} m)"
+        f"##### Ficha de la celda {fila.name} · {lugar}zona de referencia: {fila['zona_cercana']} ({fila['dist_zona_m']:.0f} m)"
     )
+    st.caption(f"[Ver la celda en OpenStreetMap]({pv.map_link(fila['lat'], fila['lon'])})")
     c1, c2, c3 = st.columns(3)
     c1.markdown("**Competencia**")
     c1.write(f"Directa: {_valor(fila['competencia_directa'])} · indirecta: {_valor(fila['competencia_indirecta'])}")
@@ -209,8 +230,133 @@ def render_cell_card(fila, perfil, brecha_disponible: bool, perfil_personalizado
         )
 
 
-def render_panorama_section(categoria: str, data_dir: Optional[Path] = None):
-    """Sección completa para una categoría de Overpass (food_drink, business, hospital, school, sport, leisure o mall)."""
+COLUMNAS_TABLA = {
+    "Competencia directa": st.column_config.NumberColumn(format="%.2f"),
+    "Mercado (0-1)": st.column_config.NumberColumn(format="%.2f"),
+    "Proveedores": st.column_config.NumberColumn(format="%.1f"),
+    "Mapa": st.column_config.LinkColumn("Mapa", display_text="Abrir"),
+}
+
+
+def firma_tabla(tabla) -> str:
+    """Huella corta de las celdas (y su orden) de la tabla, para la clave de su selección."""
+    return hashlib.md5("|".join(map(str, tabla.index)).encode("utf-8")).hexdigest()[:10]
+
+
+def render_candidate_cells(vista, perfil, categoria: str, zona: Optional[str], destino=None):
+    """Tabla de celdas de la zona recomendada (o de todas, sin zona) con las tres lentes, enlace al mapa y exportación a
+    CSV en dos pasos: el usuario marca filas, pulsa «Confirmar selección» y solo entonces aparece la descarga."""
+    zona = zona if zona in LOCATIONS else None  # una zona que el panorama no conoce no debe romper la sección
+    with destino if destino is not None else st.container():
+        ambito = f"la zona {zona}" if zona else "todas las zonas"
+        st.markdown(f"#### 📍 Celdas de {ambito}: dónde mirar primero")
+        candidatas = pv.candidate_cells(vista, zona)
+        if candidatas.empty:
+            st.info(
+                f"No hay celdas con confianza de datos media o alta en {ambito}. Mira el panorama completo más abajo."
+            )
+            return
+        todas = st.toggle(
+            f"Ver las {len(candidatas)} celdas (no solo las {pv.MAX_FILAS_TABLA} primeras)",
+            value=False,
+            key=f"pano_todas_{categoria}",
+            disabled=len(candidatas) <= pv.MAX_FILAS_TABLA,
+        )
+        mostradas = candidatas if todas else candidatas.head(pv.MAX_FILAS_TABLA)
+        tabla = pv.candidates_table(mostradas)
+        n_estrella = int(candidatas["oportunidad"].sum())
+        st.caption(
+            f"Radio de la zona: {pv.RADIO_ZONA_M:.0f} m desde su centro (el mismo con el que se cuenta su competencia); "
+            f"solo celdas con confianza media o alta. ★ = mercado alto y competencia baja: **{n_estrella}** en {ambito}. "
+            "El resto va ordenado por mercado, de mayor a menor. **No es un puntaje**: pulsa el título de una columna para "
+            "ordenar por otra lente."
+        )
+        # La clave lleva las celdas (y su orden) que muestra la tabla: la selección es por POSICIÓN de fila, así que si la
+        # tabla cambia (zona, perfil, «ver todas») se empieza sin filas marcadas en vez de marcar otras celdas.
+        clave = f"pano_top_{categoria}_{firma_tabla(tabla)}"
+        evento = st.dataframe(
+            tabla,
+            column_config=COLUMNAS_TABLA,
+            on_select="rerun",
+            selection_mode="multi-row",
+            key=clave,
+            width="stretch",
+        )
+        posiciones = [p for p in (evento.selection.rows if evento is not None else []) if 0 <= p < len(tabla)]
+        marcadas = list(tabla.index[posiciones])
+        confirmada_clave = f"pano_conf_{categoria}"
+        firma_confirmacion = f"{zona}|{perfil!r}"
+        if st.button(
+            f"Confirmar selección ({len(marcadas)}) y preparar CSV",
+            disabled=not marcadas,
+            key=f"pano_confirmar_{categoria}",
+            help="Marca una o más filas de la tabla; el CSV se prepara solo al confirmar.",
+        ):
+            st.session_state[confirmada_clave] = {"ids": marcadas, "firma": firma_confirmacion}
+        if not marcadas:
+            st.caption("Marca filas de la tabla para exportarlas.")
+        guardada = st.session_state.get(confirmada_clave)
+        if guardada and guardada["firma"] != firma_confirmacion:
+            # Cambió la zona o el perfil: el CSV mezclaría la selección vieja con lentes de otro perfil.
+            del st.session_state[confirmada_clave]
+            st.caption(
+                "Se descartó la selección confirmada porque cambiaron la zona o el perfil: vuelve a elegir y confirmar."
+            )
+            guardada = None
+        confirmadas = [c for c in (guardada["ids"] if guardada else []) if c in vista.index]
+        if confirmadas:
+            if set(marcadas) != set(confirmadas):
+                st.caption(
+                    "La selección de la tabla cambió desde la última confirmación: vuelve a confirmar para actualizarla."
+                )
+            datos = pv.export_csv(pv.export_frame(vista, confirmadas, perfil))
+            st.download_button(
+                f"⬇️ Descargar CSV de {len(confirmadas)} celda(s) confirmada(s)",
+                data=datos,
+                file_name=f"celdas_{categoria}.csv",
+                mime="text/csv",
+                key=f"pano_descarga_{categoria}",
+            )
+            st.caption(
+                "El CSV usa el perfil elegido (con tus ajustes, si los hay), e incluye lentes, percentiles, confianza y "
+                "enlace al mapa. Datos © colaboradores de OpenStreetMap (ODbL)."
+            )
+
+
+def render_zone_lenses(vista, destino=None):
+    """Las lentes resumidas por zona, para leerlas junto al desglose del puntaje por zona."""
+    with destino if destino is not None else st.container():
+        st.markdown("#### Lentes del panorama por zona")
+        resumen = pv.zone_summary(vista)
+        st.dataframe(
+            resumen,
+            column_config={
+                "Competencia directa (mediana)": st.column_config.NumberColumn(format="%.2f"),
+                "Mercado (índice mediano)": st.column_config.NumberColumn(format="%.2f"),
+                "Proveedores (mediana)": st.column_config.NumberColumn(format="%.1f"),
+                "Confianza (media, 0-1)": st.column_config.NumberColumn(format="%.2f"),
+            },
+            width="stretch",
+        )
+        st.caption(
+            f"Celdas activas a {pv.RADIO_ZONA_M:.0f} m o menos del centro de cada zona (una celda puede estar en varias). "
+            "Medianas, no sumas, porque las zonas tienen distinto número de celdas. Responde a tu perfil y es "
+            "información aparte del puntaje de arriba: no se combinan."
+        )
+
+
+def render_panorama_section(
+    categoria: str,
+    data_dir: Optional[Path] = None,
+    zona: Optional[str] = None,
+    destino_celdas=None,
+    destino_zonas=None,
+):
+    """Sección completa para una categoría de Overpass (food_drink, business, hospital, school, sport, leisure o mall).
+
+    `zona`: la zona recomendada por el puntaje; con ella la tabla de celdas se limita a esa zona. `destino_celdas` y
+    `destino_zonas`: contenedores de Streamlit creados antes (p. ej. justo bajo la zona recomendada) donde dibujar la
+    tabla de celdas y el resumen por zona; sin ellos se dibujan dentro de la sección."""
     ruta = Path(data_dir) if data_dir is not None else DATA_ML
     st.divider()
     st.subheader("🗺️ Panorama por celda de 250 m")
@@ -232,7 +378,9 @@ def render_panorama_section(categoria: str, data_dir: Optional[Path] = None):
     con_brecha = bool(guardado.loc[guardado["perfil"] == categoria, "brecha_relativa"].notna().any())
     perfil, avisos = render_profile_controls(categoria, base, counts, con_brecha)
     render_profile_status(perfil, base, avisos)
-    vista = pv.compute_view(counts, perfil, guardado, categoria)
+    vista = pv.attach_places(pv.compute_view(counts, perfil, guardado, categoria), load_places(ruta))
+    render_candidate_cells(vista, perfil, categoria, zona, destino_celdas)
+    render_zone_lenses(vista, destino_zonas)
 
     capas = pv.available_layers(vista)
     capa = st.radio("Qué mostrar en el mapa", capas, horizontal=True, key=f"pano_capa_{categoria}")

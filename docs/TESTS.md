@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**58 archivos · 1162 funciones de test · 1383 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1202 funciones de test · 1423 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -46,7 +46,8 @@
 | [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 36 | 36 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
-| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 25 | 25 |
+| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 35 | 35 |
+| [`tests/test_ml_places.py`](#teststest_ml_placespy) | 19 | 19 |
 | [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 43 | 56 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
@@ -59,7 +60,7 @@
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 28 | 28+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 39 | 39+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -1176,6 +1177,41 @@
 - `test_layer_values_devuelve_la_columna_correcta` — Cada capa muestra su columna; la de brecha, la brecha relativa.
 - `test_cell_label_incluye_celda_zona_y_distancia` — La etiqueta de la lista de celdas dice dónde está.
 - `test_el_modulo_no_importa_scikit_learn` — La interfaz usa este módulo en el contenedor del dashboard, que no carga scikit-learn.
+- `test_el_radio_de_la_zona_es_el_del_puntaje_por_zona` — Las celdas de una zona se toman con el mismo radio con el que el puntaje cuenta su competencia.
+- `test_attach_places_rotula_con_la_localidad_y_sin_ella_queda_vacia`
+- `test_zone_cells_son_las_del_radio_y_una_celda_puede_estar_en_dos_zonas`
+- `test_candidate_cells_pone_las_estrella_primero_y_excluye_la_confianza_baja`
+- `test_candidates_table_trae_lugar_lentes_y_enlace`
+- `test_zone_summary_tiene_una_fila_por_zona_con_las_estrella_que_hay`
+- `test_export_frame_lleva_el_perfil_y_solo_las_celdas_pedidas`
+- `test_export_csv_se_puede_releer_con_acentos`
+- `test_export_csv_conserva_las_coordenadas_con_precision_de_celda` — Regresión del code-review: con %.6g lat/lon perdían ~10 m (35,897432 → 35,8974).
+- `test_candidates_table_funciona_sin_la_columna_de_localidad`
+
+## `tests/test_ml_places.py`
+
+> Tests de la localidad de cada celda (src/ml/places.py y tools/build_cell_places.py): armado de límites desde la respuesta
+> de Overpass, punto en polígono con huecos, asignación por cercanía en la costa y archivos con manifiesto. Sin red.
+
+- `test_los_tramos_se_unen_en_un_anillo_cerrado_aunque_lleguen_desordenados_y_al_reves`
+- `test_una_relacion_sin_ningun_anillo_cerrado_se_conserva_vacia_y_marcada` — QA de Codex (menor): antes se descartaba en silencio y la herramienta no podía avisar de ella.
+- `test_solo_se_toman_las_relaciones_del_nivel_pedido_con_nombre`
+- `test_el_nombre_en_ingles_gana_al_local`
+- `test_un_punto_dentro_se_asigna_y_uno_lejos_queda_vacio`
+- `test_un_hueco_deja_fuera_el_punto_y_se_asigna_a_la_localidad_que_lo_ocupa`
+- `test_el_centro_en_el_mar_se_asigna_por_cercania_solo_dentro_de_la_tolerancia`
+- `test_la_distancia_al_borde_es_la_correcta`
+- `test_en_un_solape_gana_la_localidad_de_menor_id`
+- `test_escribir_y_leer_devuelve_la_localidad_por_celda`
+- `test_un_csv_alterado_o_ausente_no_se_lee`
+- `test_la_tabla_publicada_esta_integra_y_cubre_todas_las_celdas_del_panorama`
+- `test_la_consulta_es_una_sola_y_cubre_la_rejilla`
+- `test_el_dry_run_no_llama_a_la_red`
+- `test_la_herramienta_asigna_desde_una_respuesta_guardada` — Con una respuesta local (sin red) escribe el CSV y el manifiesto en el directorio indicado, sin tocar el panorama.
+- `test_sin_localidades_en_la_respuesta_no_se_escribe_nada`
+- `test_una_isla_dentro_de_un_hueco_de_la_misma_relacion_cuenta_como_dentro` — Regresión del code-review: los huecos se restaban de la unión de todos los anillos exteriores y borraban la isla.
+- `test_los_tramos_que_no_cierran_se_cuentan_para_avisar`
+- `test_la_publicada_no_tiene_limites_incompletos`
 
 ## `tests/test_ml_text_classifier.py`
 
@@ -1488,6 +1524,17 @@
 - `test_cambiar_de_negocio_no_arrastra_los_ajustes_del_anterior` — Los controles del panorama son propios de cada categoría: tras ajustar el perfil de un restaurante y buscar una farmacia, el perfil de la farmacia es el de por defecto.
 - `test_con_brecha_la_pantalla_si_menciona_el_modelo_de_brecha`
 - `test_una_categoria_sin_brecha_no_habla_del_modelo_aunque_otras_categorias_lo_tengan`
+- `test_la_seccion_con_zona_lista_sus_celdas_y_las_lentes_por_zona` — Con la zona recomendada, la tabla es de esa zona; el resumen por zona trae las 7.
+- `test_sin_zona_la_tabla_es_de_todas_las_zonas`
+- `test_sin_marcar_filas_no_se_puede_confirmar_ni_hay_descarga`
+- `test_la_descarga_solo_aparece_tras_confirmar_la_seleccion` — Marcar filas no basta: el CSV se prepara al pulsar «Confirmar», y es exactamente de las celdas marcadas.
+- `test_si_la_seleccion_cambia_despues_de_confirmar_se_avisa`
+- `test_el_toggle_amplia_la_tabla_de_15_filas_a_todas`
+- `test_la_pagina_pone_las_celdas_bajo_la_zona_recomendada_y_las_lentes_bajo_el_desglose`
+- `test_cambiar_el_perfil_descarta_la_seleccion_confirmada` — Regresión del code-review: el CSV se genera con el perfil vigente, así que una confirmación hecha con otro perfil mezclaría la selección vieja con lentes nuevas. Se descarta y se avisa.
+- `test_si_la_tabla_cambia_la_seleccion_de_filas_no_se_arrastra` — Regresión del code-review: la selección es por posición de fila. Marcar la 20 con «ver todas» y apagar el interruptor dejaba una posición fuera de la tabla (IndexError); ahora la tabla cambia de clave y empieza sin filas marcadas.
+- `test_una_zona_desconocida_no_rompe_la_seccion`
+- `test_el_hover_del_mapa_escapa_el_html_de_la_localidad` — La localidad viene de una fuente externa y editable: no se interpola como HTML en el hover de Plotly.
 
 ## `tests/test_strip_panorama_gap.py`
 

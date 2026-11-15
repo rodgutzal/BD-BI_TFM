@@ -245,10 +245,14 @@ def main():
 
     top_zone = out.index[0]
     st.metric("🏆 Zona recomendada", top_zone, f"puntaje {out['score'].iloc[0]:.3f}")
+    # Se reservan aquí, bajo la zona recomendada y bajo el desglose, los sitios de lo que calcula el panorama por celda
+    # (que depende del perfil, cuyos controles están más abajo): se rellenan al llegar a esa sección.
+    destino_celdas = st.container()
 
     render_score_map(out)
     st.markdown("#### Desglose por zona")
     render_results_table(out)
+    destino_zonas = st.container()
 
     if categoria == "food_drink":
         st.caption(
@@ -261,7 +265,7 @@ def main():
         "Nota: Msida, Gzira, Sliema y St Julian's están a menos de 1.500 m entre sí — "
         "sus conteos de competencia se solapan de forma natural, no es un error."
     )
-    render_panorama_section(categoria)
+    render_panorama_section(categoria, zona=top_zone, destino_celdas=destino_celdas, destino_zonas=destino_zonas)
 
 
 if __name__ == "__main__":
