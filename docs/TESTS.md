@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1265 funciones de test · 1486 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1266 funciones de test · 1487 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -58,7 +58,7 @@
 | [`tests/test_predictive_modeling_dashboard.py`](#teststest_predictive_modeling_dashboardpy) | 13 | 13 |
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
-| [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 10 | 10 |
+| [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 11 | 11 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
 | [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 72 | 72+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
@@ -1505,6 +1505,7 @@
 - `test_el_desglose_dice_cuanto_puso_cada_factor_y_suma_el_puntaje` — Con varios pesos el número final solo es creíble si se puede abrir: cada columna es peso × normalizado.
 - `test_filtrar_zonas_quita_filas_pero_no_cambia_los_puntajes` — La decisión del autor: el filtro no toca el puntaje, que sigue midiendo la posición entre las 7.
 - `test_filtrar_sin_zonas_o_con_desconocidas_no_rompe` — Sin filtro se devuelve todo; una zona que no existe simplemente no aparece.
+- `test_si_el_filtro_deja_la_tabla_vacia_no_se_lee_la_primera_fila` — QA de Codex: `out.index[0]` sobre una tabla vacía reventaría la pantalla. Hoy no se alcanza desde la interfaz, pero la función que filtra sí puede devolver vacío y quien la use debe poder comprobarlo.
 
 ## `tests/test_recommendation_interpretacion_ui.py`
 

@@ -177,3 +177,10 @@ def test_filtrar_sin_zonas_o_con_desconocidas_no_rompe(out):
     assert filter_zones(out, []).equals(out)
     assert list(filter_zones(out, ["Atlantis"]).index) == []
     assert list(filter_zones(out, ["Sliema", "Atlantis"]).index) == ["Sliema"]
+
+
+def test_si_el_filtro_deja_la_tabla_vacia_no_se_lee_la_primera_fila(out):
+    """QA de Codex: `out.index[0]` sobre una tabla vacía reventaría la pantalla. Hoy no se alcanza desde la interfaz,
+    pero la función que filtra sí puede devolver vacío y quien la use debe poder comprobarlo."""
+    vacio = filter_zones(out, ["Atlantis"])
+    assert vacio.empty and list(vacio.index) == []

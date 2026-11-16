@@ -464,6 +464,11 @@ def main():
     # todas, y elegir zonas solo quita filas en vez de cambiar las notas de las que quedan.
     todas = _cached_recommend(db, categoria, tuple(sorted(weights.items())))
     out = filter_zones(todas, zonas)
+    if out.empty:
+        # Hoy no se alcanza (el filtro solo ofrece las zonas conocidas y, si se vacía, vuelve a todas), pero leer la
+        # primera fila de una tabla vacía reventaría la pantalla entera en vez de decir qué pasa.
+        st.warning("Ninguna de las zonas elegidas tiene puntaje. Elige otras zonas.")
+        return
 
     top_zone = out.index[0]
     st.metric("🏆 Zona recomendada", top_zone, f"puntaje {out['score'].iloc[0]:.3f}")

@@ -913,16 +913,23 @@ def test_el_filtro_de_zonas_viene_con_todas_y_es_un_filtro_no_un_peso(pagina):
     assert list(zonas.value) == list(LOCATIONS)
     pagina.text_input[0].set_value("un restaurante")
     next(b for b in pagina.button if "Buscar" in b.label).click().run()
-    puntaje_completo = pagina.metric[0].value, pagina.metric[0].delta
+
+    def puntajes():
+        tabla = next(d.value for d in pagina.dataframe if "Zona" in getattr(d.value, "columns", []))
+        return tabla.set_index("Zona")["Puntaje"]
+
+    antes = puntajes()
 
     dos = ["Sliema", "Gzira"]
     next(m for m in pagina.multiselect if m.label == "Zonas a considerar").set_value(dos).run()
     assert not pagina.exception, [e.value for e in pagina.exception]
     assert pagina.metric[0].value in dos
     assert any("Comparando **2 de 7 zonas**" in c for c in textos(pagina.caption))
-    tabla = next(d for d in pagina.dataframe if "Zona" in getattr(d.value, "columns", []))
-    assert len(tabla.value) == 2
-    assert puntaje_completo[0] not in dos or True  # la zona ganadora puede cambiar; el puntaje de cada una, no
+    despues = puntajes()
+    assert list(despues.index) == sorted(dos, key=lambda z: -antes[z])  # solo quedan esas, y en el mismo orden
+    # QA de Codex: lo que de verdad hay que comprobar es que filtrar NO cambia la nota de las que quedan
+    for zona in dos:
+        assert despues[zona] == pytest.approx(antes[zona])
 
 
 def test_dejar_el_filtro_vacio_avisa_y_usa_todas(pagina):
