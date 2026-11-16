@@ -26,7 +26,8 @@ zona, marcado como corregido, no como observado directo. La constante es la
 
 import logging
 import math
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Dict, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -42,9 +43,103 @@ logger = logging.getLogger(__name__)
 # midió (cerca de Marsaskala, la menos densa de las 7).
 FOOD_DRINK_OSM_COVERAGE = 0.611
 
-DEFAULT_WEIGHTS = {"demanda": 0.40, "competencia": 0.35, "accesibilidad": 0.25}
 DEFAULT_POI_RADIUS_M = 1500  # mismo radio que ya se usa en foursquare_client.py
 DEFAULT_ROUTE_HOURS = 24 * 365 * 10  # "todo el histórico" (ver analyst_dashboard.py)
+
+
+@dataclass(frozen=True)
+class Criterio:
+    """Una dimensión del puntaje: de qué columna sale, hacia dónde es mejor y cómo se le explica al usuario.
+
+    `invertir` dice que MENOS es mejor (competencia, tiempo de viaje). Al normalizar se le da la vuelta, así que las
+    seis columnas acaban orientadas igual —más alto = mejor para el negocio— y los pesos se leen siempre como «cuánto
+    me importa esto», sin convenciones de signo que recordar."""
+
+    clave: str
+    etiqueta: str  # para el deslizador, donde cabe el matiz
+    corta: str  # para los encabezados de tabla, donde no
+    columna: str
+    invertir: bool
+    peso_defecto: float
+    ayuda: str
+
+
+# Las tres primeras salen de la base (demografía, POIs, rutas). Las tres últimas son lentes del panorama por celda,
+# agregadas por zona: existen solo si data/ml/ está disponible, y usan el perfil POR DEFECTO de la categoría.
+CRITERIOS = (
+    Criterio(
+        "demanda",
+        "Población (censo)",
+        "Población",
+        "demanda",
+        False,
+        0.30,
+        "Habitantes de la zona, de las cifras oficiales ya reconciliadas a un año común.",
+    ),
+    Criterio(
+        "competencia",
+        "Evitar competencia",
+        "Baja competencia",
+        "competencia",
+        True,
+        0.25,
+        "Negocios de la misma categoría a 1.500 m del centro de la zona. Menos es mejor.",
+    ),
+    Criterio(
+        "accesibilidad",
+        "Accesibilidad",
+        "Accesibilidad",
+        "tiempo_viaje_prom",
+        True,
+        0.20,
+        "Tiempo de viaje medio de las rutas que tocan la zona. Menos es mejor.",
+    ),
+    Criterio(
+        "mercado",
+        "Mercado por segmento (proxy OSM)",
+        "Mercado por segmento",
+        "mercado_mediana",
+        False,
+        0.10,
+        "Cuánto de lo que genera tus clientes (residentes, oficinistas, estudiantes, turistas, vida nocturna) hay en "
+        "las celdas de la zona. Es un proxy de OpenStreetMap, NO el censo: mide otra cosa que la población.",
+    ),
+    Criterio(
+        "proveedores",
+        "Proveedores cerca",
+        "Proveedores",
+        "proveedores_mediana",
+        False,
+        0.10,
+        "Proveedores del tipo que le importa a la categoría, en las celdas de la zona.",
+    ),
+    Criterio(
+        "diversidad",
+        "Diversidad de proveedores",
+        "Diversidad",
+        "diversidad_mediana",
+        False,
+        0.05,
+        "Qué fracción de los tipos de proveedor están presentes. Distingue «muchos de lo mismo» de «surtido completo».",
+    ),
+)
+POR_CLAVE = {c.clave: c for c in CRITERIOS}
+DEFAULT_WEIGHTS = {c.clave: c.peso_defecto for c in CRITERIOS}
+
+
+def criterios_disponibles(features: pd.DataFrame) -> Tuple[Criterio, ...]:
+    """Los criterios que esta tabla puede puntuar: su columna existe y alguna zona tiene dato. Sin `data/ml/` quedan
+    solo los tres de la base, y la pantalla ofrece esos."""
+    return tuple(c for c in CRITERIOS if c.columna in features and features[c.columna].notna().any())
+
+
+def pesos_por_defecto(criterios: Sequence[Criterio]) -> Dict[str, float]:
+    """Los pesos de fábrica de esos criterios, renormalizados para sumar 1: si faltan las lentes del panorama, los tres
+    de la base se reparten el total en la misma proporción."""
+    total = sum(c.peso_defecto for c in criterios)
+    if total <= 0:
+        return {c.clave: 1 / len(criterios) for c in criterios} if criterios else {}
+    return {c.clave: c.peso_defecto / total for c in criterios}
 
 
 def _haversine_m(lat1, lon1, lat2, lon2) -> float:
@@ -127,47 +222,96 @@ def _normalize_minmax(series: pd.Series) -> pd.Series:
 
 
 def build_zone_features(
-    db, category: str, radius_m: float = DEFAULT_POI_RADIUS_M, hours: int = DEFAULT_ROUTE_HOURS
+    db,
+    category: str,
+    radius_m: float = DEFAULT_POI_RADIUS_M,
+    hours: int = DEFAULT_ROUTE_HOURS,
+    medianas: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
-    """Una fila por zona con las 3 dimensiones crudas (sin normalizar)."""
+    """Una fila por zona con los criterios crudos (sin normalizar).
+
+    `medianas`: las lentes del panorama ya agregadas por zona (ver panorama_view.zone_lens_medians). Sin ellas la tabla
+    trae solo los tres criterios de la base y el puntaje usa esos."""
     df = zone_demand(db).join(zone_competition(db, category, radius_m)).join(zone_accessibility(db, hours))
+    if medianas is not None:
+        df = df.join(medianas)
     df["categoria"] = category
     return df
 
 
 def score_zones(features: pd.DataFrame, weights: Optional[Dict[str, float]] = None) -> pd.DataFrame:
-    """Normaliza y combina. Competencia y tiempo de viaje se invierten
-    (1 - normalizado) antes de ponderar: en las 3 dimensiones, "más alto
-    después de invertir = mejor para el negocio", así los pesos son
-    siempre positivos y se leen como "qué tanto importa cada cosa", sin
-    tener que recordar convenciones de signo."""
-    weights = weights or DEFAULT_WEIGHTS
+    """Normaliza y combina los criterios disponibles. Los de «menos es mejor» se invierten (1 - normalizado) antes de
+    ponderar, así todos quedan orientados igual.
+
+    Sin `weights` usa los de fábrica de los criterios disponibles, renormalizados: una tabla sin las lentes del
+    panorama se puntúa con los tres de la base, sin que el usuario tenga que saberlo. Con `weights` explícitos, nombrar
+    un criterio que esta tabla no puede puntuar es un error: callarlo daría un puntaje que no es el que se pidió.
+
+    Añade, por cada criterio puntuado, `<clave>_norm` (0-1, ya orientado) y `aporte_<clave>` (peso × normalizado), para
+    que la pantalla pueda enseñar de dónde sale cada puntaje en vez de un número suelto."""
+    disponibles = criterios_disponibles(features)
+    if weights is None:
+        weights = pesos_por_defecto(disponibles)
+    if not weights:
+        raise ValueError("No hay ningún criterio con datos para puntuar las zonas")
     if abs(sum(weights.values()) - 1.0) > 1e-6:
         raise ValueError(f"Los pesos deben sumar 1.0 (suman {sum(weights.values())})")
+    # Un criterio del que esta tabla no sabe nada (p. ej. accesibilidad sin rutas guardadas) se deja fuera y el resto se
+    # reparte su peso: puntuarlo con 0,5 para todas las zonas sería inventarse un dato. Se anota en el log, y la
+    # pantalla no llega aquí con criterios que no haya ofrecido.
+    claves = {c.clave for c in disponibles}
+    omitidos = sorted(k for k in weights if k not in claves)
+    if omitidos:
+        logger.warning("Criterios sin datos, se dejan fuera del puntaje: %s", ", ".join(omitidos))
+        weights = {k: v for k, v in weights.items() if k in claves}
+    if not weights:
+        raise ValueError("Ningún criterio de los pedidos tiene datos en esta tabla")
+    total = sum(weights.values())
+    if total <= 0:
+        raise ValueError("Todos los pesos son cero: no hay nada que puntuar")
+    weights = {k: v / total for k, v in weights.items()}
 
     df = features.copy()
-    df["demanda_norm"] = _normalize_minmax(df["demanda"])
-    df["competencia_norm"] = 1 - _normalize_minmax(df["competencia"])
-    df["accesibilidad_norm"] = 1 - _normalize_minmax(df["tiempo_viaje_prom"])
-
-    df["score"] = (
-        weights["demanda"] * df["demanda_norm"].fillna(0.5)
-        + weights["competencia"] * df["competencia_norm"].fillna(0.5)
-        + weights["accesibilidad"] * df["accesibilidad_norm"].fillna(0.5)
-    )
-    # Cuántas de las 3 dimensiones tenían dato real (no NaN) para esa zona,
-    # para poder avisar si un score se apoya en menos información que otro.
-    df["dimensiones_con_dato"] = df[["demanda", "competencia", "tiempo_viaje_prom"]].notna().sum(axis=1)
+    df["score"] = 0.0
+    for clave, peso in weights.items():
+        criterio = POR_CLAVE[clave]
+        norm = _normalize_minmax(df[criterio.columna])
+        if criterio.invertir:
+            norm = 1 - norm
+        df[f"{clave}_norm"] = norm
+        # «No lo sabemos» entra como neutral (0.5), no como el peor caso: una zona sin dato no debe hundirse por eso.
+        df[f"aporte_{clave}"] = peso * norm.fillna(0.5)
+        df["score"] = df["score"] + df[f"aporte_{clave}"]
+    # Cuántos de los criterios puntuados tenían dato real para esa zona, para avisar si un puntaje se apoya en menos
+    # información que otro.
+    columnas = [POR_CLAVE[k].columna for k in weights]
+    df["dimensiones_con_dato"] = df[columnas].notna().sum(axis=1)
+    df["criterios_puntuados"] = len(weights)
 
     return df.sort_values("score", ascending=False)
 
 
+def filter_zones(scored: pd.DataFrame, zonas: Optional[Sequence[str]]) -> pd.DataFrame:
+    """Deja solo las zonas elegidas. Se aplica DESPUÉS de puntuar, a propósito: así el puntaje de cada zona sigue
+    midiendo lo mismo (su posición entre las 7) y filtrar solo quita filas. Si normalizáramos sobre el subconjunto, el
+    mismo sitio cambiaría de nota según con quién se le compare, que es justo lo que confunde. `None` o vacío no
+    filtra."""
+    if not zonas:
+        return scored
+    elegidas = [z for z in zonas if z in scored.index]
+    return scored.loc[elegidas].sort_values("score", ascending=False)
+
+
 def recommend_for_category(
-    db, category: str, weights: Optional[Dict[str, float]] = None, radius_m: float = DEFAULT_POI_RADIUS_M
+    db,
+    category: str,
+    weights: Optional[Dict[str, float]] = None,
+    radius_m: float = DEFAULT_POI_RADIUS_M,
+    medianas: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """Features por zona y puntaje para una categoría ya decidida (ya sea interpretada del texto o elegida por el
-    usuario)."""
-    features = build_zone_features(db, category, radius_m)
+    usuario). `medianas`: las lentes del panorama por zona, si están disponibles."""
+    features = build_zone_features(db, category, radius_m, medianas=medianas)
     if features["demanda"].isna().all():
         logger.warning("Ninguna zona tiene demografía cargada — el score de demanda será neutral (0.5) para todas")
     return score_zones(features, weights)

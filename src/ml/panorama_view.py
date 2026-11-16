@@ -11,6 +11,7 @@ Qué hace:
 
 from typing import Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
 import pandas as pd
 
 from src.locations import LOCATIONS
@@ -262,6 +263,30 @@ def zone_summary(vista: pd.DataFrame) -> pd.DataFrame:
         }
     out = pd.DataFrame.from_dict(filas, orient="index")
     out.index.name = "Zona"
+    return out
+
+
+# Lente de celda → nombre de la columna por zona que consume el puntaje (src/location_scoring.py).
+LENTES_POR_ZONA = {
+    "mercado_total": "mercado_mediana",
+    "proveedores_total": "proveedores_mediana",
+    "proveedores_diversidad": "diversidad_mediana",
+}
+
+
+def zone_lens_medians(vista: pd.DataFrame) -> pd.DataFrame:
+    """Mediana de cada lente entre las celdas de cada zona, con los nombres que espera el puntaje por zona.
+
+    Mediana y no suma: las zonas tienen muy distinto número de celdas, y una suma premiaría a la más extensa en vez de
+    a la mejor. Una zona sin celdas con dato queda en NaN, que el puntaje trata como «no lo sabemos», no como cero."""
+    filas = {}
+    for zona in LOCATIONS:
+        sub = vista[zone_cells(vista, zona)]
+        filas[zona] = {
+            destino: (sub[origen].median() if origen in sub else np.nan) for origen, destino in LENTES_POR_ZONA.items()
+        }
+    out = pd.DataFrame.from_dict(filas, orient="index")
+    out.index.name = "zone_name"
     return out
 
 

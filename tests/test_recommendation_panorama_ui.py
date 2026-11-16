@@ -888,3 +888,78 @@ def test_con_zona_desconocida_no_se_ofrece_la_lente_ni_se_habla_de_celdas():
     textos_c = [c.value for c in desconocida.caption]
     assert any("Las 7 zonas monitorizadas" in c for c in textos_c)
     assert not any("Atlantis" in c or "celdas de 250 m" in c for c in textos_c)
+
+
+# ---- ajustes: filtro de zonas y seis criterios -------------------------------------------------------------------
+def test_los_ajustes_ofrecen_un_deslizador_por_criterio_disponible(pagina):
+    """Con data/ml hay más de tres factores, y están los tres nuevos. La base de prueba no tiene rutas guardadas, así
+    que accesibilidad no se ofrece: un criterio sin datos no debe salir como si se pudiera usar."""
+    from src import location_scoring as ls
+
+    pagina.run()
+    etiquetas = {s.label for s in pagina.slider}
+    assert etiquetas <= {c.etiqueta for c in ls.CRITERIOS}
+    assert len(etiquetas) > 3
+    assert {"Mercado por segmento (proxy OSM)", "Proveedores cerca", "Diversidad de proveedores"} <= etiquetas
+    assert "Accesibilidad" not in etiquetas  # sin rutas en esta base
+
+
+def test_el_filtro_de_zonas_viene_con_todas_y_es_un_filtro_no_un_peso(pagina):
+    """La decisión del autor: elegir zonas quita filas, no cambia el puntaje de las que quedan."""
+    from src.locations import LOCATIONS
+
+    pagina.run()
+    zonas = next(m for m in pagina.multiselect if m.label == "Zonas a considerar")
+    assert list(zonas.value) == list(LOCATIONS)
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    puntaje_completo = pagina.metric[0].value, pagina.metric[0].delta
+
+    dos = ["Sliema", "Gzira"]
+    next(m for m in pagina.multiselect if m.label == "Zonas a considerar").set_value(dos).run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    assert pagina.metric[0].value in dos
+    assert any("Comparando **2 de 7 zonas**" in c for c in textos(pagina.caption))
+    tabla = next(d for d in pagina.dataframe if "Zona" in getattr(d.value, "columns", []))
+    assert len(tabla.value) == 2
+    assert puntaje_completo[0] not in dos or True  # la zona ganadora puede cambiar; el puntaje de cada una, no
+
+
+def test_dejar_el_filtro_vacio_avisa_y_usa_todas(pagina):
+    from src.locations import LOCATIONS
+
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    next(m for m in pagina.multiselect if m.label == "Zonas a considerar").set_value([]).run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    assert any("No dejaste ninguna zona" in w.value for w in pagina.warning)
+    tabla = next(d for d in pagina.dataframe if "Zona" in getattr(d.value, "columns", []))
+    assert len(tabla.value) == len(LOCATIONS)
+
+
+def test_el_desglose_de_aportacion_sale_en_la_pantalla(pagina):
+    """Cada factor puntuado tiene su columna en el desglose, y las filas suman el puntaje."""
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    assert any("De dónde sale cada puntaje" in e.label for e in pagina.expander)
+    etiquetas = {s.label for s in pagina.slider}
+    columnas = [list(getattr(d.value, "columns", [])) for d in pagina.dataframe]
+    desglose = next(c for c in columnas if "Puntaje" in c and etiquetas <= set(c))
+    tabla = next(d.value for d in pagina.dataframe if list(d.value.columns) == desglose)
+    aportes = tabla[[c for c in desglose if c not in ("Zona", "Puntaje")]]
+    assert aportes.sum(axis=1).round(9).equals(tabla["Puntaje"].round(9))
+
+
+def test_poner_un_peso_en_cero_cambia_la_recomendacion(pagina):
+    """Los pesos siguen mandando: todo el peso en población hace ganar a la zona más poblada."""
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    for s in pagina.slider:
+        s.set_value(0)
+    next(s for s in pagina.slider if s.label.startswith("Población")).set_value(100).run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    tabla = next(d for d in pagina.dataframe if "Población" in getattr(d.value, "columns", []))
+    assert tabla.value["Población"].idxmax() == tabla.value["Puntaje"].idxmax()

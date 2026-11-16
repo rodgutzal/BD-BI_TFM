@@ -17,15 +17,24 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from src.database import RouteDatabase
-from src.location_scoring import DEFAULT_WEIGHTS, recommend_for_category
+from src.location_scoring import (
+    build_zone_features,
+    criterios_disponibles,
+    filter_zones,
+    pesos_por_defecto,
+    recommend_for_category,
+)
 from src.locations import LOCATIONS
 from src.ml import panorama_view as pv
+from src.ml.business_profiles import DEFAULT_PROFILES
 from src.ml.text_hibrido import CATEGORIAS, FUENTE_MODELO, Interpretacion, cargar_modelo_adoptado, interpretar
 from streamlit_app.dashboards import panorama_section as ps
 from streamlit_app.dashboards.maps_dashboard import POI_CATEGORY_STYLE
 from streamlit_app.dashboards.panorama_section import render_panorama_section
 
 _CACHE_TTL = 60
+# Para construir los controles antes de saber la categoría: qué criterios hay depende de los datos, no del negocio.
+CATEGORIA_SONDA = "food_drink"
 
 
 @st.cache_resource
@@ -42,14 +51,30 @@ def get_text_model():
     return cargar_modelo_adoptado()
 
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _medianas_por_zona(categoria: str):
+    """Las lentes del panorama agregadas por zona, con el perfil POR DEFECTO de la categoría.
+
+    El perfil por defecto es a propósito: el puntaje por zona se calcula ARRIBA, antes de que el usuario toque los
+    controles del panorama, que están más abajo. Atarlos crearía un círculo —el perfil cambiaría el puntaje, el puntaje
+    elige la zona, la zona filtra el panorama—. La pantalla lo dice. Devuelve None sin `data/ml/`."""
+    guardado, counts, _ = ps.load_data(ps.DATA_ML)
+    if guardado is None or categoria not in DEFAULT_PROFILES:
+        return None
+    return pv.zone_lens_medians(pv.compute_view(counts, DEFAULT_PROFILES[categoria], guardado, categoria))
+
+
 @st.cache_data(ttl=_CACHE_TTL, show_spinner="Calculando puntajes por zona...")
-def _cached_recommend(_db, categoria: str, w_demanda: float, w_competencia: float, w_accesibilidad: float):
-    """Envuelve recommend_for_category() para que Streamlit lo cachee por
-    separado según la categoría y los pesos. Los pesos van como 3 floats sueltos
-    (no un dict): un dict no sirve como parte de la clave de caché de
-    @st.cache_data de forma confiable."""
-    weights = {"demanda": w_demanda, "competencia": w_competencia, "accesibilidad": w_accesibilidad}
-    return recommend_for_category(_db, categoria, weights=weights)
+def _cached_recommend(_db, categoria: str, pesos: tuple):
+    """Envuelve recommend_for_category() para que Streamlit lo cachee por categoría y pesos. Los pesos van como una
+    tupla de pares (clave, peso) y no como dict: un dict no sirve como parte de la clave de caché de forma confiable."""
+    return recommend_for_category(_db, categoria, weights=dict(pesos), medianas=_medianas_por_zona(categoria))
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def _criterios(_db, categoria: str):
+    """Los criterios que se pueden puntuar hoy para esta categoría. Sin `data/ml/` son los tres de la base."""
+    return criterios_disponibles(build_zone_features(_db, categoria, medianas=_medianas_por_zona(categoria)))
 
 
 def etiqueta_categoria(categoria: str) -> str:
@@ -88,93 +113,137 @@ def render_interpretacion(texto: str, interpretacion: Interpretacion) -> str:
     return elegida
 
 
-def normalize_weights(w_demanda: float, w_competencia: float, w_accesibilidad: float) -> dict:
-    """Pesos relativos tal como vienen de los sliders (no hace falta que
-    sumen 100) -> dict normalizado a 1.0, como exige score_zones(). Si los
-    3 quedan en 0 (el usuario bajó todo), cae a los pesos por defecto en
-    vez de dividir por cero."""
-    total = w_demanda + w_competencia + w_accesibilidad
+def normalize_weights(crudos: dict, criterios) -> dict:
+    """Pesos tal como vienen de los deslizadores (no hace falta que sumen 100) -> dict normalizado a 1,0, como exige
+    score_zones(). Si el usuario lo baja todo a cero no hay nada que comparar: se vuelve a los de fábrica en vez de
+    dividir entre cero."""
+    total = sum(crudos.values())
     if total <= 0:
-        return dict(DEFAULT_WEIGHTS)
-    return {
-        "demanda": w_demanda / total,
-        "competencia": w_competencia / total,
-        "accesibilidad": w_accesibilidad / total,
-    }
+        return pesos_por_defecto(criterios)
+    return {clave: valor / total for clave, valor in crudos.items()}
 
 
-def render_weight_controls() -> dict:
-    with st.expander("⚙️ Ajustar qué tanto pesa cada factor"):
-        st.caption("Importancia relativa de cada factor — no hace falta que sumen 100, se normalizan solos.")
-        c1, c2, c3 = st.columns(3)
-        w_demanda = c1.slider("Demanda (población)", 0, 100, int(DEFAULT_WEIGHTS["demanda"] * 100))
-        w_competencia = c2.slider("Evitar competencia", 0, 100, int(DEFAULT_WEIGHTS["competencia"] * 100))
-        w_accesibilidad = c3.slider("Accesibilidad", 0, 100, int(DEFAULT_WEIGHTS["accesibilidad"] * 100))
-    return normalize_weights(w_demanda, w_competencia, w_accesibilidad)
-
-
-def build_results_table(out):
-    """Tabla de resultados con el desglose completo: para cada factor, el
-    valor CRUDO (lo medido) y el valor NORMALIZADO 0-1 que entra en el
-    puntaje. Nunca solo el número final.
-
-    Las tres columnas normalizadas están todas orientadas igual: "más alto =
-    mejor para el negocio". Por eso la de competencia aparece invertida
-    (1 = la zona con menos competencia) y la de accesibilidad también (1 = la
-    zona con menor tiempo de viaje). Una zona sin dato en un factor queda en
-    blanco ("sin dato") y el puntaje la trata como neutral (0.5) en ese factor.
-    """
-    return out.reset_index()[
-        [
-            "zone_name",
-            "score",
-            "demanda",
-            "demanda_norm",
-            "competencia_cruda",
-            "competencia",
-            "competencia_norm",
-            "tiempo_viaje_prom",
-            "accesibilidad_norm",
-            "dimensiones_con_dato",
-        ]
-    ].rename(
-        columns={
-            "zone_name": "Zona",
-            "score": "Puntaje",
-            "demanda": "Población",
-            "demanda_norm": "Demanda (0-1)",
-            "competencia_cruda": "Competencia (conteo real)",
-            "competencia": "Competencia (ajustada)",
-            "competencia_norm": "Baja competencia (0-1)",
-            "tiempo_viaje_prom": "Tiempo de viaje prom. (min)",
-            "accesibilidad_norm": "Accesibilidad (0-1)",
-            "dimensiones_con_dato": "Datos completos (de 3)",
-        }
+def render_zone_filter() -> list:
+    """Qué zonas entran en el ranking. Es un FILTRO, no un peso: no toca el puntaje, solo quita filas."""
+    elegidas = st.multiselect(
+        "Zonas a considerar",
+        list(LOCATIONS),
+        default=list(LOCATIONS),
+        help="Si solo te interesan algunas zonas, quédate con ellas. El puntaje de cada una no cambia.",
+        key="reco_zonas",
     )
+    if not elegidas:
+        st.warning("No dejaste ninguna zona: se muestran todas.")
+    return elegidas or list(LOCATIONS)
 
 
-def render_results_table(out):
-    tabla = build_results_table(out)
+def render_weight_controls(criterios) -> dict:
+    """Un deslizador por criterio disponible. Devuelve los pesos ya normalizados a 1."""
+    with st.expander("⚙️ Ajustar qué tanto pesa cada factor"):
+        st.caption(
+            "Importancia relativa de cada factor — no hace falta que sumen 100, se normalizan solos. Pon uno en 0 para "
+            "dejarlo fuera del puntaje."
+        )
+        crudos = {}
+        columnas = st.columns(2)
+        for i, criterio in enumerate(criterios):
+            crudos[criterio.clave] = columnas[i % 2].slider(
+                criterio.etiqueta,
+                0,
+                100,
+                int(criterio.peso_defecto * 100),
+                help=criterio.ayuda,
+                key=f"reco_peso_{criterio.clave}",
+            )
+        if len(criterios) < 4:
+            st.caption(
+                "Solo hay tres factores: faltan los datos por celda de `data/ml/` para ofrecer mercado por segmento, "
+                "proveedores y diversidad."
+            )
+        else:
+            st.caption(
+                "**Población** es el censo; **mercado por segmento** es un proxy de OpenStreetMap que mide otra cosa, "
+                "así que van por separado. Los tres últimos usan el perfil por defecto de la categoría: los ajustes del "
+                "panorama de más abajo no los cambian."
+            )
+    return normalize_weights(crudos, criterios)
+
+
+def build_contributions_table(out, criterios):
+    """Qué aportó cada criterio al puntaje de cada zona. Con seis pesos, el número final solo es creíble si se puede
+    abrir: cada columna es peso × valor normalizado, y la suma de la fila es el puntaje."""
+    columnas = {f"aporte_{c.clave}": c.etiqueta for c in criterios if f"aporte_{c.clave}" in out}
+    tabla = out[["score"] + list(columnas)].rename(columns={"score": "Puntaje", **columnas})
+    tabla.index.name = "Zona"
+    return tabla.reset_index()
+
+
+def render_contributions(out, criterios):
+    tabla = build_contributions_table(out, criterios)
+    with st.expander("🔍 De dónde sale cada puntaje"):
+        st.dataframe(
+            tabla.style.format({c: "{:.3f}" for c in tabla.columns if c != "Zona"}),
+            width="stretch",
+            hide_index=True,
+        )
+        st.caption(
+            "Cada columna es **peso × valor normalizado (0-1)** de ese factor; la fila suma el puntaje. Un factor sin "
+            "dato en una zona entra como neutral (0,5 × su peso), no como el peor caso."
+        )
+
+
+# Para los tres criterios de la base, el valor CRUDO también se enseña: son magnitudes que una persona reconoce
+# (habitantes, locales, minutos). Los tres del panorama son índices medianos de celdas, que en bruto no dicen nada:
+# de esos se enseña solo el 0-1 ya orientado.
+CRUDAS = {
+    "demanda": ("demanda", "Población"),
+    "competencia": ("competencia", "Competencia (ajustada)"),
+    "accesibilidad": ("tiempo_viaje_prom", "Tiempo de viaje prom. (min)"),
+}
+
+
+def build_results_table(out, criterios):
+    """Tabla de resultados con el desglose: para los factores medidos directamente, el valor CRUDO (lo medido) y el
+    NORMALIZADO 0-1 que entra en el puntaje; para los demás, el 0-1. Nunca solo el número final.
+
+    Todas las columnas (0-1) están orientadas igual: «más alto = mejor para el negocio». Por eso la de competencia
+    aparece invertida (1 = la zona con menos competencia) y la de accesibilidad también (1 = la de menor tiempo de
+    viaje). Una zona sin dato en un factor queda en blanco («sin dato») y el puntaje la trata como neutral (0,5)."""
+    columnas = {"zone_name": "Zona", "score": "Puntaje"}
+    for criterio in criterios:
+        if f"{criterio.clave}_norm" not in out:
+            continue  # criterio sin datos: no se puntuó, no se enseña
+        if criterio.clave == "competencia" and "competencia_cruda" in out:
+            columnas["competencia_cruda"] = "Competencia (conteo real)"
+        cruda = CRUDAS.get(criterio.clave)
+        if cruda and cruda[0] in out:
+            columnas[cruda[0]] = cruda[1]
+        columnas[f"{criterio.clave}_norm"] = f"{criterio.corta} (0-1)"
+    n = int(out["criterios_puntuados"].iloc[0]) if "criterios_puntuados" in out and len(out) else len(criterios)
+    columnas["dimensiones_con_dato"] = f"Datos completos (de {n})"
+    return out.reset_index()[list(columnas)].rename(columns=columnas)
+
+
+def render_results_table(out, criterios):
+    tabla = build_results_table(out, criterios)
+    formato = {
+        "Puntaje": "{:.3f}",
+        "Población": "{:,.0f}",
+        "Competencia (conteo real)": "{:,.0f}",
+        "Competencia (ajustada)": "{:.1f}",
+        "Tiempo de viaje prom. (min)": "{:.1f}",
+    }
+    formato.update({c: "{:.2f}" for c in tabla.columns if c.endswith("(0-1)")})
     st.dataframe(
-        tabla.style.format(
-            {
-                "Puntaje": "{:.3f}",
-                "Población": "{:,.0f}",
-                "Competencia (ajustada)": "{:.1f}",
-                "Tiempo de viaje prom. (min)": "{:.1f}",
-                "Demanda (0-1)": "{:.2f}",
-                "Baja competencia (0-1)": "{:.2f}",
-                "Accesibilidad (0-1)": "{:.2f}",
-            },
-            na_rep="sin dato",
-        ),
+        tabla.style.format({k: v for k, v in formato.items() if k in tabla.columns}, na_rep="sin dato"),
         width="stretch",
         hide_index=True,
     )
     st.caption(
-        "Las columnas (0-1) son los valores normalizados que entran en el puntaje; en las tres, "
+        f"Las columnas (0-1) son los valores normalizados que entran en el puntaje; en las {len(criterios)}, "
         "**más alto = mejor para el negocio** (por eso la competencia y el tiempo de viaje van invertidos). "
-        "Puntaje = suma ponderada de las tres columnas (0-1) con los pesos elegidos arriba."
+        "Puntaje = suma ponderada de esas columnas con los pesos elegidos arriba; ábrelo en «de dónde sale cada "
+        "puntaje» para ver cuánto puso cada factor."
     )
 
 
@@ -342,7 +411,11 @@ def main():
         "Describe el negocio que quieres abrir",
         placeholder="Ej.: una pizzería, un gimnasio, una farmacia, una tienda de ropa...",
     )
-    weights = render_weight_controls()
+    # Qué criterios hay depende de los DATOS (demografía, rutas, data/ml), no de la categoría, así que se pueden
+    # construir los controles antes de saber qué negocio es.
+    criterios = _criterios(db, CATEGORIA_SONDA)
+    zonas = render_zone_filter()
+    weights = render_weight_controls(criterios)
     buscar = st.button("🔍 Buscar mejor ubicación", type="primary")
 
     # Los resultados persisten al tocar los controles del panorama por celda (cada cambio vuelve a ejecutar la página y
@@ -369,10 +442,18 @@ def main():
         return
 
     categoria = render_interpretacion(texto, interpretacion)
-    out = _cached_recommend(db, categoria, weights["demanda"], weights["competencia"], weights["accesibilidad"])
+    # Se puntúan SIEMPRE las 7 zonas y después se filtran: así el puntaje de cada una sigue midiendo su posición entre
+    # todas, y elegir zonas solo quita filas en vez de cambiar las notas de las que quedan.
+    todas = _cached_recommend(db, categoria, tuple(sorted(weights.items())))
+    out = filter_zones(todas, zonas)
 
     top_zone = out.index[0]
     st.metric("🏆 Zona recomendada", top_zone, f"puntaje {out['score'].iloc[0]:.3f}")
+    if len(out) < len(todas):
+        st.caption(
+            f"Comparando **{len(out)} de {len(todas)} zonas**, las que elegiste arriba. El puntaje de cada una no "
+            "cambia por filtrar: sigue midiendo su posición entre las 7."
+        )
     # Se reservan aquí, bajo la zona recomendada y bajo el desglose, los sitios de lo que calcula el panorama por celda
     # (que depende del perfil, cuyos controles están más abajo): se rellenan al llegar a esa sección.
     destino_celdas = st.container()
@@ -381,7 +462,8 @@ def main():
     destino_mapa = st.container()
 
     st.markdown("#### Desglose por zona")
-    render_results_table(out)
+    render_results_table(out, criterios)
+    render_contributions(out, criterios)
     destino_zonas = st.container()
 
     if categoria == "food_drink":
@@ -389,8 +471,9 @@ def main():
             "⚠️ La competencia de restauración está corregida (Overpass ve ~61% de lo real, "
             "medido contra Foursquare en la zona menos densa) — es una estimación, no un conteo directo."
         )
-    if (out["dimensiones_con_dato"] < 3).any():
-        st.caption("⚠️ Alguna zona no tenía dato completo en una de las 3 dimensiones y se trató como neutral.")
+    puntuados = int(out["criterios_puntuados"].iloc[0])
+    if (out["dimensiones_con_dato"] < puntuados).any():
+        st.caption(f"⚠️ Alguna zona no tenía dato completo en uno de los {puntuados} factores y se trató como neutral.")
     st.caption(
         "Nota: Msida, Gzira, Sliema y St Julian's están a menos de 1.500 m entre sí — "
         "sus conteos de competencia se solapan de forma natural, no es un error."

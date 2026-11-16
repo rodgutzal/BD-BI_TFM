@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1243 funciones de test · 1464 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1261 funciones de test · 1482 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -36,7 +36,7 @@
 | [`tests/test_foursquare_client.py`](#teststest_foursquare_clientpy) | 12 | 28 |
 | [`tests/test_hybrid_scheduler.py`](#teststest_hybrid_schedulerpy) | 3 | 3 |
 | [`tests/test_license.py`](#teststest_licensepy) | 4 | 4 |
-| [`tests/test_location_scoring.py`](#teststest_location_scoringpy) | 25 | 25 |
+| [`tests/test_location_scoring.py`](#teststest_location_scoringpy) | 34 | 34 |
 | [`tests/test_locations.py`](#teststest_locationspy) | 5 | 5 |
 | [`tests/test_medallion.py`](#teststest_medallionpy) | 20 | 20 |
 | [`tests/test_merge_legacy_data.py`](#teststest_merge_legacy_datapy) | 1 | 1 |
@@ -58,9 +58,9 @@
 | [`tests/test_predictive_modeling_dashboard.py`](#teststest_predictive_modeling_dashboardpy) | 13 | 13 |
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
-| [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
+| [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 10 | 10 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 63 | 63+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 68 | 68+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -874,7 +874,7 @@
 - `test_competencia_food_drink_se_corrige_por_cobertura_de_osm` — En restauración y bares, la competencia se corrige dividiendo entre la cobertura de OpenStreetMap y lo indica en el método.
 - `test_competencia_sin_pois_es_cero` — Sin POIs, la competencia de todas las zonas es 0.
 - `test_accesibilidad_promedia_rutas_que_tocan_la_zona` — La accesibilidad de una zona es el tiempo de viaje medio de las rutas que la tocan; una zona sin rutas queda en NaN.
-- `test_pesos_por_defecto_suman_uno` — Los pesos por defecto suman 1 y valen 0,40, 0,35 y 0,25.
+- `test_pesos_por_defecto_suman_uno` — Los seis criterios tienen peso de fábrica y suman 1. Los tres de la base pesan más que las tres lentes del panorama: la población y la competencia son medidas directas, las lentes son proxies de OpenStreetMap.
 - `test_pesos_que_no_suman_uno_lanzan_error` — Unos pesos que no suman 1 lanzan `ValueError`.
 - `test_mas_demanda_mejora_el_puntaje` — A igualdad de lo demás, más demanda mejora el puntaje de la zona.
 - `test_mas_competencia_empeora_el_puntaje` — A igualdad de lo demás, más competencia empeora el puntaje.
@@ -888,6 +888,15 @@
 - `test_recomendar_con_modelo_usa_el_modelo_solo_si_las_palabras_clave_no_reconocen` — Un texto que las palabras clave no reconocen se interpreta con el modelo; uno que sí reconocen ignora al modelo.
 - `test_recomendar_sin_modelo_sigue_fallando_con_un_texto_que_las_palabras_clave_no_reconocen` — Sin modelo (el comportamiento por defecto) un texto desconocido da el mismo error de siempre.
 - `test_recomendar_por_categoria_da_lo_mismo_que_recomendar_por_texto` — `recommend_for_category` es la segunda mitad de `recommend_locations`: para la misma categoría, el mismo resultado.
+- `test_criterios_disponibles_son_los_que_tienen_columna_con_datos` — Sin las lentes del panorama quedan los tres de la base; con ellas, los seis.
+- `test_pesos_por_defecto_se_renormalizan_a_los_criterios_que_haya` — Sin data/ml, los tres de la base se reparten el total conservando sus proporciones.
+- `test_con_las_seis_dimensiones_el_puntaje_las_usa_todas`
+- `test_mas_proveedores_y_mas_diversidad_mejoran_el_puntaje` — Las lentes nuevas van en el sentido natural: más es mejor, sin invertir.
+- `test_un_criterio_sin_datos_se_deja_fuera_y_el_resto_se_reparte_su_peso` — Puntuarlo con 0,5 para todas sería inventarse un dato; se omite y se avisa en el log.
+- `test_si_ningun_criterio_pedido_tiene_datos_se_lanza_error`
+- `test_si_al_quitar_los_criterios_sin_datos_todo_lo_que_queda_pesa_cero_se_lanza_error` — Caso de borde: el único criterio con peso no tiene datos y el que sí los tiene pesa 0. No hay nada que ordenar.
+- `test_filtrar_zonas_no_cambia_el_puntaje_solo_las_filas` — Se puntúa sobre todas y luego se filtra: si normalizáramos sobre el subconjunto, el mismo sitio cambiaría de nota según con quién se le compare.
+- `test_build_zone_features_une_las_lentes_del_panorama` — Con `medianas`, la tabla de features trae también las columnas de las lentes, listas para puntuar.
 
 ## `tests/test_locations.py`
 
@@ -1486,12 +1495,16 @@
 > El README promete que el desglose muestra cada dimensión CRUDA y NORMALIZADA
 > ("nunca solo el número final"). Esto lo verifica sin abrir Streamlit.
 
-- `test_la_tabla_muestra_cada_factor_crudo_y_normalizado` — La tabla de resultados trae, por cada factor, el valor crudo y el normalizado, y una fila por zona.
-- `test_las_columnas_normalizadas_estan_entre_0_y_1` — Las columnas normalizadas (demanda, baja competencia, accesibilidad) quedan entre 0 y 1.
-- `test_mas_alto_siempre_es_mejor_en_las_tres_columnas` — La zona con más competencia tiene el menor 'Baja competencia'.
-- `test_el_puntaje_es_la_suma_ponderada_de_las_columnas_mostradas` — Lo que dice el pie de la tabla: Puntaje = suma ponderada de las tres columnas (0-1), con 0.5 donde falta el dato.
-- `test_una_zona_sin_dato_queda_en_blanco_y_se_nota` — Una zona sin dato queda en blanco (NaN) en vez de en 0 y su recuento de datos completos baja de 3.
-- `test_normalize_weights_conserva_proporciones_y_suma_uno` — Los pesos normalizados conservan las proporciones y suman 1; con todo en cero se usan los pesos por defecto sin dividir entre cero.
+- `test_la_tabla_muestra_cada_factor_crudo_y_normalizado` — La tabla de resultados trae, por cada factor medido directamente, el crudo y el normalizado, una fila por zona.
+- `test_las_columnas_normalizadas_estan_entre_0_y_1` — Las columnas normalizadas quedan entre 0 y 1.
+- `test_mas_alto_siempre_es_mejor_en_las_columnas_normalizadas` — La zona con más competencia tiene el menor 'Baja competencia'.
+- `test_el_puntaje_es_la_suma_ponderada_de_las_columnas_mostradas` — Lo que dice el pie de la tabla: Puntaje = suma ponderada de las columnas (0-1), con 0,5 donde falta el dato.
+- `test_una_zona_sin_dato_queda_en_blanco_y_se_nota` — Una zona sin dato queda en blanco (NaN) en vez de en 0 y su recuento de datos completos baja.
+- `test_normalize_weights_conserva_proporciones_y_suma_uno` — Los pesos normalizados conservan las proporciones y suman 1; con todo en cero se vuelve a los de fábrica sin dividir entre cero.
+- `test_la_tabla_solo_trae_los_factores_que_se_puntuaron` — Sin las lentes del panorama, sus columnas no aparecen: enseñarlas vacías haría creer que se tuvieron en cuenta.
+- `test_el_desglose_dice_cuanto_puso_cada_factor_y_suma_el_puntaje` — Con varios pesos el número final solo es creíble si se puede abrir: cada columna es peso × normalizado.
+- `test_filtrar_zonas_quita_filas_pero_no_cambia_los_puntajes` — La decisión del autor: el filtro no toca el puntaje, que sigue midiendo la posición entre las 7.
+- `test_filtrar_sin_zonas_o_con_desconocidas_no_rompe` — Sin filtro se devuelve todo; una zona que no existe simplemente no aparece.
 
 ## `tests/test_recommendation_interpretacion_ui.py`
 
@@ -1576,6 +1589,11 @@
 - `test_las_celdas_sin_dato_de_la_lente_salen_en_gris_y_se_cuentan` — Code-review: antes se omitían en silencio mientras el texto afirmaba que estaban todas.
 - `test_las_claves_del_mapa_llevan_la_categoria` — Code-review: eran globales, así que la lente elegida se arrastraba al buscar otro negocio.
 - `test_con_zona_desconocida_no_se_ofrece_la_lente_ni_se_habla_de_celdas` — Code-review: salía el selector de lente y un texto de «0 celdas de Atlantis» sobre un mapa que era el de zonas.
+- `test_los_ajustes_ofrecen_un_deslizador_por_criterio_disponible` — Con data/ml hay más de tres factores, y están los tres nuevos. La base de prueba no tiene rutas guardadas, así que accesibilidad no se ofrece: un criterio sin datos no debe salir como si se pudiera usar.
+- `test_el_filtro_de_zonas_viene_con_todas_y_es_un_filtro_no_un_peso` — La decisión del autor: elegir zonas quita filas, no cambia el puntaje de las que quedan.
+- `test_dejar_el_filtro_vacio_avisa_y_usa_todas`
+- `test_el_desglose_de_aportacion_sale_en_la_pantalla` — Cada factor puntuado tiene su columna en el desglose, y las filas suman el puntaje.
+- `test_poner_un_peso_en_cero_cambia_la_recomendacion` — Los pesos siguen mandando: todo el peso en población hace ganar a la zona más poblada.
 
 ## `tests/test_strip_panorama_gap.py`
 
