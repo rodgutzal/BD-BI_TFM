@@ -843,13 +843,48 @@ def test_las_claves_del_mapa_llevan_la_categoria(pagina):
     assert "reco_capa_celdas_hospital" in pagina.session_state
 
 
-def test_con_zona_desconocida_no_se_ofrece_la_lente_ni_se_habla_de_celdas(pagina, monkeypatch):
-    """Code-review: salía el selector de lente y un texto de «0 celdas de Atlantis» sobre un mapa que era el de zonas."""
-    from streamlit_app.dashboards import recommendation_dashboard as rd
+APP_MAPA = """
+import sys
+from pathlib import Path
+sys.path.insert(0, {raiz!r})
+import pandas as pd
+from src.locations import LOCATIONS
+from src.ml import business_profiles as bp
+from src.ml import panorama_view as pv
+from streamlit_app.dashboards import panorama_section as ps
+from streamlit_app.dashboards import recommendation_dashboard as rd
 
-    pagina.run()
-    pagina.text_input[0].set_value("un restaurante")
-    monkeypatch.setattr(rd, "render_panorama_section", lambda *a, **k: None)
-    next(b for b in pagina.button if "Buscar" in b.label).click().run()
-    assert not pagina.exception
-    assert not any(r.label == "Color de las celdas" for r in pagina.radio)
+datos = Path({datos!r})
+guardado, counts, _ = ps.load_data(datos)
+perfil = bp.get_default_profile("food_drink")
+vista = pv.attach_places(pv.compute_view(counts, perfil, guardado, "food_drink"), ps.load_places(datos))
+pano = ps.Panorama(vista=vista, perfil=perfil, marcadas=[])
+out = pd.DataFrame({{"score": [0.9 - 0.1 * i for i in range(len(LOCATIONS))]}}, index=list(LOCATIONS))
+rd.render_score_map(out, pano, {zona!r}, "food_drink")
+"""
+
+
+def abrir_mapa(zona):
+    """La pantalla del mapa de recomendación sola, CON panorama real, para probar la rama de cada zona."""
+    at = AppTest.from_string(
+        APP_MAPA.format(raiz=str(ROOT), datos=str(ROOT / "data" / "ml"), zona=zona), default_timeout=120
+    )
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    return at
+
+
+def test_con_zona_desconocida_no_se_ofrece_la_lente_ni_se_habla_de_celdas():
+    """Code-review: salía el selector de lente y un texto de «0 celdas de Atlantis» sobre un mapa que era el de zonas.
+
+    QA de Codex: antes este test anulaba el panorama, con lo que probaba el camino «sin datos», no este. Ahora el
+    panorama es real y lo único raro es la zona, que es justo la condición que se quiere ejercitar."""
+    conocida = abrir_mapa("Birkirkara")
+    assert any(r.label == "Color de las celdas" for r in conocida.radio)
+
+    desconocida = abrir_mapa("Atlantis")
+    assert not any(r.label == "Color de las celdas" for r in desconocida.radio)
+    assert not desconocida.toggle  # tampoco el de «ver toda la isla»
+    textos_c = [c.value for c in desconocida.caption]
+    assert any("Las 7 zonas monitorizadas" in c for c in textos_c)
+    assert not any("Atlantis" in c or "celdas de 250 m" in c for c in textos_c)
