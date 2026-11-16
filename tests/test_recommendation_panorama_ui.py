@@ -648,3 +648,19 @@ def test_el_rotulo_de_la_celda_elegida_tambien_escapa_el_html():
     fig = ps.build_map(vista, pv.available_layers(vista)[0], sel)
     rotulo = next(t for t in fig.data if t.name == "celda elegida" and t.mode == "markers+text").text[0]
     assert "<b>" not in rotulo and "&lt;b&gt;Triq&lt;/b&gt;, A&amp;B" in rotulo
+
+
+def test_la_ficha_escapa_el_marcado_del_nombre_de_osm():
+    """QA de Codex (menor): un nombre de OSM con sintaxis Markdown alteraba el encabezado de la ficha."""
+    from streamlit_app.dashboards import panorama_section as ps
+
+    assert ps.escapar_markdown("Triq *il* _Kbira_") == r"Triq \*il\* \_Kbira\_"
+    assert ps.escapar_markdown("A & B") == "A & B"  # lo que no es marcado no se toca
+    assert ps.escapar_markdown("Triq il-Kbira") == "Triq il-Kbira"
+
+
+def test_la_ficha_de_una_celda_real_no_lleva_escapes_de_mas():
+    """El escape no debe ensuciar los nombres corrientes, que son la inmensa mayoría."""
+    at = abrir("food_drink")
+    ficha = next(m for m in textos(at.markdown) if m.startswith("##### Ficha de la celda"))
+    assert "\\" not in ficha

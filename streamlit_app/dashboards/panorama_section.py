@@ -11,6 +11,7 @@ entrena nada ni se importa scikit-learn. Al ajustar el perfil, las lentes se rec
 
 import hashlib
 import html
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -108,6 +109,15 @@ def render_profile_status(perfil, base, avisos):
         st.caption(f"Perfil usado: **{base.nombre}** (por defecto).")
     for aviso in avisos:
         st.warning(aviso)
+
+
+_MARCADO = re.compile(r"([\\`*_\[\]()~|$])")
+
+
+def escapar_markdown(texto) -> str:
+    """Los nombres vienen de OpenStreetMap, que cualquiera puede editar: uno con sintaxis Markdown (`*`, `_`, `$`…) no
+    debe alterar el texto de la pantalla. Streamlit ya escapa el HTML, pero no el marcado."""
+    return _MARCADO.sub(r"\\\1", str(texto))
 
 
 def porcentaje(parte: int, total: int) -> str:
@@ -214,7 +224,7 @@ def _valor(x, formato="{:.2f}"):
 
 
 def render_cell_card(fila, perfil, brecha_disponible: bool, perfil_personalizado: bool):
-    st.markdown(f"##### Ficha de la celda {fila.name} · {pv.place_label(fila)}")
+    st.markdown(f"##### Ficha de la celda {fila.name} · {escapar_markdown(pv.place_label(fila))}")
     st.caption(
         f"Zona de referencia: {fila['zona_cercana']} ({fila['dist_zona_m']:.0f} m del centro de la zona) · "
         f"[ver la celda en OpenStreetMap]({pv.map_link(fila['lat'], fila['lon'])})"
