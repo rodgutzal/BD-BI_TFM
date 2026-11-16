@@ -140,30 +140,71 @@ def test_el_porcentaje_de_candidatas_no_se_redondea_a_cero():
     assert porcentaje(3, 0) == "—"  # sin celdas no se divide entre cero
 
 
-def _vista_y_mapa(capa=None, elegida="auto"):
+def _vista_y_mapa(capa=None, elegida="auto", acercar=False, con_lugares=True):
     from src.ml import panorama_view as pv
     from src.ml.business_profiles import DEFAULT_PROFILES
     from streamlit_app.dashboards import panorama_section as ps
 
     guardado, counts, _ = ps.load_data(ROOT / "data" / "ml")
     vista = pv.compute_view(counts, DEFAULT_PROFILES["food_drink"], guardado, "food_drink")
+    if con_lugares:
+        vista = pv.attach_places(vista, ps.load_places(ROOT / "data" / "ml"))
     capa = capa or pv.available_layers(vista)[0]
     sel = vista.index[0] if elegida == "auto" else elegida
-    return vista, sel, ps.build_map(vista, capa, sel)
+    return vista, sel, ps.build_map(vista, capa, sel, acercar)
 
 
-def test_el_mapa_rotula_la_celda_elegida():
-    """El punto azul de la celda elegida lleva su identificador, para que se sepa cuál es sin abrir la ficha."""
+def _trazas_elegida(fig):
+    return [t for t in fig.data if t.name == "celda elegida"]
+
+
+def test_el_mapa_rotula_la_celda_elegida_con_su_calle():
+    """El punto azul lleva el identificador y el lugar, para saber cuál es sin abrir la ficha."""
+    from src.ml import panorama_view as pv
+
     vista, sel, fig = _vista_y_mapa()
-    elegido = [t for t in fig.data if t.name == "celda elegida"]
-    assert len(elegido) == 1
-    assert elegido[0].mode == "markers+text" and elegido[0].text == (f"Celda elegida: {sel}",)
+    marcador = next(t for t in _trazas_elegida(fig) if t.mode == "markers+text")
+    assert marcador.text == (f"{sel} · {pv.place_label(vista.loc[sel])}",)
+    assert vista.loc[sel, "calle"] in marcador.text[0]
+
+
+def test_el_mapa_dibuja_la_celda_como_el_cuadrado_de_250_m_que_es():
+    """Un punto no deja ver qué área es: la celda elegida se dibuja con sus cuatro lados, cerrados."""
+    from src.ml import grid
+
+    _, sel, fig = _vista_y_mapa()
+    cuadro = next(t for t in _trazas_elegida(fig) if t.mode == "lines")
+    sur, oeste, norte, este = grid.cell_bounds(*grid.parse_cell_id(sel))
+    assert cuadro.fill == "toself" and len(cuadro.lat) == 5
+    assert cuadro.lat[0] == cuadro.lat[-1] and cuadro.lon[0] == cuadro.lon[-1]  # cerrado
+    assert set(cuadro.lat) == {sur, norte} and set(cuadro.lon) == {oeste, este}
+
+
+def test_acercar_centra_el_mapa_en_la_celda_y_se_ven_las_calles():
+    """Sin acercar, el mapa muestra toda la rejilla y la celda es un punto perdido en la isla."""
+    from streamlit_app.dashboards import panorama_section as ps
+
+    vista, sel, lejos = _vista_y_mapa(acercar=False)
+    _, _, cerca = _vista_y_mapa(acercar=True)
+    assert lejos.layout.mapbox.zoom == ps.ZOOM_ISLA
+    assert cerca.layout.mapbox.zoom == ps.ZOOM_CELDA > 14  # a este zoom el mapa base ya rotula las calles
+    assert cerca.layout.mapbox.center.lat == pytest.approx(vista.loc[sel, "lat"])
+    assert cerca.layout.mapbox.center.lon == pytest.approx(vista.loc[sel, "lon"])
+    assert lejos.layout.mapbox.center.lat == pytest.approx(vista["lat"].mean())
+
+
+def test_acercar_sin_celda_elegida_no_cambia_la_vista():
+    """No hay a qué acercarse: el mapa se queda como está en vez de centrarse en cualquier sitio."""
+    from streamlit_app.dashboards import panorama_section as ps
+
+    _, _, fig = _vista_y_mapa(elegida=None, acercar=True)
+    assert fig.layout.mapbox.zoom == ps.ZOOM_ISLA
 
 
 def test_el_mapa_sin_celda_elegida_no_dibuja_el_marcador():
-    """Si no hay celda elegida no se añade ningún marcador (ni rótulo) extra."""
+    """Si no hay celda elegida no se añade ningún marcador, rótulo ni cuadrado extra."""
     _, _, fig = _vista_y_mapa(elegida=None)
-    assert not [t for t in fig.data if t.name == "celda elegida"]
+    assert not _trazas_elegida(fig)
 
 
 def test_los_puntos_del_mapa_son_legibles():
@@ -542,3 +583,54 @@ def test_el_hover_del_mapa_escapa_el_html_de_la_localidad():
     fig = ps.build_map(vista, pv.available_layers(vista)[0], None)
     texto = next(t for t in fig.data if t.name not in ("sin datos",)).hovertext[0]
     assert "<img" not in texto and "&lt;img src=x&gt;&amp;Co" in texto
+
+
+# ---- ver el área concreta: calle en el rótulo y mapa acercado ----------------------------------------------------
+def toggle(at, empieza):
+    return next(t for t in at.toggle if t.label.startswith(empieza))
+
+
+def test_la_seccion_ofrece_acercar_a_la_celda_y_viene_activado():
+    """Lo que faltaba era ver el sitio: el mapa llega acercado y se puede alejar para comparar."""
+    at = abrir("food_drink")
+    t = toggle(at, "🔍 Acercar")
+    assert t.value is True
+    assert any("cuadrado de 250 m" in c for c in textos(at.caption))
+    t.set_value(False).run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("Acércate con el control" in c for c in textos(at.caption))
+
+
+def test_la_ficha_y_la_lista_dicen_la_calle_no_solo_el_pueblo():
+    """La ficha encabeza con «calle, pueblo» y la lista de celdas también."""
+    from src.ml import panorama_view as pv
+    from streamlit_app.dashboards import panorama_section as ps
+
+    lugares = ps.load_places(ROOT / "data" / "ml")
+    at = abrir("food_drink")
+    cell_id = at.selectbox[0].value  # AppTest da el valor de la opción; la etiqueta la pone format_func
+    calle = lugares.loc[cell_id, "calle"]
+    assert calle and calle in pv.cell_label(cell_id, lugares.loc[cell_id])
+    ficha = next(m for m in textos(at.markdown) if m.startswith("##### Ficha de la celda"))
+    assert cell_id in ficha and calle in ficha
+    assert any("Zona de referencia:" in c for c in textos(at.caption))
+
+
+def test_la_tabla_de_la_zona_ya_no_repite_el_mismo_pueblo_en_cada_fila():
+    """El motivo del cambio, comprobado en la pantalla: en Birkirkara la columna «Lugar» decía siempre «Birkirkara»."""
+    at = abrir_con_zona("food_drink", "Birkirkara")
+    lugares = list(at.dataframe[0].value["Lugar"])
+    assert len(lugares) > 5
+    assert len(set(lugares)) >= len(lugares) - 2  # casi una calle distinta por fila
+    assert not all(l == "Birkirkara" for l in lugares)
+
+
+def test_sin_el_archivo_de_lugares_la_pantalla_sigue_funcionando(tmp_path):
+    """Si cell_places.csv falta, se rotula con la zona de referencia y no se rompe nada."""
+    copia = tmp_path / "ml"
+    shutil.copytree(ROOT / "data" / "ml", copia)
+    (copia / "cell_places.csv").unlink()
+    (copia / "cell_places_manifest.json").unlink()
+    at = abrir("food_drink", copia)
+    assert not at.exception, [e.value for e in at.exception]
+    assert all(l.startswith("cerca de ") for l in at.dataframe[0].value["Lugar"])

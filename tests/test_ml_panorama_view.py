@@ -263,10 +263,11 @@ def test_layer_values_devuelve_la_columna_correcta(datos_con_brecha):
     assert pv.layer_values(v, pv.CAPA_BRECHA)[0].equals(v["brecha_relativa"])
 
 
-def test_cell_label_incluye_celda_zona_y_distancia():
-    """La etiqueta de la lista de celdas dice dónde está."""
-    fila = pd.Series({"zona_cercana": "Sliema", "dist_zona_m": 412.4})
-    assert pv.cell_label("r30c10", fila) == "r30c10 · Sliema (412 m del centro de zona)"
+def test_cell_label_dice_la_calle_y_el_pueblo_y_sin_ellos_la_zona():
+    """La etiqueta de la lista de celdas dice dónde está, con la calle por delante."""
+    fila = pd.Series({"zona_cercana": "Sliema", "dist_zona_m": 412.4, "calle": "Triq it-Torri", "localidad": "Sliema"})
+    assert pv.cell_label("r30c10", fila) == "Triq it-Torri, Sliema · r30c10"
+    assert pv.cell_label("r30c10", pd.Series({"zona_cercana": "Sliema"})) == "cerca de Sliema · r30c10"
 
 
 def test_el_modulo_no_importa_scikit_learn():
@@ -294,13 +295,35 @@ def test_el_radio_de_la_zona_es_el_del_puntaje_por_zona():
     assert pv.RADIO_ZONA_M == DEFAULT_POI_RADIUS_M
 
 
-def test_attach_places_rotula_con_la_localidad_y_sin_ella_queda_vacia(vista_comida):
+def test_attach_places_trae_calle_y_localidad_y_sin_archivo_quedan_vacias(vista_comida):
     assert vista_comida["localidad"].ne("").mean() > 0.95
-    sin = pv.attach_places(vista_comida.drop(columns="localidad"), None)
-    assert (sin["localidad"] == "").all()
-    fila = vista_comida[vista_comida["localidad"] != ""].iloc[0]
-    assert pv.cell_label(fila.name, fila).startswith(f"{fila['localidad']} · {fila.name} (zona de referencia: ")
-    assert pv.cell_label(fila.name, sin.loc[fila.name]).startswith(f"{fila.name} · {fila['zona_cercana']} (")
+    assert vista_comida["calle"].ne("").mean() > 0.85
+    sin = pv.attach_places(vista_comida.drop(columns=["localidad", "calle"]), None)
+    assert (sin["localidad"] == "").all() and (sin["calle"] == "").all()
+
+
+def test_place_label_prefiere_la_calle_y_cae_a_la_zona_cuando_no_hay_nada(vista_comida):
+    """La calle es lo que distingue una celda de su vecina; dentro de una zona la localidad se repite."""
+    fila = vista_comida[(vista_comida["calle"] != "") & (vista_comida["localidad"] != "")].iloc[0]
+    assert pv.place_label(fila) == f"{fila['calle']}, {fila['localidad']}"
+    assert pv.cell_label(fila.name, fila) == f"{fila['calle']}, {fila['localidad']} · {fila.name}"
+    solo_calle = fila.copy()
+    solo_calle["localidad"] = ""
+    assert pv.place_label(solo_calle) == fila["calle"]
+    solo_loc = fila.copy()
+    solo_loc["calle"] = ""
+    assert pv.place_label(solo_loc) == fila["localidad"]
+    ninguna = fila.copy()
+    ninguna["calle"], ninguna["localidad"] = "", ""
+    assert pv.place_label(ninguna) == f"cerca de {fila['zona_cercana']}"
+
+
+def test_dentro_de_una_zona_la_calle_distingue_celdas_que_la_localidad_repetia(vista_comida):
+    """El motivo del cambio: en Birkirkara la columna decía «Birkirkara» fila tras fila."""
+    sub = pv.candidate_cells(vista_comida, "Birkirkara").head(12)
+    etiquetas = pv.candidates_table(sub)["Lugar"]
+    assert sub["localidad"].nunique() <= 3  # el pueblo apenas cambia dentro del radio de la zona
+    assert etiquetas.nunique() >= len(sub) - 2  # la calle sí: casi una distinta por celda
 
 
 def test_zone_cells_son_las_del_radio_y_una_celda_puede_estar_en_dos_zonas(vista_comida):
@@ -346,6 +369,19 @@ def test_candidates_table_trae_lugar_lentes_y_enlace(vista_comida):
     ]
     assert tabla.index.name == "Celda" and tabla["Mapa"].str.startswith("https://www.openstreetmap.org/?mlat=").all()
     assert (tabla["Lugar"] != "").all()
+
+
+def test_candidates_table_sin_columnas_de_lugar_rotula_con_la_zona(vista_comida):
+    sin = vista_comida.drop(columns=["localidad", "calle"])
+    tabla = pv.candidates_table(pv.candidate_cells(sin, "Valletta").head(3))
+    assert tabla["Lugar"].str.startswith("cerca de ").all()
+
+
+def test_export_frame_lleva_la_calle(vista_comida):
+    ids = list(pv.candidate_cells(vista_comida, "Birkirkara").index[:3])
+    df = pv.export_frame(vista_comida, ids, FOOD)
+    assert list(df.columns[:2]) == ["calle", "localidad"]
+    assert df["calle"].eq(vista_comida.loc[ids, "calle"]).all()
 
 
 def test_zone_summary_tiene_una_fila_por_zona_con_las_estrella_que_hay(vista_comida):
@@ -399,7 +435,7 @@ def test_export_csv_conserva_las_coordenadas_con_precision_de_celda(vista_comida
     assert np.allclose(releido["lat"].astype(float), vista_comida.loc[ids, "lat"], atol=1e-6)
 
 
-def test_candidates_table_funciona_sin_la_columna_de_localidad(vista_comida):
-    sin = vista_comida.drop(columns="localidad")
+def test_candidates_table_con_localidad_pero_sin_calle_rotula_con_la_localidad(vista_comida):
+    sin = vista_comida.drop(columns="calle")
     tabla = pv.candidates_table(pv.candidate_cells(sin, "Valletta").head(3))
-    assert tabla["Lugar"].str.startswith("cerca de ").all()
+    assert (tabla["Lugar"] == "Valletta").all()

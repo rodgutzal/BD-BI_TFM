@@ -1,31 +1,45 @@
-"""Nombre de la localidad de cada celda (consejos locales de Malta, de OpenStreetMap).
+"""Dónde está cada celda en palabras: su calle con nombre y su localidad (de OpenStreetMap).
 
 El panorama solo decía «zona más cercana»: una de las 7 zonas monitorizadas, a veces a casi 6 km, que no es un lugar
-sino el punto de referencia más próximo. Aquí cada celda recibe el nombre de la localidad (relación administrativa
-`admin_level=8` de OSM) que contiene el centro de la celda. Es un dato PRECALCULADO (tools/build_cell_places.py hace
-UNA consulta a Overpass y escribe data/ml/cell_places.csv); la pantalla no consulta la red.
+sino el punto de referencia más próximo. Y la localidad sola tampoco basta: dentro de una zona de 1.500 m casi todas
+las celdas caen en el mismo pueblo, así que la columna repetía «Birkirkara» una fila tras otra. Por eso cada celda
+recibe DOS rótulos:
+
+  - `calle`: la vía con nombre más cercana al centro de la celda (≤ `CALLE_MAX_M`). Es lo que distingue una celda de
+    su vecina y lo que una persona reconoce: «Triq il-Kbira».
+  - `localidad`: el consejo local (relación `admin_level=8`) que contiene la celda, para situar la calle.
+
+Es un dato PRECALCULADO (tools/build_cell_places.py hace DOS consultas a Overpass y escribe data/ml/cell_places.csv);
+la pantalla no consulta la red.
 
 Este módulo solo usa numpy y pandas. Si el archivo falta o no coincide con su manifiesto, `read_places` devuelve None y
 la pantalla vuelve a rotular con la zona de referencia.
 
 Archivos (`write_places`), en un directorio:
   cell_places.csv            cell_id, localidad, osm_relacion, criterio: «dentro» (el centro de la celda cae en la
-                             localidad), «cercana» (centro en el mar pero el borde a ≤ 250 m) o vacío (ninguna)
+                             localidad), «cercana» (centro en el mar pero el borde a ≤ 250 m) o vacío (ninguna);
+                             calle y calle_m (distancia a ella; vacías si no hay ninguna con nombre cerca)
   cell_places_manifest.json  procedencia, atribución y sha256 del CSV
 """
 
 import json
+import math
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 
+from src.ml import grid
 from src.ml.inputs_bundle import file_hash
 
 NIVEL_LOCALIDAD = 8  # consejos locales de Malta en OpenStreetMap
-FORMATO = 1
+CALLE_MAX_M = 150.0  # más lejos que esto, la calle ya no describe la celda (que mide 250 m de lado)
+K_LAT_M = 111_320.0  # metros por grado de latitud; la longitud se corrige por el coseno de la latitud de referencia
+FORMATO = 2
 ARCHIVOS = {"places": "cell_places.csv", "manifest": "cell_places_manifest.json"}
+COLUMNAS = ("cell_id", "localidad", "osm_relacion", "criterio", "calle", "calle_m")
 ATRIBUCION = "© colaboradores de OpenStreetMap, ODbL (https://www.openstreetmap.org/copyright)"
 
 Punto = Tuple[float, float]  # (lat, lon)
@@ -145,6 +159,88 @@ def contained_mask(lat: np.ndarray, lon: np.ndarray, loc: Localidad) -> np.ndarr
     return dentro
 
 
+class Calles:
+    """Las vías con nombre, ya proyectadas a metros y partidas en segmentos rectos.
+
+    `segmentos` es (M, 4) con [y1, x1, y2, x2] en metros, `de_nombre` (M,) dice a qué nombre pertenece cada segmento y
+    `nombres` es la lista de nombres. Proyección plana local: a estas distancias (cientos de metros) sobra."""
+
+    def __init__(self, nombres: List[str], segmentos: np.ndarray, de_nombre: np.ndarray, ref_lat: float):
+        self.nombres = nombres
+        self.segmentos = segmentos
+        self.de_nombre = de_nombre
+        self.ref_lat = ref_lat
+
+    def __len__(self) -> int:
+        return len(self.nombres)
+
+    def __repr__(self) -> str:
+        return f"Calles({len(self.nombres)} nombres, {len(self.segmentos)} segmentos)"
+
+    def proyectar(self, lat, lon) -> Tuple[np.ndarray, np.ndarray]:
+        k_lon = K_LAT_M * math.cos(math.radians(self.ref_lat))
+        return np.asarray(lat, dtype=float) * K_LAT_M, np.asarray(lon, dtype=float) * k_lon
+
+
+def nombre_util(nombre: str) -> bool:
+    """¿Sirve como rótulo? Descarta los nombres que no dicen un lugar: marcas de obra o de eje como «4», «A-A», «B-B»."""
+    return len(nombre) >= 3 and len(re.findall(r"[^\W\d_]", nombre, flags=re.UNICODE)) >= 3
+
+
+def parse_streets(elementos: Sequence[dict], ref_lat: Optional[float] = None) -> Calles:
+    """Vías con nombre de una respuesta de Overpass (`out geom` de ways con `highway` y `name`).
+
+    Ignora lo que no sea una `way` con geometría y nombre útil (ver `nombre_util`). Varias vías con el mismo nombre
+    (una calle suele venir partida en tramos) comparten un único nombre."""
+    if ref_lat is None:
+        ref_lat = (grid.SOUTH + grid.NORTH) / 2
+    k_lon = K_LAT_M * math.cos(math.radians(ref_lat))
+    indices: Dict[str, int] = {}
+    nombres: List[str] = []
+    trozos, de_nombre = [], []
+    for el in elementos:
+        if el.get("type") != "way":
+            continue
+        nombre = nombre_de(el.get("tags", {}))
+        geom = el.get("geometry")
+        if not nombre or not nombre_util(nombre) or not geom or len(geom) < 2:
+            continue
+        if nombre not in indices:
+            indices[nombre] = len(nombres)
+            nombres.append(nombre)
+        p = np.array([(float(g["lat"]) * K_LAT_M, float(g["lon"]) * k_lon) for g in geom], dtype=float)
+        trozos.append(np.concatenate([p[:-1], p[1:]], axis=1))
+        de_nombre.append(np.full(len(p) - 1, indices[nombre], dtype=int))
+    segmentos = np.concatenate(trozos) if trozos else np.zeros((0, 4))
+    return Calles(nombres, segmentos, np.concatenate(de_nombre) if de_nombre else np.zeros(0, dtype=int), ref_lat)
+
+
+def nearest_street(lat, lon, calles: Calles, max_m: float = CALLE_MAX_M, trozo: int = 64) -> pd.DataFrame:
+    """Calle con nombre más cercana a cada punto: columnas `calle` y `calle_m` (vacía y NaN si ninguna a `max_m` o menos).
+
+    Fuerza bruta por trozos de `trozo` puntos: son ~1.100 celdas contra ~40.000 segmentos, una vez, al precalcular."""
+    lat, lon = np.asarray(lat, dtype=float), np.asarray(lon, dtype=float)
+    nombre = np.full(len(lat), "", dtype=object)
+    distancia = np.full(len(lat), np.nan)
+    if not len(calles.segmentos) or not len(lat):
+        return pd.DataFrame({"calle": nombre, "calle_m": distancia})
+    ay, ax, by, bx = calles.segmentos.T
+    dy, dx = by - ay, bx - ax
+    largo2 = np.where(dx * dx + dy * dy == 0, 1.0, dx * dx + dy * dy)
+    py, px = calles.proyectar(lat, lon)
+    for i in range(0, len(lat), trozo):
+        qy, qx = py[i : i + trozo, None], px[i : i + trozo, None]
+        t = np.clip(((qx - ax) * dx + (qy - ay) * dy) / largo2, 0.0, 1.0)
+        d = np.hypot(qx - (ax + t * dx), qy - (ay + t * dy))
+        mejor = np.argmin(d, axis=1)
+        d_mejor = d[np.arange(len(mejor)), mejor]
+        cerca = d_mejor <= max_m
+        tramo = slice(i, i + len(mejor))
+        nombre[tramo] = np.where(cerca, [calles.nombres[j] for j in calles.de_nombre[mejor]], "")
+        distancia[tramo] = np.where(cerca, d_mejor, np.nan)
+    return pd.DataFrame({"calle": nombre, "calle_m": distancia})
+
+
 def distance_to_boundary_m(lat: np.ndarray, lon: np.ndarray, loc: Localidad) -> np.ndarray:
     """Distancia (m) de cada punto al borde de la localidad (al segmento más cercano de cualquiera de sus anillos),
     con una proyección plana local: sobra para distancias de unos cientos de metros."""
@@ -200,13 +296,13 @@ def assign_places(lat, lon, localidades: Sequence[Localidad], tolerancia_m: floa
 # Archivos
 # ---------------------------------------------------------------------------
 def write_places(out_dir, tabla: pd.DataFrame, procedencia: Dict) -> Dict:
-    """Escribe cell_places.csv (columnas cell_id, localidad, osm_relacion, criterio) y su manifiesto; devuelve el
+    """Escribe cell_places.csv (cell_id, localidad, osm_relacion, criterio, calle, calle_m) y su manifiesto; devuelve el
     manifiesto."""
     directorio = Path(out_dir)
     directorio.mkdir(parents=True, exist_ok=True)
     ruta = directorio / ARCHIVOS["places"]
-    tabla = tabla[["cell_id", "localidad", "osm_relacion", "criterio"]].sort_values("cell_id")
-    tabla.to_csv(ruta, index=False, lineterminator="\n", encoding="utf-8")
+    tabla = tabla[list(COLUMNAS)].sort_values("cell_id")
+    tabla.to_csv(ruta, index=False, lineterminator="\n", encoding="utf-8", float_format="%.1f")
     completo = dict(procedencia)
     completo.update(
         {
@@ -215,6 +311,8 @@ def write_places(out_dir, tabla: pd.DataFrame, procedencia: Dict) -> Dict:
             "filas": int(len(tabla)),
             "sin_localidad": int((tabla["localidad"] == "").sum()),
             "por_cercania": int((tabla["criterio"] == "cercana").sum()),
+            "sin_calle": int((tabla["calle"] == "").sum()),
+            "calle_max_m": CALLE_MAX_M,
             "sha256": file_hash(ruta),
         }
     )
@@ -241,12 +339,12 @@ def verify_places(out_dir) -> List[str]:
     return []
 
 
-def read_places(out_dir) -> Optional[pd.Series]:
-    """Serie cell_id → localidad (cadena vacía si ninguna), o None si el archivo falta o no coincide con su manifiesto.
-    Sin localidades la pantalla sigue funcionando con la zona de referencia."""
+def read_places(out_dir) -> Optional[pd.DataFrame]:
+    """Tabla indexada por cell_id con `localidad` y `calle` (cadena vacía si no se conocen), o None si el archivo falta
+    o no coincide con su manifiesto. Sin ella la pantalla sigue funcionando con la zona de referencia."""
     if verify_places(out_dir):
         return None
     tabla = pd.read_csv(Path(out_dir) / ARCHIVOS["places"], dtype=str, keep_default_na=False, na_values=[]).set_index(
         "cell_id"
     )
-    return tabla["localidad"]
+    return tabla[["localidad", "calle"]]

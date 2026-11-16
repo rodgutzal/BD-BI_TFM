@@ -65,6 +65,13 @@ def cell_center(fila, col):
     return SOUTH + (np.asarray(fila) + 0.5) * DLAT, WEST + (np.asarray(col) + 0.5) * DLON
 
 
+def cell_bounds(fila, col):
+    """(sur, oeste, norte, este) de la celda: sus cuatro lados, para dibujarla como el cuadrado que es."""
+    sur = SOUTH + np.asarray(fila) * DLAT
+    oeste = WEST + np.asarray(col) * DLON
+    return sur, oeste, sur + DLAT, oeste + DLON
+
+
 def cells_frame() -> pd.DataFrame:
     """Todas las celdas de la rejilla: cell_id, fila, col, lat y lon del centro (una fila por celda)."""
     filas, cols = np.meshgrid(np.arange(N_ROWS), np.arange(N_COLS), indexing="ij")

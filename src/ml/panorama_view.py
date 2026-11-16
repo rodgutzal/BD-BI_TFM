@@ -167,12 +167,8 @@ def opportunity_mask(vista: pd.DataFrame) -> pd.Series:
 
 
 def cell_label(cell_id: str, fila: pd.Series) -> str:
-    """Etiqueta de la celda: con localidad (si la vista la trae) «Qormi · r23c20 (zona de referencia: Msida, 1500 m)»;
-    sin ella, como antes."""
-    localidad = fila.get("localidad", "") if hasattr(fila, "get") else ""
-    if isinstance(localidad, str) and localidad:
-        return f"{localidad} · {cell_id} (zona de referencia: {fila['zona_cercana']}, {fila['dist_zona_m']:.0f} m)"
-    return f"{cell_id} · {fila['zona_cercana']} ({fila['dist_zona_m']:.0f} m del centro de zona)"
+    """Etiqueta de la celda para elegirla: «Triq il-Kbira, Birkirkara · r23c20»."""
+    return f"{place_label(fila)} · {cell_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -183,12 +179,26 @@ MAX_FILAS_TABLA = 15
 FUENTE_DATOS = "© colaboradores de OpenStreetMap (ODbL)"
 
 
-def attach_places(vista: pd.DataFrame, lugares: Optional[pd.Series]) -> pd.DataFrame:
-    """Añade `localidad` (consejo local de OSM que contiene la celda; vacía si no se conoce). Sin `lugares` (archivo
-    ausente o alterado) todas quedan vacías y la pantalla rotula con la zona de referencia."""
+def attach_places(vista: pd.DataFrame, lugares: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Añade `calle` (la vía con nombre más cercana) y `localidad` (el consejo local de OSM), vacías si no se conocen.
+    Sin `lugares` (archivo ausente o alterado) ambas quedan vacías y la pantalla rotula con la zona de referencia."""
     out = vista.copy()
-    out["localidad"] = lugares.reindex(out.index).fillna("") if lugares is not None else ""
+    for col in ("localidad", "calle"):
+        disponible = lugares is not None and col in lugares
+        out[col] = lugares[col].reindex(out.index).fillna("") if disponible else ""
     return out
+
+
+def place_label(fila: pd.Series) -> str:
+    """Dónde está la celda, en palabras: «Triq il-Kbira, Birkirkara». Sin calle, solo la localidad; sin ninguna de las
+    dos (celdas de mar o sin vías con nombre cerca), la zona de referencia."""
+    calle = fila.get("calle", "") if hasattr(fila, "get") else ""
+    localidad = fila.get("localidad", "") if hasattr(fila, "get") else ""
+    calle = calle if isinstance(calle, str) else ""
+    localidad = localidad if isinstance(localidad, str) else ""
+    if calle and localidad:
+        return f"{calle}, {localidad}"
+    return calle or localidad or f"cerca de {fila['zona_cercana']}"
 
 
 def map_link(lat: float, lon: float) -> str:
@@ -216,13 +226,12 @@ def candidate_cells(vista: pd.DataFrame, zona: Optional[str] = None) -> pd.DataF
 
 
 def candidates_table(sub: pd.DataFrame) -> pd.DataFrame:
-    """Tabla legible de `candidate_cells`, indexada por cell_id. Sin la columna `localidad` (vista sin `attach_places`)
+    """Tabla legible de `candidate_cells`, indexada por cell_id. Sin las columnas de lugar (vista sin `attach_places`)
     rotula con la zona de referencia."""
-    localidades = sub["localidad"] if "localidad" in sub else pd.Series("", index=sub.index)
     tabla = pd.DataFrame(
         {
             "★": sub["oportunidad"].map({True: "★", False: ""}),
-            "Lugar": [loc if loc else f"cerca de {zona}" for loc, zona in zip(localidades, sub["zona_cercana"])],
+            "Lugar": sub.apply(place_label, axis=1) if len(sub) else pd.Series(dtype=str),
             "Competencia directa": sub["competencia_directa"],
             "Mercado (0-1)": sub["mercado_total"],
             "Proveedores": sub["proveedores_total"],
@@ -264,6 +273,7 @@ def export_frame(vista: pd.DataFrame, ids: Sequence[str], perfil: BusinessProfil
     ]
     pcts = [c for c in sub.columns if c.startswith("pct_")]
     out = pd.DataFrame(index=sub.index)
+    out["calle"] = sub["calle"] if "calle" in sub else ""
     out["localidad"] = sub["localidad"] if "localidad" in sub else ""
     out["zona_referencia"], out["dist_zona_m"] = sub["zona_cercana"], sub["dist_zona_m"]
     out["lat"], out["lon"] = sub["lat"], sub["lon"]
