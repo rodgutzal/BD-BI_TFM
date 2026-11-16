@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1223 funciones de test · 1444 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1227 funciones de test · 1448 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -46,8 +46,8 @@
 | [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 36 | 36 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
-| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 39 | 39 |
-| [`tests/test_ml_places.py`](#teststest_ml_placespy) | 29 | 29 |
+| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 40 | 40 |
+| [`tests/test_ml_places.py`](#teststest_ml_placespy) | 31 | 31 |
 | [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 43 | 56 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
@@ -60,7 +60,7 @@
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 46 | 46+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 47 | 47+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -1191,6 +1191,7 @@
 - `test_export_csv_se_puede_releer_con_acentos`
 - `test_export_csv_conserva_las_coordenadas_con_precision_de_celda` — Regresión del code-review: con %.6g lat/lon perdían ~10 m (35,897432 → 35,8974).
 - `test_candidates_table_con_localidad_pero_sin_calle_rotula_con_la_localidad`
+- `test_export_frame_tiene_el_mismo_encabezado_sea_cual_sea_la_seleccion` — Code-review: las columnas se decidían sobre las celdas elegidas, así que el encabezado cambiaba de una exportación a otra y dos CSV no se podían juntar.
 
 ## `tests/test_ml_places.py`
 
@@ -1226,6 +1227,8 @@
 - `test_nearest_street_por_trozos_da_lo_mismo_que_de_una_vez` — El cálculo va por trozos para no hacer una matriz enorme: el resultado no puede depender del tamaño del trozo.
 - `test_sin_calles_o_sin_puntos_no_falla`
 - `test_la_consulta_de_calles_pide_solo_vias_con_nombre`
+- `test_una_via_sin_rol_delimita_por_fuera` — Code-review: en OSM el rol vacío de una `way` de un límite es el caso corriente y significa «outer»; tratarlo como desconocido hacía desaparecer la localidad entera y sin avisar.
+- `test_una_via_con_un_rol_que_no_delimita_se_cuenta_para_avisar` — Un miembro con otro rol (p. ej. `label`) no cierra nada: la relación se conserva marcada, para que se avise.
 
 ## `tests/test_ml_text_classifier.py`
 
@@ -1556,6 +1559,7 @@
 - `test_la_ficha_y_la_lista_dicen_la_calle_no_solo_el_pueblo` — La ficha encabeza con «calle, pueblo» y la lista de celdas también.
 - `test_la_tabla_de_la_zona_ya_no_repite_el_mismo_pueblo_en_cada_fila` — El motivo del cambio, comprobado en la pantalla: en Birkirkara la columna «Lugar» decía siempre «Birkirkara».
 - `test_sin_el_archivo_de_lugares_la_pantalla_sigue_funcionando` — Si cell_places.csv falta, se rotula con la zona de referencia y no se rompe nada.
+- `test_el_rotulo_de_la_celda_elegida_tambien_escapa_el_html` — Code-review: el hover escapaba el nombre de OSM pero el rótulo del punto azul no.
 
 ## `tests/test_strip_panorama_gap.py`
 

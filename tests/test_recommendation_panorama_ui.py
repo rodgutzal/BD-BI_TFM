@@ -634,3 +634,17 @@ def test_sin_el_archivo_de_lugares_la_pantalla_sigue_funcionando(tmp_path):
     at = abrir("food_drink", copia)
     assert not at.exception, [e.value for e in at.exception]
     assert all(l.startswith("cerca de ") for l in at.dataframe[0].value["Lugar"])
+
+
+def test_el_rotulo_de_la_celda_elegida_tambien_escapa_el_html():
+    """Code-review: el hover escapaba el nombre de OSM pero el rótulo del punto azul no."""
+    from src.ml import panorama_view as pv
+    from streamlit_app.dashboards import panorama_section as ps
+
+    guardado, counts, _ = ps.load_data(ROOT / "data" / "ml")
+    vista = pv.compute_view(counts, bp.get_default_profile("food_drink"), guardado, "food_drink")
+    vista["calle"], vista["localidad"] = "<b>Triq</b>", "A&B"
+    sel = vista.index[0]
+    fig = ps.build_map(vista, pv.available_layers(vista)[0], sel)
+    rotulo = next(t for t in fig.data if t.name == "celda elegida" and t.mode == "markers+text").text[0]
+    assert "<b>" not in rotulo and "&lt;b&gt;Triq&lt;/b&gt;, A&amp;B" in rotulo

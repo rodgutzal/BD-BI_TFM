@@ -268,8 +268,10 @@ def zone_summary(vista: pd.DataFrame) -> pd.DataFrame:
 def export_frame(vista: pd.DataFrame, ids: Sequence[str], perfil: BusinessProfile) -> pd.DataFrame:
     """Filas de `ids` listas para exportar: identificación, lentes y percentiles del perfil usado, confianza y enlace."""
     sub = vista.loc[[i for i in ids if i in vista.index]]
+    # Qué columnas salen se decide sobre TODA la vista, no sobre las celdas elegidas: si no, el encabezado cambiaría de
+    # una exportación a otra (una lente vacía solo en esas celdas desaparecería) y dos CSV no se podrían juntar.
     lentes = [
-        c for c in sub.columns if c.startswith(("competencia_", "mercado_", "proveedores_")) and sub[c].notna().any()
+        c for c in sub.columns if c.startswith(("competencia_", "mercado_", "proveedores_")) and vista[c].notna().any()
     ]
     pcts = [c for c in sub.columns if c.startswith("pct_")]
     out = pd.DataFrame(index=sub.index)

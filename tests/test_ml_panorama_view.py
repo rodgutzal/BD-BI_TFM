@@ -439,3 +439,16 @@ def test_candidates_table_con_localidad_pero_sin_calle_rotula_con_la_localidad(v
     sin = vista_comida.drop(columns="calle")
     tabla = pv.candidates_table(pv.candidate_cells(sin, "Valletta").head(3))
     assert (tabla["Lugar"] == "Valletta").all()
+
+
+def test_export_frame_tiene_el_mismo_encabezado_sea_cual_sea_la_seleccion(vista_comida):
+    """Code-review: las columnas se decidían sobre las celdas elegidas, así que el encabezado cambiaba de una
+    exportación a otra y dos CSV no se podían juntar."""
+    todas = list(vista_comida.index[:40])
+    una = [todas[0]]
+    assert list(pv.export_frame(vista_comida, una, FOOD).columns) == list(
+        pv.export_frame(vista_comida, todas, FOOD).columns
+    )
+    cols = list(pv.export_frame(vista_comida, una, FOOD).columns)
+    for lente in [c for c in cols if c.startswith("pct_")]:  # cada percentil conserva su lente de base
+        assert lente.removeprefix("pct_") in cols

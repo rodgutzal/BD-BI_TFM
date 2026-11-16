@@ -378,3 +378,21 @@ def test_sin_calles_o_sin_puntos_no_falla():
 def test_la_consulta_de_calles_pide_solo_vias_con_nombre():
     q = tool.construir_consulta_calles()
     assert 'way["highway"]["name"]' in q and "out geom;" in q and f"{grid.SOUTH:.6f}" in q
+
+
+def test_una_via_sin_rol_delimita_por_fuera():
+    """Code-review: en OSM el rol vacío de una `way` de un límite es el caso corriente y significa «outer»; tratarlo
+    como desconocido hacía desaparecer la localidad entera y sin avisar."""
+    sin_rol = [dict(TRAMO_A, role=""), {k: v for k, v in TRAMO_B.items() if k != "role"}]
+    (loc,) = places.parse_boundaries([relacion(1, "Sin rol", sin_rol)])
+    assert len(loc.exteriores) == 1 and loc.tramos_descartados == 0
+    assert places.contained_mask(np.array([35.905]), np.array([14.505]), loc)[0]
+
+
+def test_una_via_con_un_rol_que_no_delimita_se_cuenta_para_avisar():
+    """Un miembro con otro rol (p. ej. `label`) no cierra nada: la relación se conserva marcada, para que se avise."""
+    etiqueta = dict(TRAMO_A, role="label")
+    (loc,) = places.parse_boundaries([relacion(1, "Solo etiqueta", [etiqueta])])
+    assert loc.exteriores == [] and loc.tramos_descartados == 1
+    completa = places.parse_boundaries([relacion(2, "Completa", [TRAMO_A, TRAMO_B, etiqueta])])[0]
+    assert len(completa.exteriores) == 1 and completa.tramos_descartados == 1

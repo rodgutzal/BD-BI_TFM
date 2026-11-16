@@ -5,7 +5,7 @@
   "calles": 4082,
   "consulta": "[out:json][timeout:150];\nrelation[\"boundary\"=\"administrative\"][\"admin_level\"=\"8\"](35.840000,14.440000,35.940000,14.580000);\nout geom;",
   "consulta_calles": "[out:json][timeout:150];\nway[\"highway\"][\"name\"](35.840000,14.440000,35.940000,14.580000);\nout geom;",
-  "ejecutado": "2026-11-16T00:08:29Z",
+  "ejecutado": "2026-11-16T00:54:54Z",
   "espejo": "respuesta guardada en un archivo local",
   "filas": 1139,
   "formato": 2,

@@ -193,7 +193,7 @@ def build_map(vista, capa: str, seleccionada: Optional[str], acercar: bool = Fal
                 name="celda elegida",
                 marker=dict(size=16, color="#1f77b4"),
                 hoverinfo="skip",
-                text=[f"{elegida} · {pv.place_label(f)}"],
+                text=[html.escape(f"{elegida} · {pv.place_label(f)}")],
                 textposition="top right",
                 textfont=dict(size=14, color="#0b3d6b"),
             )

@@ -117,16 +117,24 @@ def parse_boundaries(elementos: Sequence[dict], nivel: int = NIVEL_LOCALIDAD) ->
         if not nombre:
             continue
         tramos = {"outer": [], "inner": []}
+        ignoradas = 0
         for m in el.get("members", []):
             geom = m.get("geometry")
-            rol = m.get("role")
-            if m.get("type") == "way" and geom and rol in tramos:
+            if m.get("type") != "way" or not geom:
+                continue
+            # En un límite de OSM, una `way` sin rol delimita por fuera: es el caso corriente, no un error. Cualquier
+            # otro rol (p. ej. `label`) no delimita, y se cuenta para poder avisar de que el límite va incompleto.
+            rol = m.get("role") or "outer"
+            if rol in tramos:
                 tramos[rol].append([(float(p["lat"]), float(p["lon"])) for p in geom])
+            else:
+                ignoradas += 1
         (exteriores, sobran_ext), (interiores, sobran_int) = _cerrar_anillos(tramos["outer"]), _cerrar_anillos(
             tramos["inner"]
         )
-        if exteriores or sobran_ext:  # sin ningún anillo cerrado se conserva, vacía y marcada, para que se avise
-            salida.append(Localidad(el["id"], nombre, exteriores, interiores, sobran_ext + sobran_int))
+        descartados = sobran_ext + sobran_int + ignoradas
+        if exteriores or descartados:  # sin ningún anillo cerrado se conserva, vacía y marcada, para que se avise
+            salida.append(Localidad(el["id"], nombre, exteriores, interiores, descartados))
     return salida
 
 
