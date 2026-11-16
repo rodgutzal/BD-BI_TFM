@@ -799,7 +799,7 @@ def test_sin_datos_de_celda_la_pagina_mantiene_el_mapa_de_zonas(pagina, tmp_path
     next(b for b in pagina.button if "Buscar" in b.label).click().run()
     assert not pagina.exception, [e.value for e in pagina.exception]
     assert not any(r.label == "Color de las celdas" for r in pagina.radio)
-    assert any("Las 7 zonas monitorizadas" in c for c in textos(pagina.caption))
+    assert any("zonas que estás comparando" in c for c in textos(pagina.caption))
     assert any("Zona recomendada" in m.label for m in pagina.metric)
 
 
@@ -886,7 +886,7 @@ def test_con_zona_desconocida_no_se_ofrece_la_lente_ni_se_habla_de_celdas():
     assert not any(r.label == "Color de las celdas" for r in desconocida.radio)
     assert not desconocida.toggle  # tampoco el de «ver toda la isla»
     textos_c = [c.value for c in desconocida.caption]
-    assert any("Las 7 zonas monitorizadas" in c for c in textos_c)
+    assert any("zonas que estás comparando" in c for c in textos_c)
     assert not any("Atlantis" in c or "celdas de 250 m" in c for c in textos_c)
 
 
@@ -963,3 +963,68 @@ def test_poner_un_peso_en_cero_cambia_la_recomendacion(pagina):
     assert not pagina.exception, [e.value for e in pagina.exception]
     tabla = next(d for d in pagina.dataframe if "Población" in getattr(d.value, "columns", []))
     assert tabla.value["Población"].idxmax() == tabla.value["Puntaje"].idxmax()
+
+
+# ---- correcciones del code-review de los ajustes -----------------------------------------------------------------
+def test_los_criterios_dependen_de_la_categoria_no_de_una_sonda_fija(pagina):
+    """Code-review (verificado con data/ml): `business`, `hospital` y `leisure` no tienen NINGÚN proveedor con datos,
+    así que para una farmacia no deben ofrecerse «proveedores» ni «diversidad». Antes se sondeaba siempre con
+    food_drink y salían dos deslizadores que el puntaje descartaba en silencio."""
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    con_proveedores = {s.label for s in pagina.slider}
+    assert "Proveedores cerca" in con_proveedores
+
+    pagina.text_input[0].set_value("una farmacia")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    sin_proveedores = {s.label for s in pagina.slider}
+    assert "Proveedores cerca" not in sin_proveedores and "Diversidad de proveedores" not in sin_proveedores
+    assert "Mercado por segmento (proxy OSM)" in sin_proveedores  # el mercado sí existe para todas
+    assert any("No se ofrecen" in c and "Proveedores" in c for c in textos(pagina.caption))
+
+
+def test_un_factor_en_cero_se_queda_fuera_del_puntaje_y_de_los_avisos(pagina):
+    """Code-review: la ayuda promete «ponlo en 0 para dejarlo fuera», pero seguía contando como factor puntuado y
+    disparaba el aviso de datos incompletos por algo que no aportaba nada."""
+    from streamlit_app.dashboards.recommendation_dashboard import normalize_weights
+
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    antes = next(d.value for d in pagina.dataframe if "Zona" in getattr(d.value, "columns", []))
+    columnas_antes = [c for c in antes.columns if c.endswith("(0-1)")]
+
+    next(s for s in pagina.slider if s.label == "Mercado por segmento (proxy OSM)").set_value(0).run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    despues = next(d.value for d in pagina.dataframe if "Zona" in getattr(d.value, "columns", []))
+    assert len(columnas_antes) - 1 == len([c for c in despues.columns if c.endswith("(0-1)")])
+    assert not [c for c in despues.columns if c.startswith("Mercado")]
+    assert "Datos completos (de 4)" in despues.columns  # uno menos que antes
+
+    pesos = normalize_weights({"demanda": 50, "competencia": 50, "mercado": 0}, [])
+    assert "mercado" not in pesos and sum(pesos.values()) == pytest.approx(1.0)
+
+
+def test_los_textos_hablan_de_los_factores_que_se_puntuaron(pagina):
+    """Code-review: el pie decía «en las 6» mientras la tabla mostraba 4 columnas y «Datos completos (de 4)»."""
+    pagina.run()
+    pagina.text_input[0].set_value("una farmacia")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    tabla = next(d.value for d in pagina.dataframe if "Zona" in getattr(d.value, "columns", []))
+    n = len([c for c in tabla.columns if c.endswith("(0-1)")])
+    assert f"Datos completos (de {n})" in tabla.columns
+    assert any(f"en las {n}, **más alto = mejor" in c for c in textos(pagina.caption))
+
+
+def test_al_filtrar_zonas_el_mapa_no_dice_que_enseña_siete(pagina):
+    """Code-review: con el filtro nuevo el mapa dibuja menos zonas, pero el texto seguía afirmando «las 7 zonas»."""
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    next(m for m in pagina.multiselect if m.label == "Zonas a considerar").set_value(["Sliema", "Gzira"]).run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    pies = textos(pagina.caption)
+    assert not any("las 7 zonas" in c for c in pies)
+    assert any("las 2 zonas que comparas" in c or "Las 2 zonas que estás comparando" in c for c in pies)

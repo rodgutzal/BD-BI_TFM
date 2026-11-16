@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from src.database import RouteDatabase
 from src.location_scoring import (
+    CRITERIOS,
     build_zone_features,
     criterios_disponibles,
     filter_zones,
@@ -33,8 +34,10 @@ from streamlit_app.dashboards.maps_dashboard import POI_CATEGORY_STYLE
 from streamlit_app.dashboards.panorama_section import render_panorama_section
 
 _CACHE_TTL = 60
-# Para construir los controles antes de saber la categoría: qué criterios hay depende de los datos, no del negocio.
-CATEGORIA_SONDA = "food_drink"
+# Solo para poder enseñar los controles ANTES de que haya un negocio escrito. Qué criterios hay depende de la
+# categoría: `business`, `hospital` y `leisure` no tienen ningún proveedor con datos, así que para ellas no se ofrecen
+# «proveedores» ni «diversidad». En cuanto se interpreta el texto, los controles se rehacen con los de esa categoría.
+CATEGORIA_INICIAL = "food_drink"
 
 
 @st.cache_resource
@@ -115,12 +118,15 @@ def render_interpretacion(texto: str, interpretacion: Interpretacion) -> str:
 
 def normalize_weights(crudos: dict, criterios) -> dict:
     """Pesos tal como vienen de los deslizadores (no hace falta que sumen 100) -> dict normalizado a 1,0, como exige
-    score_zones(). Si el usuario lo baja todo a cero no hay nada que comparar: se vuelve a los de fábrica en vez de
-    dividir entre cero."""
+    score_zones().
+
+    Un factor en 0 se deja FUERA del resultado, no se pasa con peso cero: es lo que promete la ayuda del control, y así
+    no cuenta como «factor puntuado» ni dispara el aviso de datos incompletos por algo que no aporta nada. Si el
+    usuario lo baja todo a cero no hay nada que comparar: se vuelve a los de fábrica en vez de dividir entre cero."""
     total = sum(crudos.values())
     if total <= 0:
         return pesos_por_defecto(criterios)
-    return {clave: valor / total for clave, valor in crudos.items()}
+    return {clave: valor / total for clave, valor in crudos.items() if valor > 0}
 
 
 def render_zone_filter() -> list:
@@ -155,16 +161,18 @@ def render_weight_controls(criterios) -> dict:
                 help=criterio.ayuda,
                 key=f"reco_peso_{criterio.clave}",
             )
-        if len(criterios) < 4:
+        faltan = [c.corta for c in CRITERIOS if c.clave not in {x.clave for x in criterios}]
+        if faltan:
             st.caption(
-                "Solo hay tres factores: faltan los datos por celda de `data/ml/` para ofrecer mercado por segmento, "
-                "proveedores y diversidad."
+                f"No se ofrecen **{', '.join(faltan)}**: no hay datos de eso para este negocio, y un factor que no se "
+                "puede medir no debe poder moverse."
             )
-        else:
+        del_panorama = [c.corta for c in criterios if c.columna.endswith("_mediana")]
+        if del_panorama:
             st.caption(
                 "**Población** es el censo; **mercado por segmento** es un proxy de OpenStreetMap que mide otra cosa, "
-                "así que van por separado. Los tres últimos usan el perfil por defecto de la categoría: los ajustes del "
-                "panorama de más abajo no los cambian."
+                f"así que van por separado. {', '.join(del_panorama)} usan el perfil por defecto de la categoría: los "
+                "ajustes del panorama de más abajo no los cambian."
             )
     return normalize_weights(crudos, criterios)
 
@@ -239,8 +247,9 @@ def render_results_table(out, criterios):
         width="stretch",
         hide_index=True,
     )
+    puntuados = len([c for c in criterios if f"{c.clave}_norm" in out])
     st.caption(
-        f"Las columnas (0-1) son los valores normalizados que entran en el puntaje; en las {len(criterios)}, "
+        f"Las columnas (0-1) son los valores normalizados que entran en el puntaje; en las {puntuados}, "
         "**más alto = mejor para el negocio** (por eso la competencia y el tiempo de viaje van invertidos). "
         "Puntaje = suma ponderada de esas columnas con los pesos elegidos arriba; ábrelo en «de dónde sale cada "
         "puntaje» para ver cuánto puso cada factor."
@@ -371,7 +380,7 @@ def render_score_map(out, panorama=None, zona: Optional[str] = None, categoria: 
     capas = capas_del_mapa(panorama.vista) if panorama is not None else []
     if panorama is None or zona not in LOCATIONS or not capas:
         st.plotly_chart(build_score_map(out), width="stretch")
-        st.caption("Las 7 zonas monitorizadas, coloreadas por su puntaje.")
+        st.caption(f"Las {len(out)} zonas que estás comparando, coloreadas por su puntaje.")
         return
     c1, c2 = st.columns([3, 1])
     # Las claves llevan la categoría, como el resto de controles: buscar otro negocio no debe arrastrar la lente elegida.
@@ -390,7 +399,8 @@ def render_score_map(out, panorama=None, zona: Optional[str] = None, categoria: 
         f"Los puntos de color son las **{n} celdas de 250 m** de {zona} (a {pv.RADIO_ZONA_M:.0f} m o menos de su centro) "
         f"con dato de **{capa.split(' (')[0].lower()}**; pasa el ratón para ver su calle."
         + (f" Otras {sin_dato} no tienen dato de esta lente y van en gris." if sin_dato else "")
-        + " Los círculos con nombre son las 7 zonas: el verde es la recomendada. **El color de las celdas es una lente, "
+        + f" Los círculos con nombre son las {len(out)} zonas que comparas: el verde es la recomendada. **El color de "
+        "las celdas es una lente, "
         "no el puntaje de la zona** — ese puntaje no existe por celda, porque la población y el tiempo de viaje se miden "
         "por zona. Las celdas que marques en la tabla de arriba se dibujan aquí con su cuadrado de 250 m."
     )
@@ -411,12 +421,15 @@ def main():
         "Describe el negocio que quieres abrir",
         placeholder="Ej.: una pizzería, un gimnasio, una farmacia, una tienda de ropa...",
     )
-    # Qué criterios hay depende de los DATOS (demografía, rutas, data/ml), no de la categoría, así que se pueden
-    # construir los controles antes de saber qué negocio es.
-    criterios = _criterios(db, CATEGORIA_SONDA)
     zonas = render_zone_filter()
-    weights = render_weight_controls(criterios)
+    # Qué criterios se pueden puntuar depende de la CATEGORÍA, que no se conoce hasta interpretar el texto: se reserva
+    # el sitio de los ajustes y se rellenan más abajo, ya con la categoría decidida.
+    destino_ajustes = st.container()
     buscar = st.button("🔍 Buscar mejor ubicación", type="primary")
+
+    def ajustes(cat: str):
+        with destino_ajustes:
+            return render_weight_controls(_criterios(db, cat))
 
     # Los resultados persisten al tocar los controles del panorama por celda (cada cambio vuelve a ejecutar la página y
     # `buscar` sería False): se recuerda el texto con que se buscó, y solo cambia al volver a pulsar el botón.
@@ -424,10 +437,12 @@ def main():
         if not texto or not texto.strip():
             st.session_state.pop("reco_texto", None)
             st.warning("Escribe una descripción del negocio primero.")
+            ajustes(CATEGORIA_INICIAL)
             return
         st.session_state["reco_texto"] = texto.strip()
     texto = st.session_state.get("reco_texto")
     if not texto:
+        ajustes(CATEGORIA_INICIAL)
         return
 
     interpretacion = interpretar(texto, get_text_model())
@@ -439,9 +454,12 @@ def main():
         st.info(
             "Prueba con palabras más concretas: restaurante, farmacia, gimnasio, escuela, centro comercial, tienda de ropa..."
         )
+        ajustes(CATEGORIA_INICIAL)
         return
 
     categoria = render_interpretacion(texto, interpretacion)
+    criterios = _criterios(db, categoria)
+    weights = ajustes(categoria)
     # Se puntúan SIEMPRE las 7 zonas y después se filtran: así el puntaje de cada una sigue midiendo su posición entre
     # todas, y elegir zonas solo quita filas en vez de cambiar las notas de las que quedan.
     todas = _cached_recommend(db, categoria, tuple(sorted(weights.items())))

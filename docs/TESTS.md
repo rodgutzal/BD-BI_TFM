@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1261 funciones de test · 1482 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1265 funciones de test · 1486 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -60,7 +60,7 @@
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 10 | 10 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 68 | 68+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 72 | 72+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -1594,6 +1594,10 @@
 - `test_dejar_el_filtro_vacio_avisa_y_usa_todas`
 - `test_el_desglose_de_aportacion_sale_en_la_pantalla` — Cada factor puntuado tiene su columna en el desglose, y las filas suman el puntaje.
 - `test_poner_un_peso_en_cero_cambia_la_recomendacion` — Los pesos siguen mandando: todo el peso en población hace ganar a la zona más poblada.
+- `test_los_criterios_dependen_de_la_categoria_no_de_una_sonda_fija` — Code-review (verificado con data/ml): `business`, `hospital` y `leisure` no tienen NINGÚN proveedor con datos, así que para una farmacia no deben ofrecerse «proveedores» ni «diversidad». Antes se sondeaba siempre con food_drink y salían dos deslizadores que el puntaje descartaba en silencio.
+- `test_un_factor_en_cero_se_queda_fuera_del_puntaje_y_de_los_avisos` — Code-review: la ayuda promete «ponlo en 0 para dejarlo fuera», pero seguía contando como factor puntuado y disparaba el aviso de datos incompletos por algo que no aportaba nada.
+- `test_los_textos_hablan_de_los_factores_que_se_puntuaron` — Code-review: el pie decía «en las 6» mientras la tabla mostraba 4 columnas y «Datos completos (de 4)».
+- `test_al_filtrar_zonas_el_mapa_no_dice_que_enseña_siete` — Code-review: con el filtro nuevo el mapa dibuja menos zonas, pero el texto seguía afirmando «las 7 zonas».
 
 ## `tests/test_strip_panorama_gap.py`
 
