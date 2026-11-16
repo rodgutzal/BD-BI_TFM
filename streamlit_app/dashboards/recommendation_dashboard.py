@@ -220,7 +220,22 @@ def build_score_map(out, panorama=None, zona: Optional[str] = None, capa: Option
     if con_celdas:
         celdas = panorama.vista[pv.zone_cells(panorama.vista, zona)]
         valores, titulo = pv.layer_values(celdas, capa)
-        con = celdas[valores.notna()]
+        con, sin = celdas[valores.notna()], celdas[valores.isna()]
+        if len(sin):  # sin dato no es lo mismo que valor bajo: se dibujan en gris, no se omiten en silencio
+            fig.add_trace(
+                go.Scattermapbox(
+                    lat=sin["lat"],
+                    lon=sin["lon"],
+                    mode="markers",
+                    marker=dict(size=9, color="#bbbbbb"),
+                    hovertext=[
+                        f"{i} · {html.escape(pv.place_label(r))}<br>sin datos"
+                        for i, (_, r) in zip(sin.index, sin.iterrows())
+                    ],
+                    hoverinfo="text",
+                    name="sin datos",
+                )
+            )
         fig.add_trace(
             go.Scattermapbox(
                 lat=con["lat"],
@@ -276,30 +291,39 @@ def capa_por_defecto(capas) -> int:
     return 0
 
 
-def render_score_map(out, panorama=None, zona: Optional[str] = None):
+def capas_del_mapa(vista) -> list:
+    """Las lentes que puede mostrar este mapa. La brecha de oferta se queda fuera a propósito: no está validada y este
+    es el mapa con el que se decide; vive en el panorama de abajo, con su advertencia."""
+    return [c for c in pv.available_layers(vista) if c != pv.CAPA_BRECHA]
+
+
+def render_score_map(out, panorama=None, zona: Optional[str] = None, categoria: str = ""):
     """Dibuja el mapa. Con panorama ofrece además con qué lente colorear las celdas y si alejarse a toda la isla."""
-    if panorama is None:
+    capas = capas_del_mapa(panorama.vista) if panorama is not None else []
+    if panorama is None or zona not in LOCATIONS or not capas:
         st.plotly_chart(build_score_map(out), width="stretch")
         st.caption("Las 7 zonas monitorizadas, coloreadas por su puntaje.")
         return
-    capas = pv.available_layers(panorama.vista)
     c1, c2 = st.columns([3, 1])
+    # Las claves llevan la categoría, como el resto de controles: buscar otro negocio no debe arrastrar la lente elegida.
     capa = c1.radio(
         "Color de las celdas",
         capas,
         index=capa_por_defecto(capas),
         horizontal=True,
-        key="reco_capa_celdas",
+        key=f"reco_capa_celdas_{categoria}",
     )
-    isla = c2.toggle("Ver toda la isla", value=False, key="reco_mapa_isla")
+    isla = c2.toggle("Ver toda la isla", value=False, key=f"reco_mapa_isla_{categoria}")
     st.plotly_chart(build_score_map(out, panorama, zona, capa, isla), width="stretch")
-    n = int(pv.zone_cells(panorama.vista, zona).sum()) if zona in LOCATIONS else 0
+    valores, _ = pv.layer_values(panorama.vista[pv.zone_cells(panorama.vista, zona)], capa)
+    n, sin_dato = int(valores.notna().sum()), int(valores.isna().sum())
     st.caption(
-        f"Los puntos pequeños son las **{n} celdas de 250 m** de {zona} (a {pv.RADIO_ZONA_M:.0f} m o menos de su centro), "
-        f"coloreadas por **{capa.split(' (')[0].lower()}**; pasa el ratón para ver su calle. Los círculos con nombre son las "
-        "7 zonas: el verde es la recomendada. **El color de las celdas es una lente, no el puntaje de la zona** — ese "
-        "puntaje no existe por celda, porque la población y el tiempo de viaje se miden por zona. Las celdas que marques "
-        "en la tabla de arriba se dibujan aquí con su cuadrado de 250 m."
+        f"Los puntos de color son las **{n} celdas de 250 m** de {zona} (a {pv.RADIO_ZONA_M:.0f} m o menos de su centro) "
+        f"con dato de **{capa.split(' (')[0].lower()}**; pasa el ratón para ver su calle."
+        + (f" Otras {sin_dato} no tienen dato de esta lente y van en gris." if sin_dato else "")
+        + " Los círculos con nombre son las 7 zonas: el verde es la recomendada. **El color de las celdas es una lente, "
+        "no el puntaje de la zona** — ese puntaje no existe por celda, porque la población y el tiempo de viaje se miden "
+        "por zona. Las celdas que marques en la tabla de arriba se dibujan aquí con su cuadrado de 250 m."
     )
 
 
@@ -375,7 +399,7 @@ def main():
         categoria, zona=top_zone, destino_celdas=destino_celdas, destino_zonas=destino_zonas
     )
     with destino_mapa:
-        render_score_map(out, panorama, top_zone)
+        render_score_map(out, panorama, top_zone, categoria)
 
 
 if __name__ == "__main__":

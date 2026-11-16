@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1239 funciones de test · 1460 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1243 funciones de test · 1464 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -60,7 +60,7 @@
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 59 | 59+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 63 | 63+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -1572,6 +1572,10 @@
 - `test_una_zona_desconocida_no_dibuja_celdas_pero_tampoco_falla`
 - `test_la_pagina_pone_el_mapa_con_celdas_entre_la_tabla_y_el_desglose` — El mapa de arriba es el de la decisión: va bajo la zona recomendada y sus celdas, antes del desglose por zona.
 - `test_sin_datos_de_celda_la_pagina_mantiene_el_mapa_de_zonas` — Si falta data/ml no hay celdas que dibujar, pero la recomendación por zona sigue entera.
+- `test_el_mapa_de_recomendacion_no_ofrece_la_brecha_exploratoria` — Code-review: la brecha no está validada y este es el mapa con el que se decide. Vive en el panorama, con su aviso.
+- `test_las_celdas_sin_dato_de_la_lente_salen_en_gris_y_se_cuentan` — Code-review: antes se omitían en silencio mientras el texto afirmaba que estaban todas.
+- `test_las_claves_del_mapa_llevan_la_categoria` — Code-review: eran globales, así que la lente elegida se arrastraba al buscar otro negocio.
+- `test_con_zona_desconocida_no_se_ofrece_la_lente_ni_se_habla_de_celdas` — Code-review: salía el selector de lente y un texto de «0 celdas de Atlantis» sobre un mapa que era el de zonas.
 
 ## `tests/test_strip_panorama_gap.py`
 
