@@ -14,8 +14,9 @@ import html
 import re
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, NamedTuple, Optional
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -26,7 +27,7 @@ from src.locations import LOCATIONS
 from src.ml import grid, panorama
 from src.ml import panorama_view as pv
 from src.ml import places
-from src.ml.business_profiles import DEFAULT_PROFILES
+from src.ml.business_profiles import DEFAULT_PROFILES, BusinessProfile
 
 DATA_ML = ROOT_DIR / "data" / "ml"
 
@@ -278,9 +279,11 @@ def firma_tabla(tabla) -> str:
     return hashlib.md5("|".join(map(str, tabla.index)).encode("utf-8")).hexdigest()[:10]
 
 
-def render_candidate_cells(vista, perfil, categoria: str, zona: Optional[str], destino=None):
+def render_candidate_cells(vista, perfil, categoria: str, zona: Optional[str], destino=None) -> List[str]:
     """Tabla de celdas de la zona recomendada (o de todas, sin zona) con las tres lentes, enlace al mapa y exportación a
-    CSV en dos pasos: el usuario marca filas, pulsa «Confirmar selección» y solo entonces aparece la descarga."""
+    CSV en dos pasos: el usuario marca filas, pulsa «Confirmar selección» y solo entonces aparece la descarga.
+
+    Devuelve las celdas marcadas en la tabla, para que el mapa de recomendación las resalte."""
     zona = zona if zona in LOCATIONS else None  # una zona que el panorama no conoce no debe romper la sección
     with destino if destino is not None else st.container():
         ambito = f"la zona {zona}" if zona else "todas las zonas"
@@ -290,7 +293,7 @@ def render_candidate_cells(vista, perfil, categoria: str, zona: Optional[str], d
             st.info(
                 f"No hay celdas con confianza de datos media o alta en {ambito}. Mira el panorama completo más abajo."
             )
-            return
+            return []
         todas = st.toggle(
             f"Ver las {len(candidatas)} celdas (no solo las {pv.MAX_FILAS_TABLA} primeras)",
             value=False,
@@ -356,6 +359,7 @@ def render_candidate_cells(vista, perfil, categoria: str, zona: Optional[str], d
                 "El CSV usa el perfil elegido (con tus ajustes, si los hay), e incluye lentes, percentiles, confianza y "
                 "enlace al mapa. Datos © colaboradores de OpenStreetMap (ODbL)."
             )
+        return marcadas
 
 
 def render_zone_lenses(vista, destino=None):
@@ -380,29 +384,40 @@ def render_zone_lenses(vista, destino=None):
         )
 
 
+class Panorama(NamedTuple):
+    """Lo que la sección calculó, para que el mapa de recomendación (que está ARRIBA, pero se dibuja al final en un
+    contenedor reservado) pueda pintar las mismas celdas con el mismo perfil."""
+
+    vista: pd.DataFrame
+    perfil: BusinessProfile
+    marcadas: List[str]
+
+
 def render_panorama_section(
     categoria: str,
     data_dir: Optional[Path] = None,
     zona: Optional[str] = None,
     destino_celdas=None,
     destino_zonas=None,
-):
+) -> Optional[Panorama]:
     """Sección completa para una categoría de Overpass (food_drink, business, hospital, school, sport, leisure o mall).
 
     `zona`: la zona recomendada por el puntaje; con ella la tabla de celdas se limita a esa zona. `destino_celdas` y
     `destino_zonas`: contenedores de Streamlit creados antes (p. ej. justo bajo la zona recomendada) donde dibujar la
-    tabla de celdas y el resumen por zona; sin ellos se dibujan dentro de la sección."""
+    tabla de celdas y el resumen por zona; sin ellos se dibujan dentro de la sección.
+
+    Devuelve el `Panorama` con el que se dibujó, o None si no hay datos de celda para esta categoría."""
     ruta = Path(data_dir) if data_dir is not None else DATA_ML
     st.divider()
     st.subheader("🗺️ Panorama por celda de 250 m")
     base = DEFAULT_PROFILES.get(categoria)
     if base is None:
         st.info("Esta categoría no tiene panorama por celda.")
-        return
+        return None
     guardado, counts, manifiesto = load_data(ruta)
     if guardado is None:
         st.info(f"El panorama por celda no está disponible: {manifiesto}. Se genera con `tools/build_panorama.py`.")
-        return
+        return None
     st.caption(
         "Tres lentes por separado —**competencia**, **mercado consumidor** y **proveedores**— sobre celdas de 250 m, con "
         "indicadores explícitos (conteos de POIs de OpenStreetMap ponderados por vecindad). **No hay un puntaje combinado**: "
@@ -414,7 +429,7 @@ def render_panorama_section(
     perfil, avisos = render_profile_controls(categoria, base, counts, con_brecha)
     render_profile_status(perfil, base, avisos)
     vista = pv.attach_places(pv.compute_view(counts, perfil, guardado, categoria), load_places(ruta))
-    render_candidate_cells(vista, perfil, categoria, zona, destino_celdas)
+    marcadas = render_candidate_cells(vista, perfil, categoria, zona, destino_celdas)
     render_zone_lenses(vista, destino_zonas)
 
     capas = pv.available_layers(vista)
@@ -466,3 +481,4 @@ def render_panorama_section(
             else ""
         )
     )
+    return Panorama(vista=vista, perfil=perfil, marcadas=marcadas)

@@ -664,3 +664,140 @@ def test_la_ficha_de_una_celda_real_no_lleva_escapes_de_mas():
     at = abrir("food_drink")
     ficha = next(m for m in textos(at.markdown) if m.startswith("##### Ficha de la celda"))
     assert "\\" not in ficha
+
+
+# ---- celdas dentro del mapa de recomendación ---------------------------------------------------------------------
+def _mapa_reco(zona="Birkirkara", capa=None, isla=False, con_panorama=True, marcadas=()):
+    """(out, panorama, figura) del mapa de arriba, sin levantar la pantalla."""
+    import pandas as pd
+
+    from src.locations import LOCATIONS
+    from src.ml import panorama_view as pv
+    from streamlit_app.dashboards import panorama_section as ps
+    from streamlit_app.dashboards import recommendation_dashboard as rd
+
+    out = pd.DataFrame(
+        {"score": [0.9 - 0.1 * i for i in range(len(LOCATIONS))]},
+        index=pd.Index(list(LOCATIONS), name="zone_name"),
+    )
+    pano = None
+    if con_panorama:
+        guardado, counts, _ = ps.load_data(ROOT / "data" / "ml")
+        vista = pv.attach_places(
+            pv.compute_view(counts, bp.get_default_profile("food_drink"), guardado, "food_drink"),
+            ps.load_places(ROOT / "data" / "ml"),
+        )
+        pano = ps.Panorama(vista=vista, perfil=bp.get_default_profile("food_drink"), marcadas=list(marcadas))
+        capa = capa or pv.available_layers(vista)[rd.capa_por_defecto(pv.available_layers(vista))]
+    return out, pano, rd.build_score_map(out, pano, zona, capa, isla)
+
+
+def test_el_mapa_de_recomendacion_dibuja_las_celdas_de_la_zona():
+    """Lo que faltaba: el mapa de arriba solo tenía 7 puntos de ciudad. Ahora trae las celdas de la zona recomendada."""
+    from src.ml import panorama_view as pv
+
+    out, pano, fig = _mapa_reco()
+    celdas = next(t for t in fig.data if t.name != "zonas" and t.mode == "markers")
+    esperadas = pano.vista[pv.zone_cells(pano.vista, "Birkirkara")]
+    assert len(celdas.lat) == len(esperadas) > 50
+    assert set(celdas.lat) == set(esperadas["lat"])
+
+
+def test_el_mapa_de_recomendacion_se_centra_en_la_zona_no_en_la_isla():
+    from src.locations import LOCATIONS
+    from streamlit_app.dashboards import recommendation_dashboard as rd
+
+    _, _, cerca = _mapa_reco()
+    assert cerca.layout.mapbox.zoom == rd.ZOOM_ZONA > rd.ZOOM_ISLA
+    assert cerca.layout.mapbox.center.lat == pytest.approx(LOCATIONS["Birkirkara"].latitude)
+    _, _, lejos = _mapa_reco(isla=True)
+    assert lejos.layout.mapbox.zoom == rd.ZOOM_ISLA
+
+
+def test_el_hover_de_una_celda_dice_su_calle_y_escapa_el_html():
+    out, pano, fig = _mapa_reco()
+    celdas = next(t for t in fig.data if t.name != "zonas" and t.mode == "markers")
+    assert any(", Birkirkara<br>" in t for t in celdas.hovertext)
+    pano.vista["calle"] = "<b>Triq</b>"
+    from streamlit_app.dashboards import recommendation_dashboard as rd
+
+    fig2 = rd.build_score_map(out, pano, "Birkirkara", "Mercado (índice 0-1)")
+    hov = next(t for t in fig2.data if t.name != "zonas" and t.mode == "markers").hovertext[0]
+    assert "<b>" not in hov and "&lt;b&gt;Triq&lt;/b&gt;" in hov
+
+
+def test_las_celdas_marcadas_en_la_tabla_salen_como_su_cuadrado():
+    from src.ml import panorama_view as pv
+    from streamlit_app.dashboards import panorama_section as ps
+
+    _, pano0, _ = _mapa_reco()
+    dos = list(pano0.vista[pv.zone_cells(pano0.vista, "Birkirkara")].index[:2])
+    _, _, fig = _mapa_reco(marcadas=dos)
+    cuadros = [t for t in fig.data if t.name == "celda marcada"]
+    assert len(cuadros) == 2
+    lat_sq, _ = ps.cuadrado_celda(dos[0])
+    assert list(cuadros[0].lat) == lat_sq and cuadros[0].fill == "toself"
+    # una celda marcada que no está en la zona no se dibuja
+    _, _, sin = _mapa_reco(marcadas=["r02c08"])
+    assert not [t for t in sin.data if t.name == "celda marcada"]
+
+
+def test_sin_panorama_el_mapa_sigue_siendo_el_de_zonas_con_su_puntaje():
+    """Si falta data/ml el mapa no debe romperse: vuelve al de siempre, con la barra de color del puntaje."""
+    out, pano, fig = _mapa_reco(con_panorama=False)
+    assert pano is None and len(fig.data) == 1
+    zonas = fig.data[0]
+    assert zonas.marker.showscale and zonas.marker.colorbar.title.text == "Puntaje"
+    assert list(zonas.text) == list(out.index)
+
+
+def test_con_celdas_la_barra_de_color_es_la_lente_y_la_zona_recomendada_se_distingue():
+    """Dos barras de color en un mapa no se leen: con celdas, la barra es de la lente y las zonas van por color plano."""
+    out, _, fig = _mapa_reco()
+    zonas = next(t for t in fig.data if t.name == "zonas")
+    assert not zonas.marker.showscale
+    assert list(zonas.marker.color) == ["#1a7f37" if z == "Birkirkara" else "#8a8a8a" for z in out.index]
+    celdas = next(t for t in fig.data if t.name != "zonas" and t.mode == "markers")
+    assert celdas.marker.showscale
+
+
+def test_la_lente_por_defecto_del_mapa_es_el_mercado():
+    from src.ml import panorama_view as pv
+    from streamlit_app.dashboards import recommendation_dashboard as rd
+
+    capas = list(pv.CAPAS)
+    assert capas[rd.capa_por_defecto(capas)].startswith("Mercado")
+    assert rd.capa_por_defecto(["Solo una"]) == 0  # sin mercado disponible, la primera
+
+
+def test_una_zona_desconocida_no_dibuja_celdas_pero_tampoco_falla():
+    _, _, fig = _mapa_reco(zona="Atlantis")
+    assert [t.name for t in fig.data] == ["zonas"]
+
+
+def test_la_pagina_pone_el_mapa_con_celdas_entre_la_tabla_y_el_desglose(pagina):
+    """El mapa de arriba es el de la decisión: va bajo la zona recomendada y sus celdas, antes del desglose por zona."""
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    assert any(r.label == "Color de las celdas" for r in pagina.radio)
+    assert any(t.label == "Ver toda la isla" for t in pagina.toggle)
+    m = textos(pagina.markdown)
+    pos = {k: next(i for i, t in enumerate(m) if k in t) for k in ("Celdas de la zona", "Desglose por zona")}
+    assert pos["Celdas de la zona"] < pos["Desglose por zona"]
+    assert any("El color de las celdas es una lente, no el puntaje de la zona" in c for c in textos(pagina.caption))
+
+
+def test_sin_datos_de_celda_la_pagina_mantiene_el_mapa_de_zonas(pagina, tmp_path, monkeypatch):
+    """Si falta data/ml no hay celdas que dibujar, pero la recomendación por zona sigue entera."""
+    from streamlit_app.dashboards import panorama_section as ps
+
+    monkeypatch.setattr(ps, "DATA_ML", tmp_path)
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    assert not any(r.label == "Color de las celdas" for r in pagina.radio)
+    assert any("Las 7 zonas monitorizadas" in c for c in textos(pagina.caption))
+    assert any("Zona recomendada" in m.label for m in pagina.metric)
