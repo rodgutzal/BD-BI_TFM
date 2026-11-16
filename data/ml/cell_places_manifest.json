@@ -1,15 +1,19 @@
 {
   "atribucion": "© colaboradores de OpenStreetMap, ODbL (https://www.openstreetmap.org/copyright)",
   "base_osm": "2026-11-15T20:33:35Z",
-  "consulta": "[out:json][timeout:120];\nrelation[\"boundary\"=\"administrative\"][\"admin_level\"=\"8\"](35.840000,14.440000,35.940000,14.580000);\nout geom;",
-  "ejecutado": "2026-11-15T20:58:14Z",
+  "calle_max_m": 150.0,
+  "calles": 4082,
+  "consulta": "[out:json][timeout:150];\nrelation[\"boundary\"=\"administrative\"][\"admin_level\"=\"8\"](35.840000,14.440000,35.940000,14.580000);\nout geom;",
+  "consulta_calles": "[out:json][timeout:150];\nway[\"highway\"][\"name\"](35.840000,14.440000,35.940000,14.580000);\nout geom;",
+  "ejecutado": "2026-11-16T00:54:54Z",
   "espejo": "respuesta guardada en un archivo local",
   "filas": 1139,
-  "formato": 1,
+  "formato": 2,
   "localidades": 46,
   "localidades_incompletas": [],
   "nivel_admin": 8,
   "por_cercania": 99,
-  "sha256": "e7ca72383d45371928ee835293f3cf71e211a627e90c0e97fbf064d6fd2fa619",
+  "sha256": "078485be54e9dc10965c0f9134921da6038310a311a797ae1ab08ada38a5a314",
+  "sin_calle": 141,
   "sin_localidad": 10
 }

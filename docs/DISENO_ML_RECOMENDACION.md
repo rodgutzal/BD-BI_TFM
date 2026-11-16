@@ -263,6 +263,8 @@ El entrenamiento no corre donde está el stack. Hasta la fase 1b las herramienta
 | `cell_counts.csv` | 1.447 celdas × (categoría\|subcategoría): la base para recalcular las lentes con el perfil que ajuste el usuario, sin la base de datos |
 | `panorama_manifest.json` | procedencia (hash de la entrada, commit, versiones), parámetros, decisión de la validación y sha256 de los dos CSV |
 
+Aparte, `tools/build_cell_places.py` escribe `cell_places.csv` (+ su manifiesto) con **dónde está cada celda en palabras**: la calle con nombre más cercana (≤ 150 m) y la localidad (consejo local, `admin_level=8`), de dos consultas a Overpass. La zona de referencia no bastaba —es una de las 7 zonas, a veces a casi 6 km— y la localidad sola tampoco: dentro del radio de 1.500 m de una zona casi todas las celdas caen en el mismo pueblo, así que la columna repetía «Birkirkara» fila tras fila. La calle es lo que distingue una celda de su vecina. Si el archivo falta o no coincide con su manifiesto, la pantalla vuelve a rotular con la zona de referencia.
+
 `src/ml/panorama.py` solo usa numpy, pandas y scipy (la rejilla ya lo usaba): **no importa scikit-learn**, así que el dashboard puede importarlo. Con `--sin-brecha` solo se calculan las lentes, en segundos; con la brecha, ~1 minuto por objetivo.
 
 **Qué dice cada columna y qué no:**

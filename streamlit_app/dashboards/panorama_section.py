@@ -11,6 +11,7 @@ entrena nada ni se importa scikit-learn. Al ajustar el perfil, las lentes se rec
 
 import hashlib
 import html
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -22,7 +23,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from src.locations import LOCATIONS
-from src.ml import panorama
+from src.ml import grid, panorama
 from src.ml import panorama_view as pv
 from src.ml import places
 from src.ml.business_profiles import DEFAULT_PROFILES
@@ -110,17 +111,38 @@ def render_profile_status(perfil, base, avisos):
         st.warning(aviso)
 
 
+_MARCADO = re.compile(r"([\\`*_\[\]()~|$])")
+
+
+def escapar_markdown(texto) -> str:
+    """Los nombres vienen de OpenStreetMap, que cualquiera puede editar: uno con sintaxis Markdown (`*`, `_`, `$`…) no
+    debe alterar el texto de la pantalla. Streamlit ya escapa el HTML, pero no el marcado."""
+    return _MARCADO.sub(r"\\\1", str(texto))
+
+
 def porcentaje(parte: int, total: int) -> str:
     """Porcentaje con un decimal. Con cero decimales 5 de 1139 (0,4 %) se veía como «0%», que parece «ninguna»."""
     return f"{parte / total:.1%}" if total else "—"
 
 
-def build_map(vista, capa: str, seleccionada: Optional[str]):
+ZOOM_ISLA = 10.5  # toda la rejilla: para comparar celdas entre sí
+ZOOM_CELDA = 15.5  # una celda de 250 m con sus calles alrededor
+
+
+def cuadrado_celda(cell_id: str):
+    """(latitudes, longitudes) del contorno cerrado de la celda, para dibujarla como el cuadrado de 250 m que es."""
+    sur, oeste, norte, este = grid.cell_bounds(*grid.parse_cell_id(cell_id))
+    return [sur, sur, norte, norte, sur], [oeste, este, este, oeste, oeste]
+
+
+def build_map(vista, capa: str, seleccionada: Optional[str], acercar: bool = False):
+    """Mapa de la capa elegida. Si hay celda elegida se dibuja su cuadrado de 250 m; con `acercar`, el mapa se centra en
+    ella y se acerca hasta que se ven las calles (que es lo que permite reconocer el sitio)."""
     valores, titulo = pv.layer_values(vista, capa)
     con, sin = vista[valores.notna()], vista[valores.isna()]
     textos = [
-        f"{i} · {html.escape(getattr(r, 'localidad', '') or r.zona_cercana)}<br>{titulo}: {v:.2f}<br>Confianza: {r.confianza_nivel}"
-        for i, r, v in zip(con.index, con.itertuples(), valores[con.index])
+        f"{i} · {html.escape(pv.place_label(r))}<br>{titulo}: {v:.2f}<br>Confianza: {r['confianza_nivel']}"
+        for i, (_, r), v in zip(con.index, con.iterrows(), valores[con.index])
     ]
     fig = go.Figure()
     if len(sin):
@@ -155,8 +177,24 @@ def build_map(vista, capa: str, seleccionada: Optional[str]):
             name=titulo,
         )
     )
-    if seleccionada is not None and seleccionada in vista.index:
-        f = vista.loc[seleccionada]
+    elegida = seleccionada if seleccionada is not None and seleccionada in vista.index else None
+    centro = dict(lat=float(vista["lat"].mean()), lon=float(vista["lon"].mean()))
+    zoom = ZOOM_ISLA
+    if elegida is not None:
+        f = vista.loc[elegida]
+        lat_sq, lon_sq = cuadrado_celda(elegida)
+        fig.add_trace(
+            go.Scattermapbox(
+                lat=lat_sq,
+                lon=lon_sq,
+                mode="lines",
+                fill="toself",
+                fillcolor="rgba(31,119,180,0.25)",
+                line=dict(width=3, color="#1f77b4"),
+                name="celda elegida",
+                hoverinfo="skip",
+            )
+        )
         fig.add_trace(
             go.Scattermapbox(
                 lat=[f["lat"]],
@@ -165,17 +203,15 @@ def build_map(vista, capa: str, seleccionada: Optional[str]):
                 name="celda elegida",
                 marker=dict(size=16, color="#1f77b4"),
                 hoverinfo="skip",
-                text=[f"Celda elegida: {seleccionada}"],
+                text=[html.escape(f"{elegida} · {pv.place_label(f)}")],
                 textposition="top right",
                 textfont=dict(size=14, color="#0b3d6b"),
             )
         )
+        if acercar:
+            centro, zoom = dict(lat=float(f["lat"]), lon=float(f["lon"])), ZOOM_CELDA
     fig.update_layout(
-        mapbox=dict(
-            style="open-street-map",
-            center=dict(lat=float(vista["lat"].mean()), lon=float(vista["lon"].mean())),
-            zoom=10.5,
-        ),
+        mapbox=dict(style="open-street-map", center=centro, zoom=zoom),
         height=520,
         margin=dict(l=0, r=0, t=0, b=0),
         showlegend=False,
@@ -188,12 +224,11 @@ def _valor(x, formato="{:.2f}"):
 
 
 def render_cell_card(fila, perfil, brecha_disponible: bool, perfil_personalizado: bool):
-    localidad = fila.get("localidad", "")
-    lugar = f"{localidad} · " if isinstance(localidad, str) and localidad else ""
-    st.markdown(
-        f"##### Ficha de la celda {fila.name} · {lugar}zona de referencia: {fila['zona_cercana']} ({fila['dist_zona_m']:.0f} m)"
+    st.markdown(f"##### Ficha de la celda {fila.name} · {escapar_markdown(pv.place_label(fila))}")
+    st.caption(
+        f"Zona de referencia: {fila['zona_cercana']} ({fila['dist_zona_m']:.0f} m del centro de la zona) · "
+        f"[ver la celda en OpenStreetMap]({pv.map_link(fila['lat'], fila['lon'])})"
     )
-    st.caption(f"[Ver la celda en OpenStreetMap]({pv.map_link(fila['lat'], fila['lon'])})")
     c1, c2, c3 = st.columns(3)
     c1.markdown("**Competencia**")
     c1.write(f"Directa: {_valor(fila['competencia_directa'])} · indirecta: {_valor(fila['competencia_indirecta'])}")
@@ -402,7 +437,17 @@ def render_panorama_section(
         key=f"pano_celda_{categoria}",
     )
 
-    st.plotly_chart(build_map(vista, capa, elegida), width="stretch")
+    acercar = st.toggle(
+        "🔍 Acercar a la celda elegida (para ver sus calles)",
+        value=True,
+        key=f"pano_acercar_{categoria}",
+        help="Apágalo para volver a ver toda la rejilla y comparar unas celdas con otras.",
+    )
+    st.plotly_chart(build_map(vista, capa, elegida, acercar), width="stretch")
+    st.caption(
+        "La celda elegida se dibuja como el cuadrado de 250 m que es."
+        + ("" if acercar else " Acércate con el control de arriba para ver sus calles.")
+    )
 
     st.caption(
         f"★ = mercado en el 25 % superior y competencia directa en el 25 % inferior, con confianza no baja: **{len(candidatas)} de "

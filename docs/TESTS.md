@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1202 funciones de test · 1423 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1229 funciones de test · 1450 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -46,8 +46,8 @@
 | [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 36 | 36 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
-| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 35 | 35 |
-| [`tests/test_ml_places.py`](#teststest_ml_placespy) | 19 | 19 |
+| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 40 | 40 |
+| [`tests/test_ml_places.py`](#teststest_ml_placespy) | 31 | 31 |
 | [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 43 | 56 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
@@ -60,7 +60,7 @@
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 39 | 39+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 49 | 49+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -1175,18 +1175,23 @@
 - `test_la_tabla_publicada_no_ofrece_la_capa_de_brecha`
 - `test_capas_disponibles_omiten_lo_que_no_tiene_datos` — La brecha solo es una capa si la categoría la tiene; una lente toda NaN no se ofrece.
 - `test_layer_values_devuelve_la_columna_correcta` — Cada capa muestra su columna; la de brecha, la brecha relativa.
-- `test_cell_label_incluye_celda_zona_y_distancia` — La etiqueta de la lista de celdas dice dónde está.
+- `test_cell_label_dice_la_calle_y_el_pueblo_y_sin_ellos_la_zona` — La etiqueta de la lista de celdas dice dónde está, con la calle por delante.
 - `test_el_modulo_no_importa_scikit_learn` — La interfaz usa este módulo en el contenedor del dashboard, que no carga scikit-learn.
 - `test_el_radio_de_la_zona_es_el_del_puntaje_por_zona` — Las celdas de una zona se toman con el mismo radio con el que el puntaje cuenta su competencia.
-- `test_attach_places_rotula_con_la_localidad_y_sin_ella_queda_vacia`
+- `test_attach_places_trae_calle_y_localidad_y_sin_archivo_quedan_vacias`
+- `test_place_label_prefiere_la_calle_y_cae_a_la_zona_cuando_no_hay_nada` — La calle es lo que distingue una celda de su vecina; dentro de una zona la localidad se repite.
+- `test_dentro_de_una_zona_la_calle_distingue_celdas_que_la_localidad_repetia` — El motivo del cambio: en Birkirkara la columna decía «Birkirkara» fila tras fila.
 - `test_zone_cells_son_las_del_radio_y_una_celda_puede_estar_en_dos_zonas`
 - `test_candidate_cells_pone_las_estrella_primero_y_excluye_la_confianza_baja`
 - `test_candidates_table_trae_lugar_lentes_y_enlace`
+- `test_candidates_table_sin_columnas_de_lugar_rotula_con_la_zona`
+- `test_export_frame_lleva_la_calle`
 - `test_zone_summary_tiene_una_fila_por_zona_con_las_estrella_que_hay`
 - `test_export_frame_lleva_el_perfil_y_solo_las_celdas_pedidas`
 - `test_export_csv_se_puede_releer_con_acentos`
 - `test_export_csv_conserva_las_coordenadas_con_precision_de_celda` — Regresión del code-review: con %.6g lat/lon perdían ~10 m (35,897432 → 35,8974).
-- `test_candidates_table_funciona_sin_la_columna_de_localidad`
+- `test_candidates_table_con_localidad_pero_sin_calle_rotula_con_la_localidad`
+- `test_export_frame_tiene_el_mismo_encabezado_sea_cual_sea_la_seleccion` — Code-review: las columnas se decidían sobre las celdas elegidas, así que el encabezado cambiaba de una exportación a otra y dos CSV no se podían juntar.
 
 ## `tests/test_ml_places.py`
 
@@ -1202,16 +1207,28 @@
 - `test_el_centro_en_el_mar_se_asigna_por_cercania_solo_dentro_de_la_tolerancia`
 - `test_la_distancia_al_borde_es_la_correcta`
 - `test_en_un_solape_gana_la_localidad_de_menor_id`
-- `test_escribir_y_leer_devuelve_la_localidad_por_celda`
+- `test_escribir_y_leer_devuelve_la_calle_y_la_localidad_por_celda`
 - `test_un_csv_alterado_o_ausente_no_se_lee`
 - `test_la_tabla_publicada_esta_integra_y_cubre_todas_las_celdas_del_panorama`
 - `test_la_consulta_es_una_sola_y_cubre_la_rejilla`
 - `test_el_dry_run_no_llama_a_la_red`
 - `test_la_herramienta_asigna_desde_una_respuesta_guardada` — Con una respuesta local (sin red) escribe el CSV y el manifiesto en el directorio indicado, sin tocar el panorama.
 - `test_sin_localidades_en_la_respuesta_no_se_escribe_nada`
+- `test_sin_calles_en_la_respuesta_tampoco_se_escribe_nada` — Con localidades pero sin ninguna calle con nombre el rótulo volvería a repetir el pueblo: mejor no escribir.
 - `test_una_isla_dentro_de_un_hueco_de_la_misma_relacion_cuenta_como_dentro` — Regresión del code-review: los huecos se restaban de la unión de todos los anillos exteriores y borraban la isla.
 - `test_los_tramos_que_no_cierran_se_cuentan_para_avisar`
 - `test_la_publicada_no_tiene_limites_incompletos`
+- `test_parse_streets_une_los_tramos_del_mismo_nombre_y_proyecta_a_metros` — Una calle viene partida en varias `way`: todas comparten un único nombre, y cada `way` aporta sus segmentos.
+- `test_parse_streets_descarta_lo_que_no_es_una_via_con_nombre_util` — Sin nombre, sin geometría, con un solo punto o con un nombre que no dice un lugar («4», «A-A»): fuera.
+- `test_nombre_util_acepta_nombres_reales_y_rechaza_marcas_de_eje`
+- `test_nearest_street_da_la_calle_mas_cercana_y_su_distancia` — Dos calles paralelas: cada punto recibe la suya, con la distancia medida al segmento (no a su extremo).
+- `test_nearest_street_deja_vacia_la_celda_sin_calle_cerca` — Más allá de max_m no se rotula: una calle a 500 m no dice dónde está la celda.
+- `test_nearest_street_mide_al_segmento_no_al_vertice` — Un punto frente al medio de la calle está a su distancia perpendicular, no a la del extremo más cercano.
+- `test_nearest_street_por_trozos_da_lo_mismo_que_de_una_vez` — El cálculo va por trozos para no hacer una matriz enorme: el resultado no puede depender del tamaño del trozo.
+- `test_sin_calles_o_sin_puntos_no_falla`
+- `test_la_consulta_de_calles_pide_solo_vias_con_nombre`
+- `test_una_via_sin_rol_delimita_por_fuera` — Code-review: en OSM el rol vacío de una `way` de un límite es el caso corriente y significa «outer»; tratarlo como desconocido hacía desaparecer la localidad entera y sin avisar.
+- `test_una_via_con_un_rol_que_no_delimita_se_cuenta_para_avisar` — Un miembro con otro rol (p. ej. `label`) no cierra nada: la relación se conserva marcada, para que se avise.
 
 ## `tests/test_ml_text_classifier.py`
 
@@ -1503,8 +1520,11 @@
 - `test_las_capas_son_las_tres_lentes_y_la_brecha_solo_donde_existe` — Con una brecha (sintética), food_drink la ofrece como capa exploratoria; hospital no la tiene.
 - `test_la_lista_de_celdas_empieza_por_las_de_mercado_alto_y_competencia_baja` — La primera opción lleva la estrella del filtro de oportunidad, y la nota dice cuántas celdas son.
 - `test_el_porcentaje_de_candidatas_no_se_redondea_a_cero` — 5 de 1139 es 0,4 %: con cero decimales se leía «0%», que parece «ninguna celda». Se muestra con un decimal.
-- `test_el_mapa_rotula_la_celda_elegida` — El punto azul de la celda elegida lleva su identificador, para que se sepa cuál es sin abrir la ficha.
-- `test_el_mapa_sin_celda_elegida_no_dibuja_el_marcador` — Si no hay celda elegida no se añade ningún marcador (ni rótulo) extra.
+- `test_el_mapa_rotula_la_celda_elegida_con_su_calle` — El punto azul lleva el identificador y el lugar, para saber cuál es sin abrir la ficha.
+- `test_el_mapa_dibuja_la_celda_como_el_cuadrado_de_250_m_que_es` — Un punto no deja ver qué área es: la celda elegida se dibuja con sus cuatro lados, cerrados.
+- `test_acercar_centra_el_mapa_en_la_celda_y_se_ven_las_calles` — Sin acercar, el mapa muestra toda la rejilla y la celda es un punto perdido en la isla.
+- `test_acercar_sin_celda_elegida_no_cambia_la_vista` — No hay a qué acercarse: el mapa se queda como está en vez de centrarse en cualquier sitio.
+- `test_el_mapa_sin_celda_elegida_no_dibuja_el_marcador` — Si no hay celda elegida no se añade ningún marcador, rótulo ni cuadrado extra.
 - `test_los_puntos_del_mapa_son_legibles` — Los puntos de celda no son diminutos ni casi transparentes (se confundían con las etiquetas del mapa base).
 - `test_la_ficha_muestra_las_tres_lentes_y_la_confianza` — La ficha de la celda elegida trae competencia, mercado, proveedores y la confianza (que no es una probabilidad).
 - `test_el_mapa_y_la_ficha_usan_el_perfil_elegido` — Una celda con competencia indirecta la pierde al quitar ese tipo de competencia: las lentes se recalculan con el perfil del usuario, no con el de por defecto.
@@ -1535,6 +1555,13 @@
 - `test_si_la_tabla_cambia_la_seleccion_de_filas_no_se_arrastra` — Regresión del code-review: la selección es por posición de fila. Marcar la 20 con «ver todas» y apagar el interruptor dejaba una posición fuera de la tabla (IndexError); ahora la tabla cambia de clave y empieza sin filas marcadas.
 - `test_una_zona_desconocida_no_rompe_la_seccion`
 - `test_el_hover_del_mapa_escapa_el_html_de_la_localidad` — La localidad viene de una fuente externa y editable: no se interpola como HTML en el hover de Plotly.
+- `test_la_seccion_ofrece_acercar_a_la_celda_y_viene_activado` — Lo que faltaba era ver el sitio: el mapa llega acercado y se puede alejar para comparar.
+- `test_la_ficha_y_la_lista_dicen_la_calle_no_solo_el_pueblo` — La ficha encabeza con «calle, pueblo» y la lista de celdas también.
+- `test_la_tabla_de_la_zona_ya_no_repite_el_mismo_pueblo_en_cada_fila` — El motivo del cambio, comprobado en la pantalla: en Birkirkara la columna «Lugar» decía siempre «Birkirkara».
+- `test_sin_el_archivo_de_lugares_la_pantalla_sigue_funcionando` — Si cell_places.csv falta, se rotula con la zona de referencia y no se rompe nada.
+- `test_el_rotulo_de_la_celda_elegida_tambien_escapa_el_html` — Code-review: el hover escapaba el nombre de OSM pero el rótulo del punto azul no.
+- `test_la_ficha_escapa_el_marcado_del_nombre_de_osm` — QA de Codex (menor): un nombre de OSM con sintaxis Markdown alteraba el encabezado de la ficha.
+- `test_la_ficha_de_una_celda_real_no_lleva_escapes_de_mas` — El escape no debe ensuciar los nombres corrientes, que son la inmensa mayoría.
 
 ## `tests/test_strip_panorama_gap.py`
 
