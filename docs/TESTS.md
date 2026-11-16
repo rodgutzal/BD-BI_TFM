@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1229 funciones de test · 1450 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1243 funciones de test · 1464 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -60,7 +60,7 @@
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 6 | 6 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 49 | 49+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 63 | 63+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -1562,6 +1562,20 @@
 - `test_el_rotulo_de_la_celda_elegida_tambien_escapa_el_html` — Code-review: el hover escapaba el nombre de OSM pero el rótulo del punto azul no.
 - `test_la_ficha_escapa_el_marcado_del_nombre_de_osm` — QA de Codex (menor): un nombre de OSM con sintaxis Markdown alteraba el encabezado de la ficha.
 - `test_la_ficha_de_una_celda_real_no_lleva_escapes_de_mas` — El escape no debe ensuciar los nombres corrientes, que son la inmensa mayoría.
+- `test_el_mapa_de_recomendacion_dibuja_las_celdas_de_la_zona` — Lo que faltaba: el mapa de arriba solo tenía 7 puntos de ciudad. Ahora trae las celdas de la zona recomendada.
+- `test_el_mapa_de_recomendacion_se_centra_en_la_zona_no_en_la_isla`
+- `test_el_hover_de_una_celda_dice_su_calle_y_escapa_el_html`
+- `test_las_celdas_marcadas_en_la_tabla_salen_como_su_cuadrado`
+- `test_sin_panorama_el_mapa_sigue_siendo_el_de_zonas_con_su_puntaje` — Si falta data/ml el mapa no debe romperse: vuelve al de siempre, con la barra de color del puntaje.
+- `test_con_celdas_la_barra_de_color_es_la_lente_y_la_zona_recomendada_se_distingue` — Dos barras de color en un mapa no se leen: con celdas, la barra es de la lente y las zonas van por color plano.
+- `test_la_lente_por_defecto_del_mapa_es_el_mercado`
+- `test_una_zona_desconocida_no_dibuja_celdas_pero_tampoco_falla`
+- `test_la_pagina_pone_el_mapa_con_celdas_entre_la_tabla_y_el_desglose` — El mapa de arriba es el de la decisión: va bajo la zona recomendada y sus celdas, antes del desglose por zona.
+- `test_sin_datos_de_celda_la_pagina_mantiene_el_mapa_de_zonas` — Si falta data/ml no hay celdas que dibujar, pero la recomendación por zona sigue entera.
+- `test_el_mapa_de_recomendacion_no_ofrece_la_brecha_exploratoria` — Code-review: la brecha no está validada y este es el mapa con el que se decide. Vive en el panorama, con su aviso.
+- `test_las_celdas_sin_dato_de_la_lente_salen_en_gris_y_se_cuentan` — Code-review: antes se omitían en silencio mientras el texto afirmaba que estaban todas.
+- `test_las_claves_del_mapa_llevan_la_categoria` — Code-review: eran globales, así que la lente elegida se arrastraba al buscar otro negocio.
+- `test_con_zona_desconocida_no_se_ofrece_la_lente_ni_se_habla_de_celdas` — Code-review: salía el selector de lente y un texto de «0 celdas de Atlantis» sobre un mapa que era el de zonas.
 
 ## `tests/test_strip_panorama_gap.py`
 
