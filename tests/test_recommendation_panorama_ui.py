@@ -1095,8 +1095,6 @@ def test_el_resumen_sigue_a_la_zona_cuando_se_filtra(pagina):
 
 def test_el_resumen_no_corona_a_una_zona_que_no_gano():
     """Code-review: el texto decía «es la mejor» por el número de filas, sin mirar la posición real."""
-    import pandas as pd
-    import streamlit as st
     from streamlit.testing.v1 import AppTest
 
     codigo = """
