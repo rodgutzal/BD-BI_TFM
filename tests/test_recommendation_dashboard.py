@@ -6,6 +6,7 @@ El README promete que el desglose muestra cada dimensión CRUDA y NORMALIZADA
 
 import math
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -13,14 +14,37 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.database import RouteDatabase
-from src.location_scoring import recommend_locations
+from src.location_scoring import POR_CLAVE, criterios_disponibles, filter_zones, pesos_por_defecto, recommend_locations
 from src.locations import LOCATIONS
-from streamlit_app.dashboards.recommendation_dashboard import build_results_table, normalize_weights
+from streamlit_app.dashboards.recommendation_dashboard import (
+    build_contributions_table,
+    build_results_table,
+    normalize_weights,
+)
+
+
+def _medicion(ts, origin, destination, minutos):
+    return {
+        "timestamp": ts.isoformat(),
+        "origin": origin,
+        "destination": destination,
+        "data_source": "tomtom",
+        "travel_time_min": minutos,
+        "distance_km": 3.0,
+    }
 
 
 @pytest.fixture
 def out(tmp_path):
     db = RouteDatabase(tmp_path / "t.csv", tmp_path / "t.db")
+    ahora = datetime.now(timezone.utc)
+    db.save_records_to_sqlite(
+        [
+            _medicion(ahora, "Msida", "Gzira", 10.0),
+            _medicion(ahora, "Msida", "Sliema", 20.0),
+            _medicion(ahora, "Valletta", "Birkirkara", 15.0),
+        ]
+    )
     # Una zona (Marsaskala) sin demografía, para ver cómo queda un dato faltante.
     db.save_demographics(
         [{"zone_name": z, "population": 1000 * (i + 1)} for i, z in enumerate(LOCATIONS) if z != "Marsaskala"]
@@ -43,14 +67,20 @@ def out(tmp_path):
     return recommend_locations(db, "una tienda de ropa")
 
 
-def test_la_tabla_muestra_cada_factor_crudo_y_normalizado(out):
-    """La tabla de resultados trae, por cada factor, el valor crudo y el normalizado, y una fila por zona."""
-    tabla = build_results_table(out)
+@pytest.fixture
+def criterios(out):
+    """Los criterios que esta tabla puntuó: los tres de la base (sin las lentes del panorama, que no se le pasaron)."""
+    return criterios_disponibles(out)
+
+
+def test_la_tabla_muestra_cada_factor_crudo_y_normalizado(out, criterios):
+    """La tabla de resultados trae, por cada factor medido directamente, el crudo y el normalizado, una fila por zona."""
+    tabla = build_results_table(out, criterios)
     for columna in (
         "Zona",
         "Puntaje",
         "Población",
-        "Demanda (0-1)",
+        "Población (0-1)",
         "Competencia (conteo real)",
         "Competencia (ajustada)",
         "Baja competencia (0-1)",
@@ -62,51 +92,95 @@ def test_la_tabla_muestra_cada_factor_crudo_y_normalizado(out):
     assert len(tabla) == len(LOCATIONS)
 
 
-def test_las_columnas_normalizadas_estan_entre_0_y_1(out):
-    """Las columnas normalizadas (demanda, baja competencia, accesibilidad) quedan entre 0 y 1."""
-    tabla = build_results_table(out)
-    for columna in ("Demanda (0-1)", "Baja competencia (0-1)", "Accesibilidad (0-1)"):
+def test_las_columnas_normalizadas_estan_entre_0_y_1(out, criterios):
+    """Las columnas normalizadas quedan entre 0 y 1."""
+    tabla = build_results_table(out, criterios)
+    for columna in [c for c in tabla.columns if c.endswith("(0-1)")]:
         valores = tabla[columna].dropna()
         assert valores.between(0, 1).all(), columna
 
 
-def test_mas_alto_siempre_es_mejor_en_las_tres_columnas(out):
+def test_mas_alto_siempre_es_mejor_en_las_columnas_normalizadas(out, criterios):
     """La zona con más competencia tiene el menor 'Baja competencia'."""
-    tabla = build_results_table(out).set_index("Zona")
+    tabla = build_results_table(out, criterios).set_index("Zona")
     mas_competida = tabla["Competencia (conteo real)"].idxmax()
     assert tabla.loc[mas_competida, "Baja competencia (0-1)"] == tabla["Baja competencia (0-1)"].min()
-    # y la más poblada, el mayor 'Demanda'
+    # y la más poblada, el mayor 'Población (0-1)'
     mas_poblada = tabla["Población"].idxmax()
-    assert tabla.loc[mas_poblada, "Demanda (0-1)"] == 1.0
+    assert tabla.loc[mas_poblada, "Población (0-1)"] == 1.0
 
 
-def test_el_puntaje_es_la_suma_ponderada_de_las_columnas_mostradas(out):
-    """Lo que dice el pie de la tabla: Puntaje = suma ponderada de las tres
-    columnas (0-1), con 0.5 donde falta el dato."""
-    pesos = {"demanda": 0.40, "competencia": 0.35, "accesibilidad": 0.25}  # los de por defecto
-    tabla = build_results_table(out)
-    for _, fila in tabla.iterrows():
-        esperado = (
-            pesos["demanda"] * (0.5 if math.isnan(fila["Demanda (0-1)"]) else fila["Demanda (0-1)"])
-            + pesos["competencia"]
-            * (0.5 if math.isnan(fila["Baja competencia (0-1)"]) else fila["Baja competencia (0-1)"])
-            + pesos["accesibilidad"] * (0.5 if math.isnan(fila["Accesibilidad (0-1)"]) else fila["Accesibilidad (0-1)"])
+def test_el_puntaje_es_la_suma_ponderada_de_las_columnas_mostradas(out, criterios):
+    """Lo que dice el pie de la tabla: Puntaje = suma ponderada de las columnas (0-1), con 0,5 donde falta el dato."""
+    pesos = pesos_por_defecto(criterios)
+    tabla = build_results_table(out, criterios).set_index("Zona")
+    for zona, fila in tabla.iterrows():
+        esperado = sum(
+            peso
+            * (0.5 if math.isnan(fila[f"{POR_CLAVE[clave].corta} (0-1)"]) else fila[f"{POR_CLAVE[clave].corta} (0-1)"])
+            for clave, peso in pesos.items()
         )
-        assert fila["Puntaje"] == pytest.approx(esperado), fila["Zona"]
+        assert fila["Puntaje"] == pytest.approx(esperado), zona
 
 
-def test_una_zona_sin_dato_queda_en_blanco_y_se_nota(out):
-    """Una zona sin dato queda en blanco (NaN) en vez de en 0 y su recuento de datos completos baja de 3."""
-    tabla = build_results_table(out).set_index("Zona")
+def test_una_zona_sin_dato_queda_en_blanco_y_se_nota(out, criterios):
+    """Una zona sin dato queda en blanco (NaN) en vez de en 0 y su recuento de datos completos baja."""
+    tabla = build_results_table(out, criterios).set_index("Zona")
     assert math.isnan(tabla.loc["Marsaskala", "Población"])
-    assert math.isnan(tabla.loc["Marsaskala", "Demanda (0-1)"])  # blanco -> "sin dato" en pantalla
+    assert math.isnan(tabla.loc["Marsaskala", "Población (0-1)"])  # blanco -> "sin dato" en pantalla
     assert tabla.loc["Marsaskala", "Datos completos (de 3)"] < 3
 
 
-def test_normalize_weights_conserva_proporciones_y_suma_uno():
-    """Los pesos normalizados conservan las proporciones y suman 1; con todo en cero se usan los pesos por defecto sin dividir entre cero."""
-    w = normalize_weights(40, 35, 25)
+def test_normalize_weights_conserva_proporciones_y_suma_uno(criterios):
+    """Los pesos normalizados conservan las proporciones y suman 1; con todo en cero se vuelve a los de fábrica sin
+    dividir entre cero."""
+    w = normalize_weights({"demanda": 40, "competencia": 35, "accesibilidad": 25}, criterios)
     assert sum(w.values()) == pytest.approx(1.0)
     assert w["demanda"] == pytest.approx(0.40)
-    # todo en cero -> pesos por defecto, sin dividir entre cero
-    assert sum(normalize_weights(0, 0, 0).values()) == pytest.approx(1.0)
+    assert w["competencia"] == pytest.approx(0.35)
+    cero = normalize_weights({c.clave: 0 for c in criterios}, criterios)
+    assert sum(cero.values()) == pytest.approx(1.0)
+    assert cero == pesos_por_defecto(criterios)
+
+
+def test_la_tabla_solo_trae_los_factores_que_se_puntuaron(out, criterios):
+    """Sin las lentes del panorama, sus columnas no aparecen: enseñarlas vacías haría creer que se tuvieron en cuenta."""
+    tabla = build_results_table(out, criterios)
+    assert not [c for c in tabla.columns if "Mercado" in c or "Proveedores" in c or "Diversidad" in c]
+    assert "Datos completos (de 3)" in tabla.columns
+
+
+# ---- desglose de aportación -------------------------------------------------------------------------------------
+def test_el_desglose_dice_cuanto_puso_cada_factor_y_suma_el_puntaje(out, criterios):
+    """Con varios pesos el número final solo es creíble si se puede abrir: cada columna es peso × normalizado."""
+    tabla = build_contributions_table(out, criterios).set_index("Zona")
+    assert list(tabla.columns) == ["Puntaje"] + [c.etiqueta for c in criterios]
+    aportes = tabla[[c.etiqueta for c in criterios]]
+    assert aportes.sum(axis=1).round(9).equals(tabla["Puntaje"].round(9))
+    assert (aportes >= 0).all().all()
+
+
+# ---- filtro de zonas ---------------------------------------------------------------------------------------------
+def test_filtrar_zonas_quita_filas_pero_no_cambia_los_puntajes(out):
+    """La decisión del autor: el filtro no toca el puntaje, que sigue midiendo la posición entre las 7."""
+    elegidas = ["Sliema", "Gzira"]
+    filtrado = filter_zones(out, elegidas)
+    assert set(filtrado.index) == set(elegidas)
+    for zona in elegidas:
+        assert filtrado.loc[zona, "score"] == out.loc[zona, "score"]
+    assert filtrado["score"].is_monotonic_decreasing
+
+
+def test_filtrar_sin_zonas_o_con_desconocidas_no_rompe(out):
+    """Sin filtro se devuelve todo; una zona que no existe simplemente no aparece."""
+    assert filter_zones(out, None).equals(out)
+    assert filter_zones(out, []).equals(out)
+    assert list(filter_zones(out, ["Atlantis"]).index) == []
+    assert list(filter_zones(out, ["Sliema", "Atlantis"]).index) == ["Sliema"]
+
+
+def test_si_el_filtro_deja_la_tabla_vacia_no_se_lee_la_primera_fila(out):
+    """QA de Codex: `out.index[0]` sobre una tabla vacía reventaría la pantalla. Hoy no se alcanza desde la interfaz,
+    pero la función que filtra sí puede devolver vacío y quien la use debe poder comprobarlo."""
+    vacio = filter_zones(out, ["Atlantis"])
+    assert vacio.empty and list(vacio.index) == []

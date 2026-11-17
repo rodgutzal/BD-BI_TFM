@@ -14,6 +14,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src import location_scoring as ls
 from src.database import RouteDatabase
 from src.location_scoring import (
     DEFAULT_WEIGHTS,
@@ -175,9 +176,12 @@ def _features(**cols):
 
 
 def test_pesos_por_defecto_suman_uno():
-    """Los pesos por defecto suman 1 y valen 0,40, 0,35 y 0,25."""
+    """Los seis criterios tienen peso de fábrica y suman 1. Los tres de la base pesan más que las tres lentes del
+    panorama: la población y la competencia son medidas directas, las lentes son proxies de OpenStreetMap."""
     assert sum(DEFAULT_WEIGHTS.values()) == pytest.approx(1.0)
-    assert DEFAULT_WEIGHTS == {"demanda": 0.40, "competencia": 0.35, "accesibilidad": 0.25}
+    assert set(DEFAULT_WEIGHTS) == {c.clave for c in ls.CRITERIOS}
+    base = DEFAULT_WEIGHTS["demanda"] + DEFAULT_WEIGHTS["competencia"] + DEFAULT_WEIGHTS["accesibilidad"]
+    assert base > 0.5
 
 
 def test_pesos_que_no_suman_uno_lanzan_error():
@@ -236,12 +240,13 @@ def test_recomienda_de_extremo_a_extremo(db):
     """La recomendación de extremo a extremo devuelve todas las zonas ordenadas por puntaje y con el desglose completo, no solo el puntaje final."""
     db.save_demographics([{"zone_name": z, "population": 1000 * (i + 1)} for i, z in enumerate(LOCATIONS)])
     db.save_pois([_poi(1, "food_drink", "Sliema")])
+    db.save_records_to_sqlite([_medicion(datetime.now(timezone.utc) - timedelta(minutes=5), "Msida", "Gzira", 10.0)])
     out = recommend_locations(db, "quiero abrir una pizzería")
 
     assert set(out.index) == set(LOCATIONS)
     assert (out["categoria"] == "food_drink").all()
     assert out["score"].is_monotonic_decreasing
-    # el desglose completo está presente, no solo el puntaje final
+    # el desglose completo está presente, no solo el puntaje final: lo crudo, lo normalizado y lo que aportó cada uno
     for col in (
         "demanda",
         "competencia",
@@ -250,9 +255,15 @@ def test_recomienda_de_extremo_a_extremo(db):
         "demanda_norm",
         "competencia_norm",
         "accesibilidad_norm",
+        "aporte_demanda",
+        "aporte_competencia",
+        "aporte_accesibilidad",
         "dimensiones_con_dato",
     ):
         assert col in out.columns
+    # el puntaje es exactamente la suma de lo que aportó cada criterio: nada se cuela por fuera
+    aportes = [c for c in out.columns if c.startswith("aporte_")]
+    assert out["score"].round(9).equals(out[aportes].sum(axis=1).round(9))
 
 
 def test_recomendar_con_texto_incomprensible_lanza_error(db):
@@ -299,3 +310,105 @@ def test_recomendar_por_categoria_da_lo_mismo_que_recomendar_por_texto(db):
     por_texto = recommend_locations(db, "farmacia")
     por_categoria = recommend_for_category(db, "hospital")
     assert por_texto.equals(por_categoria)
+
+
+# ---------------------------------------------------------------------------
+# criterios, lentes del panorama y filtro de zonas
+# ---------------------------------------------------------------------------
+def _medianas(**cols):
+    base = {
+        "mercado_mediana": [0.1, 0.2, 0.3],
+        "proveedores_mediana": [1.0, 2.0, 3.0],
+        "diversidad_mediana": [0.2, 0.4, 0.6],
+    }
+    base.update(cols)
+    return pd.DataFrame(base, index=pd.Index(["A", "B", "C"], name="zone_name"))
+
+
+def _features6(**cols):
+    """Las tres de la base más las tres lentes; `cols` puede sobrescribir cualquiera de las seis."""
+    de_lentes = {k: v for k, v in cols.items() if k.endswith("_mediana")}
+    de_base = {k: v for k, v in cols.items() if not k.endswith("_mediana")}
+    return _features(**de_base).join(_medianas(**de_lentes))
+
+
+def test_criterios_disponibles_son_los_que_tienen_columna_con_datos():
+    """Sin las lentes del panorama quedan los tres de la base; con ellas, los seis."""
+    assert [c.clave for c in ls.criterios_disponibles(_features())] == ["demanda", "competencia", "accesibilidad"]
+    assert [c.clave for c in ls.criterios_disponibles(_features6())] == [c.clave for c in ls.CRITERIOS]
+    # una columna presente pero toda vacía no cuenta: no se puede puntuar con ella
+    vacia = _features6(mercado_mediana=[float("nan")] * 3)
+    assert "mercado" not in [c.clave for c in ls.criterios_disponibles(vacia)]
+
+
+def test_pesos_por_defecto_se_renormalizan_a_los_criterios_que_haya():
+    """Sin data/ml, los tres de la base se reparten el total conservando sus proporciones."""
+    tres = ls.criterios_disponibles(_features())
+    pesos = ls.pesos_por_defecto(tres)
+    assert sum(pesos.values()) == pytest.approx(1.0)
+    assert pesos["demanda"] / pesos["competencia"] == pytest.approx(0.30 / 0.25)
+    assert sum(ls.pesos_por_defecto(ls.CRITERIOS).values()) == pytest.approx(1.0)
+
+
+def test_con_las_seis_dimensiones_el_puntaje_las_usa_todas():
+    out = score_zones(_features6())
+    for criterio in ls.CRITERIOS:
+        assert f"aporte_{criterio.clave}" in out.columns
+    assert out["criterios_puntuados"].iloc[0] == 6
+    aportes = [c for c in out.columns if c.startswith("aporte_")]
+    assert out["score"].round(9).equals(out[aportes].sum(axis=1).round(9))
+
+
+def test_mas_proveedores_y_mas_diversidad_mejoran_el_puntaje():
+    """Las lentes nuevas van en el sentido natural: más es mejor, sin invertir."""
+    iguales = dict(demanda=[100.0] * 3, competencia=[5.0] * 3, tiempo_viaje_prom=[10.0] * 3)
+    solo_prov = {"proveedores": 1.0}
+    out = score_zones(_features6(**iguales), solo_prov)
+    assert list(out.index) == ["C", "B", "A"]
+    out_div = score_zones(_features6(**iguales), {"diversidad": 1.0})
+    assert list(out_div.index) == ["C", "B", "A"]
+
+
+def test_un_criterio_sin_datos_se_deja_fuera_y_el_resto_se_reparte_su_peso():
+    """Puntuarlo con 0,5 para todas sería inventarse un dato; se omite y se avisa en el log."""
+    sin_rutas = _features(tiempo_viaje_prom=[float("nan")] * 3)
+    out = score_zones(sin_rutas, {"demanda": 0.5, "competencia": 0.25, "accesibilidad": 0.25})
+    assert "aporte_accesibilidad" not in out.columns
+    assert out["criterios_puntuados"].iloc[0] == 2
+    # los dos que quedan conservan su proporción (0.5 : 0.25 -> 2/3 : 1/3)
+    assert out.loc["C", "aporte_demanda"] == pytest.approx(2 / 3 * out.loc["C", "demanda_norm"])
+
+
+def test_si_ningun_criterio_pedido_tiene_datos_se_lanza_error():
+    vacias = _features(demanda=[float("nan")] * 3, competencia=[float("nan")] * 3, tiempo_viaje_prom=[float("nan")] * 3)
+    with pytest.raises(ValueError, match="Ningún criterio"):
+        score_zones(vacias, {"demanda": 1.0})
+
+
+def test_si_al_quitar_los_criterios_sin_datos_todo_lo_que_queda_pesa_cero_se_lanza_error():
+    """Caso de borde: el único criterio con peso no tiene datos y el que sí los tiene pesa 0. No hay nada que ordenar."""
+    sin_rutas = _features(tiempo_viaje_prom=[float("nan")] * 3)
+    with pytest.raises(ValueError, match="cero"):
+        score_zones(sin_rutas, {"demanda": 0.0, "accesibilidad": 1.0})
+
+
+def test_filtrar_zonas_no_cambia_el_puntaje_solo_las_filas():
+    """Se puntúa sobre todas y luego se filtra: si normalizáramos sobre el subconjunto, el mismo sitio cambiaría de
+    nota según con quién se le compare."""
+    todas = score_zones(_features())
+    dos = ls.filter_zones(todas, ["A", "C"])
+    assert list(dos.index) == ["C", "A"]
+    assert dos.loc["A", "score"] == todas.loc["A", "score"]
+    assert ls.filter_zones(todas, None).equals(todas)
+
+
+def test_build_zone_features_une_las_lentes_del_panorama(db):
+    """Con `medianas`, la tabla de features trae también las columnas de las lentes, listas para puntuar."""
+    medianas = pd.DataFrame(
+        {"mercado_mediana": 0.5, "proveedores_mediana": 2.0, "diversidad_mediana": 0.3},
+        index=pd.Index(list(LOCATIONS), name="zone_name"),
+    )
+    con = ls.build_zone_features(db, "food_drink", medianas=medianas)
+    assert {"mercado_mediana", "proveedores_mediana", "diversidad_mediana"} <= set(con.columns)
+    sin = ls.build_zone_features(db, "food_drink")
+    assert "mercado_mediana" not in sin.columns
