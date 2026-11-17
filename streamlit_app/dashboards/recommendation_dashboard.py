@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -254,6 +255,115 @@ def render_results_table(out, criterios):
         "Puntaje = suma ponderada de esas columnas con los pesos elegidos arriba; ábrelo en «de dónde sale cada "
         "puntaje» para ver cuánto puso cada factor."
     )
+
+
+CELDAS_RESUMEN = 3  # cuántas celdas nombra el resumen final: las justas para elegir, no una lista que haya que leer
+FACTORES_RESUMEN = 3  # cuántos factores nombra; si hay más, el texto dice que son «3 de N»
+
+
+def build_summary(out, criterios, panorama=None, zona: Optional[str] = None, maximo: int = CELDAS_RESUMEN) -> dict:
+    """Los datos del resumen final: qué zona ganó, QUÉ la hizo ganar y DÓNDE mirar dentro de ella.
+
+    `factores` va ordenado por lo que cada uno aportó al puntaje, con su parte del total y si esa zona tenía dato real:
+    un factor sin dato entra como neutral (0,5 × su peso), así que aporta sin ser mérito, y el resumen debe decirlo.
+    `celdas` son las primeras de `candidate_cells` en esa zona (★ primero, luego por mercado), o None sin panorama."""
+    if zona is None or zona not in out.index:
+        return {"zona": None, "puntaje": None, "posicion": None, "zonas": len(out), "factores": [], "celdas": None}
+    fila = out.loc[zona]
+    puntaje = float(fila["score"])
+    factores = []
+    for criterio in criterios:
+        columna = f"aporte_{criterio.clave}"
+        if columna not in out:
+            continue  # no se puntuó: ni por falta de datos ni por peso cero
+        aporte = float(fila[columna])
+        crudo = fila[criterio.columna] if criterio.columna in out else None
+        factores.append(
+            {
+                "etiqueta": criterio.corta,
+                "aporte": aporte,
+                # None, no 0.0: con puntaje cero no hay un total que repartir, y un «0 %» afirmaría una parte relativa
+                # que no se puede calcular. Pasa cuando una zona queda la última en todos los criterios medidos.
+                "parte": (aporte / puntaje) if puntaje else None,
+                "sin_dato": crudo is None or pd.isna(crudo),
+            }
+        )
+    factores.sort(key=lambda f: -f["aporte"])
+    # None y vacío dicen cosas distintas: None es «no hay datos por celda que mirar» (falta data/ml o la zona no es
+    # una de las conocidas) y vacío es «esta zona no tiene ninguna celda con confianza media o alta». Afirmar lo
+    # segundo cuando pasa lo primero sería inventarse algo sobre los datos.
+    celdas = None
+    if panorama is not None and zona in LOCATIONS:
+        celdas = pv.candidate_cells(panorama.vista, zona).head(maximo)
+    return {
+        "zona": zona,
+        "puntaje": puntaje,
+        "posicion": list(out.index).index(zona) + 1,
+        "zonas": len(out),
+        "factores": factores,
+        "celdas": celdas,
+    }
+
+
+def render_summary(out, criterios, panorama=None, zona: Optional[str] = None):
+    """El cierre de la pantalla: de la ciudad al sitio concreto, en un bloque que se pueda leer de un vistazo."""
+    resumen = build_summary(out, criterios, panorama, zona)
+    if resumen["zona"] is None:
+        return
+    st.divider()
+    st.subheader("📋 En resumen")
+    zonas, posicion = resumen["zonas"], resumen["posicion"]
+    if zonas == 1:
+        cuantas = "la única zona que comparas"
+    elif posicion == 1:
+        cuantas = f"la mejor de las {zonas} zonas que comparas"
+    else:  # la pantalla siempre pasa la ganadora, pero el texto no debe coronar a quien no ganó
+        cuantas = f"la zona número {posicion} de las {zonas} que comparas"
+    st.markdown(f"**{resumen['zona']}** es {cuantas}, con un puntaje de **{resumen['puntaje']:.3f}**.")
+
+    con_dato = [f for f in resumen["factores"] if not f["sin_dato"]]
+    if not resumen["puntaje"]:
+        st.markdown(
+            "Ningún factor suma a ese puntaje: esta zona queda la última en todos los que se miden, así que no hay "
+            "una parte del total que repartir."
+        )
+    elif con_dato:
+        mostrados = con_dato[:FACTORES_RESUMEN]
+        cuenta = f" ({len(mostrados)} de {len(con_dato)} factores con dato)" if len(con_dato) > len(mostrados) else ""
+        detalle = " · ".join(f"**{f['etiqueta']}** {f['aporte']:.3f} ({f['parte']:.0%})" for f in mostrados)
+        st.markdown(f"Lo que más pesa en ese puntaje{cuenta}: {detalle}.")
+    sin_dato = [f["etiqueta"] for f in resumen["factores"] if f["sin_dato"]]
+    if sin_dato:
+        st.caption(
+            f"⚠️ En esta zona no hay dato de **{', '.join(sin_dato)}**: entra como neutral (0,5 × su peso), así que "
+            "suma al puntaje sin ser mérito."
+        )
+
+    celdas = resumen["celdas"]
+    if celdas is None:
+        st.caption("No hay datos por celda disponibles para concretar más dentro de la zona.")
+        return
+    if celdas.empty:
+        st.caption("Esta zona no tiene ninguna celda con confianza de datos media o alta para concretar más.")
+        return
+    st.markdown(f"**Dónde mirar dentro de {resumen['zona']}:**")
+    for i, (cell_id, celda) in enumerate(celdas.iterrows(), start=1):
+        estrella = "★ " if celda["oportunidad"] else ""
+        st.markdown(
+            f"{i}. {estrella}**{ps.escapar_markdown(pv.place_label(celda))}** · `{cell_id}` — "
+            f"mercado {_num(celda['mercado_total'])} · competencia {_num(celda['competencia_directa'])} · "
+            f"proveedores {_num(celda['proveedores_total'], '{:.1f}')} · confianza {celda['confianza_nivel']} · "
+            f"[ver en el mapa]({pv.map_link(celda['lat'], celda['lon'])})"
+        )
+    st.caption(
+        "El **puntaje es de la zona** (población y tiempo de viaje solo se miden por zona); las **celdas salen de las "
+        "lentes**, que son conteos de OpenStreetMap, no una predicción. ★ = mercado alto y competencia baja. "
+        "Datos © colaboradores de OpenStreetMap (ODbL)."
+    )
+
+
+def _num(valor, formato: str = "{:.2f}") -> str:
+    return "sin dato" if pd.isna(valor) else formato.format(valor)
 
 
 ZOOM_ISLA = 11.5  # las 7 zonas de un vistazo
@@ -506,6 +616,7 @@ def main():
     )
     with destino_mapa:
         render_score_map(out, panorama, top_zone, categoria)
+    render_summary(out, criterios, panorama, top_zone)
 
 
 if __name__ == "__main__":

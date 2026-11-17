@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1266 funciones de test · 1487 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1277 funciones de test · 1498 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -58,9 +58,9 @@
 | [`tests/test_predictive_modeling_dashboard.py`](#teststest_predictive_modeling_dashboardpy) | 13 | 13 |
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
-| [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 11 | 11 |
+| [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 17 | 17 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 72 | 72+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 77 | 77+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -1506,6 +1506,12 @@
 - `test_filtrar_zonas_quita_filas_pero_no_cambia_los_puntajes` — La decisión del autor: el filtro no toca el puntaje, que sigue midiendo la posición entre las 7.
 - `test_filtrar_sin_zonas_o_con_desconocidas_no_rompe` — Sin filtro se devuelve todo; una zona que no existe simplemente no aparece.
 - `test_si_el_filtro_deja_la_tabla_vacia_no_se_lee_la_primera_fila` — QA de Codex: `out.index[0]` sobre una tabla vacía reventaría la pantalla. Hoy no se alcanza desde la interfaz, pero la función que filtra sí puede devolver vacío y quien la use debe poder comprobarlo.
+- `test_el_resumen_dice_la_zona_su_puntaje_y_que_la_hizo_ganar` — El cierre de la pantalla: qué zona ganó y QUÉ la hizo ganar, ordenado por lo que aportó cada factor.
+- `test_el_resumen_marca_los_factores_sin_dato_de_esa_zona` — Un factor sin dato entra como neutral (0,5 × su peso): aporta sin ser mérito, y el resumen debe poder decirlo.
+- `test_el_resumen_sin_zona_o_con_una_desconocida_no_falla`
+- `test_el_resumen_sin_panorama_no_nombra_celdas` — Sin data/ml no hay celdas que concretar, pero la parte de zona sigue entera.
+- `test_el_resumen_distingue_sin_panorama_de_zona_sin_celdas_con_confianza` — Code-review: `celdas is None` mezclaba dos cosas distintas. None = no hay datos por celda que mirar; vacío = esta zona no tiene ninguna celda con confianza media o alta. Afirmar lo segundo cuando pasa lo primero sería inventarse algo sobre los datos.
+- `test_con_puntaje_cero_no_se_afirma_una_parte_del_total` — QA de Codex: una zona que queda la última en TODOS los criterios saca exactamente 0, y entonces dividir entre el puntaje para sacar el «% del total» no tiene sentido. `parte` queda en None y la pantalla lo dice con palabras.
 
 ## `tests/test_recommendation_interpretacion_ui.py`
 
@@ -1599,6 +1605,11 @@
 - `test_un_factor_en_cero_se_queda_fuera_del_puntaje_y_de_los_avisos` — Code-review: la ayuda promete «ponlo en 0 para dejarlo fuera», pero seguía contando como factor puntuado y disparaba el aviso de datos incompletos por algo que no aportaba nada.
 - `test_los_textos_hablan_de_los_factores_que_se_puntuaron` — Code-review: el pie decía «en las 6» mientras la tabla mostraba 4 columnas y «Datos completos (de 4)».
 - `test_al_filtrar_zonas_el_mapa_no_dice_que_enseña_siete` — Code-review: con el filtro nuevo el mapa dibuja menos zonas, pero el texto seguía afirmando «las 7 zonas».
+- `test_el_resumen_final_cierra_el_circulo_de_la_ciudad_a_la_calle` — Lo que el usuario pidió: al final, la zona ganadora con lo que la hizo ganar y las calles donde mirar.
+- `test_el_resumen_va_al_final_despues_del_panorama` — «Al final»: el resumen cierra la pantalla, después de la ficha de celda del panorama.
+- `test_el_resumen_sigue_a_la_zona_cuando_se_filtra` — Si filtras zonas, el resumen habla de la que gana entre esas, no de la que ganaba antes.
+- `test_el_resumen_no_corona_a_una_zona_que_no_gano` — Code-review: el texto decía «es la mejor» por el número de filas, sin mirar la posición real.
+- `test_el_resumen_dice_cuantos_factores_muestra_de_los_que_hay` — Code-review: nombraba 3 de hasta 6 sin decir que eran solo 3.
 
 ## `tests/test_strip_panorama_gap.py`
 

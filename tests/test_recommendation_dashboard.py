@@ -14,11 +14,19 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.database import RouteDatabase
-from src.location_scoring import POR_CLAVE, criterios_disponibles, filter_zones, pesos_por_defecto, recommend_locations
+from src.location_scoring import (
+    POR_CLAVE,
+    criterios_disponibles,
+    filter_zones,
+    pesos_por_defecto,
+    recommend_locations,
+    score_zones,
+)
 from src.locations import LOCATIONS
 from streamlit_app.dashboards.recommendation_dashboard import (
     build_contributions_table,
     build_results_table,
+    build_summary,
     normalize_weights,
 )
 
@@ -184,3 +192,104 @@ def test_si_el_filtro_deja_la_tabla_vacia_no_se_lee_la_primera_fila(out):
     pero la función que filtra sí puede devolver vacío y quien la use debe poder comprobarlo."""
     vacio = filter_zones(out, ["Atlantis"])
     assert vacio.empty and list(vacio.index) == []
+
+
+# ---- resumen final -----------------------------------------------------------------------------------------------
+def test_el_resumen_dice_la_zona_su_puntaje_y_que_la_hizo_ganar(out, criterios):
+    """El cierre de la pantalla: qué zona ganó y QUÉ la hizo ganar, ordenado por lo que aportó cada factor."""
+    zona = out.index[0]
+    r = build_summary(out, criterios, zona=zona)
+    assert r["zona"] == zona and r["posicion"] == 1 and r["zonas"] == len(LOCATIONS)
+    assert r["puntaje"] == pytest.approx(out.loc[zona, "score"])
+    aportes = [f["aporte"] for f in r["factores"]]
+    assert aportes == sorted(aportes, reverse=True)
+    assert sum(aportes) == pytest.approx(r["puntaje"])  # el resumen no se deja nada fuera
+    assert r["puntaje"] > 0
+    for f in r["factores"]:
+        assert f["parte"] == pytest.approx(f["aporte"] / r["puntaje"])
+
+
+def test_el_resumen_marca_los_factores_sin_dato_de_esa_zona(out, criterios):
+    """Un factor sin dato entra como neutral (0,5 × su peso): aporta sin ser mérito, y el resumen debe poder decirlo."""
+    r = build_summary(out, criterios, zona="Marsaskala")  # la zona que el fixture dejó sin demografía
+    poblacion = next(f for f in r["factores"] if f["etiqueta"] == "Población")
+    assert poblacion["sin_dato"] is True
+    assert not any(f["sin_dato"] for f in r["factores"] if f["etiqueta"] == "Baja competencia")
+
+
+def test_el_resumen_sin_zona_o_con_una_desconocida_no_falla(out, criterios):
+    for zona in (None, "Atlantis"):
+        r = build_summary(out, criterios, zona=zona)
+        assert r["zona"] is None and r["factores"] == [] and r["celdas"] is None
+
+
+def test_el_resumen_sin_panorama_no_nombra_celdas(out, criterios):
+    """Sin data/ml no hay celdas que concretar, pero la parte de zona sigue entera."""
+    r = build_summary(out, criterios, panorama=None, zona=out.index[0])
+    assert r["celdas"] is None and r["factores"]
+
+
+def test_el_resumen_distingue_sin_panorama_de_zona_sin_celdas_con_confianza(out, criterios):
+    """Code-review: `celdas is None` mezclaba dos cosas distintas. None = no hay datos por celda que mirar;
+    vacío = esta zona no tiene ninguna celda con confianza media o alta. Afirmar lo segundo cuando pasa lo primero
+    sería inventarse algo sobre los datos."""
+    import pandas as pd
+
+    from src.ml import business_profiles as bp
+    from src.ml import panorama_view as pv
+    from streamlit_app.dashboards import panorama_section as ps
+
+    zona = out.index[0]
+    assert build_summary(out, criterios, panorama=None, zona=zona)["celdas"] is None
+
+    ROOT = Path(__file__).resolve().parents[1]
+    guardado, counts, _ = ps.load_data(ROOT / "data" / "ml")
+    vista = pv.compute_view(counts, bp.get_default_profile("food_drink"), guardado, "food_drink")
+    pano = ps.Panorama(vista=vista, perfil=bp.get_default_profile("food_drink"), marcadas=[])
+    con_celdas = build_summary(out, criterios, panorama=pano, zona=zona)["celdas"]
+    assert con_celdas is not None and not con_celdas.empty
+
+    # una zona cuyas celdas son todas de confianza baja: tabla vacía, no None
+    sin_confianza = vista.copy()
+    sin_confianza["confianza_nivel"] = "baja"
+    flojo = ps.Panorama(vista=sin_confianza, perfil=bp.get_default_profile("food_drink"), marcadas=[])
+    vacias = build_summary(out, criterios, panorama=flojo, zona=zona)["celdas"]
+    assert vacias is not None and vacias.empty and isinstance(vacias, pd.DataFrame)
+
+
+def test_con_puntaje_cero_no_se_afirma_una_parte_del_total(out, criterios):
+    """QA de Codex: una zona que queda la última en TODOS los criterios saca exactamente 0, y entonces dividir entre el
+    puntaje para sacar el «% del total» no tiene sentido. `parte` queda en None y la pantalla lo dice con palabras."""
+    import pandas as pd
+    from streamlit.testing.v1 import AppTest
+
+    uno = [POR_CLAVE["demanda"]]
+    cero = score_zones(
+        pd.DataFrame({"demanda": [10.0, 5.0]}, index=pd.Index(["Sliema", "Gzira"], name="zone_name")),
+        {"demanda": 1.0},
+    )
+    assert cero.loc["Gzira", "score"] == 0.0  # la peor en el único criterio
+    r = build_summary(cero, uno, zona="Gzira")
+    assert r["puntaje"] == 0.0
+    assert all(f["parte"] is None for f in r["factores"])
+    assert all(f["aporte"] == 0.0 for f in r["factores"])
+
+    codigo = """
+import sys
+sys.path.insert(0, {raiz!r})
+import pandas as pd
+from src import location_scoring as ls
+from streamlit_app.dashboards import recommendation_dashboard as rd
+
+out = ls.score_zones(
+    pd.DataFrame({{"demanda": [10.0, 5.0]}}, index=pd.Index(["Sliema", "Gzira"], name="zone_name")),
+    {{"demanda": 1.0}},
+)
+rd.render_summary(out, [ls.POR_CLAVE["demanda"]], None, "Gzira")
+"""
+    at = AppTest.from_string(codigo.format(raiz=str(Path(__file__).resolve().parents[1])), default_timeout=60)
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    md = " ".join(m.value for m in at.markdown)
+    assert "Ningún factor suma a ese puntaje" in md
+    assert "0%" not in md and "0 %" not in md  # no se inventa un porcentaje
