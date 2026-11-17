@@ -219,3 +219,31 @@ def test_el_resumen_sin_panorama_no_nombra_celdas(out, criterios):
     """Sin data/ml no hay celdas que concretar, pero la parte de zona sigue entera."""
     r = build_summary(out, criterios, panorama=None, zona=out.index[0])
     assert r["celdas"] is None and r["factores"]
+
+
+def test_el_resumen_distingue_sin_panorama_de_zona_sin_celdas_con_confianza(out, criterios):
+    """Code-review: `celdas is None` mezclaba dos cosas distintas. None = no hay datos por celda que mirar;
+    vacío = esta zona no tiene ninguna celda con confianza media o alta. Afirmar lo segundo cuando pasa lo primero
+    sería inventarse algo sobre los datos."""
+    import pandas as pd
+
+    from src.ml import business_profiles as bp
+    from src.ml import panorama_view as pv
+    from streamlit_app.dashboards import panorama_section as ps
+
+    zona = out.index[0]
+    assert build_summary(out, criterios, panorama=None, zona=zona)["celdas"] is None
+
+    ROOT = Path(__file__).resolve().parents[1]
+    guardado, counts, _ = ps.load_data(ROOT / "data" / "ml")
+    vista = pv.compute_view(counts, bp.get_default_profile("food_drink"), guardado, "food_drink")
+    pano = ps.Panorama(vista=vista, perfil=bp.get_default_profile("food_drink"), marcadas=[])
+    con_celdas = build_summary(out, criterios, panorama=pano, zona=zona)["celdas"]
+    assert con_celdas is not None and not con_celdas.empty
+
+    # una zona cuyas celdas son todas de confianza baja: tabla vacía, no None
+    sin_confianza = vista.copy()
+    sin_confianza["confianza_nivel"] = "baja"
+    flojo = ps.Panorama(vista=sin_confianza, perfil=bp.get_default_profile("food_drink"), marcadas=[])
+    vacias = build_summary(out, criterios, panorama=flojo, zona=zona)["celdas"]
+    assert vacias is not None and vacias.empty and isinstance(vacias, pd.DataFrame)

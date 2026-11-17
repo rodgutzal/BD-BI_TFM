@@ -1091,3 +1091,44 @@ def test_el_resumen_sigue_a_la_zona_cuando_se_filtra(pagina):
     zona = pagina.metric[0].value
     assert zona in ("Sliema", "Gzira")
     assert any(f"**{zona}** es la mejor de las 2 zonas" in m for m in textos(pagina.markdown))
+
+
+def test_el_resumen_no_corona_a_una_zona_que_no_gano():
+    """Code-review: el texto decía «es la mejor» por el número de filas, sin mirar la posición real."""
+    import pandas as pd
+    import streamlit as st
+    from streamlit.testing.v1 import AppTest
+
+    codigo = """
+import sys
+sys.path.insert(0, {raiz!r})
+import pandas as pd
+from src import location_scoring as ls
+from streamlit_app.dashboards import recommendation_dashboard as rd
+
+out = pd.DataFrame(
+    {{"score": [0.9, 0.5], "demanda": [10.0, 5.0], "aporte_demanda": [0.9, 0.5]}},
+    index=pd.Index(["Sliema", "Gzira"], name="zone_name"),
+)
+rd.render_summary(out, [ls.POR_CLAVE["demanda"]], None, {zona!r})
+"""
+    for zona, esperado in (("Sliema", "la mejor de las 2 zonas"), ("Gzira", "la zona número 2 de las 2")):
+        at = AppTest.from_string(codigo.format(raiz=str(ROOT), zona=zona), default_timeout=60)
+        at.run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert any(esperado in m.value for m in at.markdown), (zona, esperado)
+
+
+def test_el_resumen_dice_cuantos_factores_muestra_de_los_que_hay(pagina):
+    """Code-review: nombraba 3 de hasta 6 sin decir que eran solo 3."""
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    linea = next(m for m in textos(pagina.markdown) if m.startswith("Lo que más pesa"))
+    import re as _re
+
+    hay = _re.search(r"\((\d+) de (\d+) factores con dato\)", linea)
+    assert hay, linea
+    mostrados, total = int(hay.group(1)), int(hay.group(2))
+    assert mostrados == 3 < total
+    assert linea.count(" · ") == mostrados - 1

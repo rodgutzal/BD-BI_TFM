@@ -258,6 +258,7 @@ def render_results_table(out, criterios):
 
 
 CELDAS_RESUMEN = 3  # cuántas celdas nombra el resumen final: las justas para elegir, no una lista que haya que leer
+FACTORES_RESUMEN = 3  # cuántos factores nombra; si hay más, el texto dice que son «3 de N»
 
 
 def build_summary(out, criterios, panorama=None, zona: Optional[str] = None, maximo: int = CELDAS_RESUMEN) -> dict:
@@ -286,10 +287,12 @@ def build_summary(out, criterios, panorama=None, zona: Optional[str] = None, max
             }
         )
     factores.sort(key=lambda f: -f["aporte"])
+    # None y vacío dicen cosas distintas: None es «no hay datos por celda que mirar» (falta data/ml o la zona no es
+    # una de las conocidas) y vacío es «esta zona no tiene ninguna celda con confianza media o alta». Afirmar lo
+    # segundo cuando pasa lo primero sería inventarse algo sobre los datos.
     celdas = None
     if panorama is not None and zona in LOCATIONS:
-        candidatas = pv.candidate_cells(panorama.vista, zona)
-        celdas = candidatas.head(maximo) if not candidatas.empty else None
+        celdas = pv.candidate_cells(panorama.vista, zona).head(maximo)
     return {
         "zona": zona,
         "puntaje": puntaje,
@@ -307,17 +310,21 @@ def render_summary(out, criterios, panorama=None, zona: Optional[str] = None):
         return
     st.divider()
     st.subheader("📋 En resumen")
-    cuantas = (
-        "la única zona que comparas"
-        if resumen["zonas"] == 1
-        else f"la mejor de las {resumen['zonas']} zonas que comparas"
-    )
+    zonas, posicion = resumen["zonas"], resumen["posicion"]
+    if zonas == 1:
+        cuantas = "la única zona que comparas"
+    elif posicion == 1:
+        cuantas = f"la mejor de las {zonas} zonas que comparas"
+    else:  # la pantalla siempre pasa la ganadora, pero el texto no debe coronar a quien no ganó
+        cuantas = f"la zona número {posicion} de las {zonas} que comparas"
     st.markdown(f"**{resumen['zona']}** es {cuantas}, con un puntaje de **{resumen['puntaje']:.3f}**.")
 
     con_dato = [f for f in resumen["factores"] if not f["sin_dato"]]
     if con_dato:
-        detalle = " · ".join(f"**{f['etiqueta']}** {f['aporte']:.3f} ({f['parte']:.0%})" for f in con_dato[:3])
-        st.markdown(f"Lo que más pesa en ese puntaje: {detalle}.")
+        mostrados = con_dato[:FACTORES_RESUMEN]
+        cuenta = f" ({len(mostrados)} de {len(con_dato)} factores con dato)" if len(con_dato) > len(mostrados) else ""
+        detalle = " · ".join(f"**{f['etiqueta']}** {f['aporte']:.3f} ({f['parte']:.0%})" for f in mostrados)
+        st.markdown(f"Lo que más pesa en ese puntaje{cuenta}: {detalle}.")
     sin_dato = [f["etiqueta"] for f in resumen["factores"] if f["sin_dato"]]
     if sin_dato:
         st.caption(
@@ -327,7 +334,10 @@ def render_summary(out, criterios, panorama=None, zona: Optional[str] = None):
 
     celdas = resumen["celdas"]
     if celdas is None:
-        st.caption("No hay celdas con confianza media o alta en esta zona para concretar más.")
+        st.caption("No hay datos por celda disponibles para concretar más dentro de la zona.")
+        return
+    if celdas.empty:
+        st.caption("Esta zona no tiene ninguna celda con confianza de datos media o alta para concretar más.")
         return
     st.markdown(f"**Dónde mirar dentro de {resumen['zona']}:**")
     for i, (cell_id, celda) in enumerate(celdas.iterrows(), start=1):

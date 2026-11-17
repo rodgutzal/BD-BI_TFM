@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1273 funciones de test · 1494 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1276 funciones de test · 1497 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -58,9 +58,9 @@
 | [`tests/test_predictive_modeling_dashboard.py`](#teststest_predictive_modeling_dashboardpy) | 13 | 13 |
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
-| [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 15 | 15 |
+| [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 16 | 16 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 75 | 75+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 77 | 77+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -1510,6 +1510,7 @@
 - `test_el_resumen_marca_los_factores_sin_dato_de_esa_zona` — Un factor sin dato entra como neutral (0,5 × su peso): aporta sin ser mérito, y el resumen debe poder decirlo.
 - `test_el_resumen_sin_zona_o_con_una_desconocida_no_falla`
 - `test_el_resumen_sin_panorama_no_nombra_celdas` — Sin data/ml no hay celdas que concretar, pero la parte de zona sigue entera.
+- `test_el_resumen_distingue_sin_panorama_de_zona_sin_celdas_con_confianza` — Code-review: `celdas is None` mezclaba dos cosas distintas. None = no hay datos por celda que mirar; vacío = esta zona no tiene ninguna celda con confianza media o alta. Afirmar lo segundo cuando pasa lo primero sería inventarse algo sobre los datos.
 
 ## `tests/test_recommendation_interpretacion_ui.py`
 
@@ -1606,6 +1607,8 @@
 - `test_el_resumen_final_cierra_el_circulo_de_la_ciudad_a_la_calle` — Lo que el usuario pidió: al final, la zona ganadora con lo que la hizo ganar y las calles donde mirar.
 - `test_el_resumen_va_al_final_despues_del_panorama` — «Al final»: el resumen cierra la pantalla, después de la ficha de celda del panorama.
 - `test_el_resumen_sigue_a_la_zona_cuando_se_filtra` — Si filtras zonas, el resumen habla de la que gana entre esas, no de la que ganaba antes.
+- `test_el_resumen_no_corona_a_una_zona_que_no_gano` — Code-review: el texto decía «es la mejor» por el número de filas, sin mirar la posición real.
+- `test_el_resumen_dice_cuantos_factores_muestra_de_los_que_hay` — Code-review: nombraba 3 de hasta 6 sin decir que eran solo 3.
 
 ## `tests/test_strip_panorama_gap.py`
 
