@@ -80,6 +80,7 @@ def test_ninguna_palabra_clave_choca_con_otra_categoria():
 
 
 def test_cantidad_de_palabras_clave_documentada():
-    """El README dice 140 palabras clave (únicas)."""
+    """El README dice 396 palabras clave (únicas). Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los
+    plurales subieron la exactitud del sistema de 76,0 % a 84,9 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2)."""
     unicas = {kw for kws in BUSINESS_TYPE_RULES.values() for kw in kws}
-    assert len(unicas) == 140
+    assert len(unicas) == 396

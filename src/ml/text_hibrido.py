@@ -22,6 +22,7 @@ from typing import Optional
 
 from src.business_type_classifier import classify_business_type
 from src.ml.text_classifier import ModeloTexto
+from src.sectores import ActividadFueraDeAlcance, actividad_fuera_de_alcance, sector_de
 
 logger = logging.getLogger(__name__)
 
@@ -32,30 +33,45 @@ ARCHIVO_MANIFIESTO = "text_classifier_manifest.json"
 
 FUENTE_PALABRAS = "palabras"
 FUENTE_MODELO = "modelo"
+FUENTE_FUERA = "fuera_de_alcance"
 # Las siete categorías que sabe interpretar el sistema (las mismas del método de palabras clave y del modelo).
 CATEGORIAS = ("food_drink", "hospital", "school", "sport", "leisure", "mall", "business")
 
 
 @dataclass(frozen=True)
 class Interpretacion:
-    """Qué categoría se entendió, quién la decidió y, si fue el modelo, con qué confianza (0-1)."""
+    """Qué categoría se entendió, quién la decidió y, si fue el modelo, con qué confianza (0-1).
+
+    `sector` es el sector económico de lo entendido. `fuera` solo viene cuando el texto nombra una actividad que este
+    sistema NO puede analizar (una granja, una cantera): entonces `categoria` es None a propósito, y `fuera` trae el
+    porqué para poder explicarlo en vez de dar un puntaje con criterios que no vienen al caso."""
 
     categoria: Optional[str]
     fuente: Optional[str] = None
     confianza: Optional[float] = None
+    sector: Optional[str] = None
+    fuera: Optional[ActividadFueraDeAlcance] = None
 
 
 def interpretar(texto: str, modelo: Optional[ModeloTexto] = None) -> Interpretacion:
-    """Híbrido: palabras clave primero; solo si se abstienen, el modelo. Sin modelo, solo las palabras clave."""
+    """Fuera de alcance primero, luego palabras clave y, solo si se abstienen, el modelo.
+
+    El paso de «fuera de alcance» va DELANTE porque si no, una fábrica de muebles la atraparía la palabra «mueble» y
+    acabaría analizada como una tienda. Hoy ninguna de las 347 frases de entrenamiento ni de las 200 de evaluación
+    nombra una de esas actividades (hay un test que lo comprueba), así que anteponer este paso no cambia ninguna
+    respuesta medida: la aplicación sigue siendo exactamente el sistema que se evaluó."""
+    fuera = actividad_fuera_de_alcance(texto or "")
+    if fuera is not None:
+        return Interpretacion(None, FUENTE_FUERA, sector=fuera.sector, fuera=fuera)
     categoria = classify_business_type(texto or "")
     if categoria is not None:
-        return Interpretacion(categoria, FUENTE_PALABRAS)
+        return Interpretacion(categoria, FUENTE_PALABRAS, sector=sector_de(categoria))
     if modelo is None:
         return Interpretacion(None)
     categoria, probabilidad = modelo.clasificar(texto or "")
     if categoria is None:
         return Interpretacion(None)
-    return Interpretacion(categoria, FUENTE_MODELO, probabilidad)
+    return Interpretacion(categoria, FUENTE_MODELO, probabilidad, sector=sector_de(categoria))
 
 
 def cargar_modelo_adoptado(directorio=DIRECTORIO_MODELO) -> Optional[ModeloTexto]:

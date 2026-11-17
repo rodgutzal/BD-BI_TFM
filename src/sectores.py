@@ -1,0 +1,160 @@
+"""Sector económico de cada categoría, y qué actividades este sistema NO puede analizar.
+
+Dos cosas que van juntas:
+
+1. **El sector de lo que se busca.** Las 7 categorías de Overpass son todas del sector TERCIARIO (servicios y
+   comercio). Saberlo importa porque explica el límite del sistema: todo lo que mide —competencia entre comercios,
+   mercado consumidor a pie, proveedores minoristas— son variables de servicios urbanos.
+
+2. **Las actividades fuera de alcance.** Alguien puede querer poner una granja o un invernadero. Reconocer la frase y
+   mandarla a la categoría «más parecida» daría un puntaje con criterios que no deciden nada de eso: el sistema
+   respondería con seguridad y se equivocaría. Reconocerla y explicar POR QUÉ no se puede es más útil y más honesto,
+   y es lo que hace `actividad_fuera_de_alcance`.
+
+Por qué no se puede, en concreto (medido sobre los datos de este repositorio):
+  - Las tres lentes del panorama son competencia, mercado consumidor y proveedores, todas de comercio urbano.
+  - El puntaje por zona combina población, competencia de comercios y tiempo de viaje entre las 7 zonas.
+  - La rejilla cubre ~141 km² del este urbano de Malta; la isla tiene 316 km² y el campo está al oeste.
+  - De agricultura solo hay, como contexto, 94 invernaderos y 35 edificios de granja: no sostienen un análisis.
+"""
+
+import re
+from dataclasses import dataclass
+from typing import Dict, Optional, Tuple
+
+from src.business_type_classifier import _normalize, patron_palabra
+
+PRIMARIO, SECUNDARIO, TERCIARIO = "primario", "secundario", "terciario"
+
+SECTORES: Dict[str, Dict[str, str]] = {
+    PRIMARIO: {
+        "nombre": "Sector primario",
+        "descripcion": "Obtiene recursos directamente de la naturaleza: agricultura, ganadería, pesca, extracción.",
+    },
+    SECUNDARIO: {
+        "nombre": "Sector secundario",
+        "descripcion": "Transforma esos recursos: manufactura, construcción, talleres.",
+    },
+    TERCIARIO: {
+        "nombre": "Sector terciario",
+        "descripcion": "Presta servicios y vende al consumidor: comercio, hostelería, salud, educación, ocio.",
+    },
+}
+
+# Las 7 categorías de Overpass son todas terciarias. Está escrito una por una, y no con un valor por defecto, para que
+# añadir una categoría de otro sector obligue a decidir cuál es en vez de heredar «terciario» sin pensarlo.
+SECTOR_POR_CATEGORIA: Dict[str, str] = {
+    "food_drink": TERCIARIO,
+    "business": TERCIARIO,
+    "hospital": TERCIARIO,
+    "school": TERCIARIO,
+    "sport": TERCIARIO,
+    "leisure": TERCIARIO,
+    "mall": TERCIARIO,
+}
+
+
+@dataclass(frozen=True)
+class ActividadFueraDeAlcance:
+    """Una actividad que se reconoce pero no se puede analizar, con el porqué y con qué haría falta para poder."""
+
+    clave: str
+    nombre: str
+    sector: str
+    palabras: Tuple[str, ...]
+    motivo: str
+    haria_falta: str
+
+
+# Solo términos de PRODUCCIÓN, nunca de venta: «invernadero» está aquí, pero «centro de jardinería» es una tienda y se
+# queda en `business`. Por eso estas palabras se miran DESPUÉS de las de las categorías (ver `interpretar`): lo que el
+# sistema sí sabe analizar tiene preferencia.
+FUERA_DE_ALCANCE: Tuple[ActividadFueraDeAlcance, ...] = (
+    ActividadFueraDeAlcance(
+        "agricultura",
+        "Agricultura",
+        PRIMARIO,
+        (
+            "granja",
+            "invernadero",
+            "huerto",
+            "huerta",
+            "cultivo",
+            "sembradio",
+            "plantacion",
+            "vinedo",
+            "olivar",
+            "campo de cultivo",
+            "parcela agricola",
+            "explotacion agricola",
+        ),
+        "Dónde va una explotación agrícola lo deciden el suelo cultivable, el agua, la pendiente y el acceso a la "
+        "distribución. Nada de eso está en estos datos, que miden comercio urbano.",
+        "Catastro de suelo agrícola, derechos de agua, pendiente del terreno, zonas protegidas y distancia al mercado "
+        "mayorista. Y ampliar la rejilla al oeste de Malta, donde está el campo.",
+    ),
+    ActividadFueraDeAlcance(
+        "ganaderia",
+        "Ganadería",
+        PRIMARIO,
+        ("ganaderia", "establo", "criadero", "apiario", "colmenar", "corral", "porqueriza", "avicola"),
+        "Una explotación ganadera se decide por superficie, distancia mínima a viviendas por normativa, agua y gestión "
+        "de residuos. El sistema no conoce ninguna de esas cosas.",
+        "Normativa de distancias a núcleos habitados, superficie disponible, puntos de agua y plantas de tratamiento.",
+    ),
+    ActividadFueraDeAlcance(
+        "pesca",
+        "Pesca y acuicultura",
+        PRIMARIO,
+        ("piscifactoria", "acuicultura", "pesquera", "criadero de peces", "cofradia de pescadores", "almadraba"),
+        "Depende del mar, no del suelo: calidad del agua, corrientes, profundidad y concesiones marítimas. La rejilla "
+        "solo cubre tierra firme.",
+        "Batimetría, calidad del agua, concesiones de acuicultura y acceso a puerto.",
+    ),
+    ActividadFueraDeAlcance(
+        "extraccion",
+        "Extracción",
+        PRIMARIO,
+        ("cantera", "mina", "salinas", "gravera", "yacimiento"),
+        "La localización la impone el recurso geológico, no el mercado: donde está la piedra, está la cantera.",
+        "Mapa geológico, permisos de extracción y zonas protegidas.",
+    ),
+    ActividadFueraDeAlcance(
+        "manufactura",
+        "Manufactura",
+        SECUNDARIO,
+        ("fabrica", "planta de produccion", "maquiladora", "aserradero", "fundicion", "refineria", "ensambladora"),
+        "Una fábrica se decide por suelo industrial, energía, logística y mano de obra. El sistema mide clientes a pie "
+        "y comercios competidores, que para esto no dicen nada.",
+        "Suelo industrial calificado, potencia eléctrica disponible, acceso a puerto y carretera, y coste del suelo. "
+        "Parte de esto ya se recolecta como contexto (`industria`), pero no basta para recomendar.",
+    ),
+)
+
+
+_FUERA_COMPILADAS: Tuple[Tuple[ActividadFueraDeAlcance, Tuple[re.Pattern, ...]], ...] = tuple(
+    (actividad, tuple(re.compile(patron_palabra(p)) for p in actividad.palabras)) for actividad in FUERA_DE_ALCANCE
+)
+
+
+def sector_de(categoria: Optional[str]) -> Optional[str]:
+    """Sector de una categoría de Overpass, o None si no se conoce."""
+    return SECTOR_POR_CATEGORIA.get(categoria) if categoria else None
+
+
+def nombre_sector(sector: Optional[str]) -> str:
+    return SECTORES[sector]["nombre"] if sector in SECTORES else ""
+
+
+def actividad_fuera_de_alcance(texto: str) -> Optional[ActividadFueraDeAlcance]:
+    """La actividad no analizable que nombra el texto, o None.
+
+    Compara igual que las palabras clave de las categorías (límite de palabra y plural castellano, ver
+    `patron_palabra`): así «granja» no matchea dentro de otra palabra, pero «dos granjas» sí se reconoce."""
+    if not texto or not texto.strip():
+        return None
+    normalizado = _normalize(texto)
+    for actividad, patrones in _FUERA_COMPILADAS:
+        if any(p.search(normalizado) for p in patrones):
+            return actividad
+    return None
