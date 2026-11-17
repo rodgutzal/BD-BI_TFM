@@ -144,7 +144,7 @@ def test_la_aplicacion_da_la_misma_respuesta_que_la_evaluacion_para_cada_frase(m
     son las de lo que ve el usuario.
 
     Las cifras son las de la REMEDICIÓN del 16-nov-2026, tras ampliar el vocabulario de 140 a 396 términos y arreglar
-    el reconocimiento de plurales: 84,9 % de exactitud y 9,9 % de respuestas equivocadas (antes 76,0 % y 6,2 %).
+    el reconocimiento de plurales: 85,4 % de exactitud y 9,4 % de respuestas equivocadas (antes 76,0 % y 6,2 %).
     Responder más implica equivocarse más, y ese intercambio está documentado en el diseño."""
     tr, ev = etc.cargar(evaluacion=etc.DATA / "frases_evaluacion_v2.psv")
     ev = etc.solo_coincidentes(ev)
@@ -152,4 +152,4 @@ def test_la_aplicacion_da_la_misma_respuesta_que_la_evaluacion_para_cada_frase(m
     de_la_app = [th.interpretar(f, modelo_real).categoria for f in ev["frase"]]
     assert de_la_app == evaluado
     reales = list(ev["categoria"])
-    assert int(tt.aciertos(de_la_app, reales).sum()) == 163 and int(tt.equivocadas(de_la_app, reales).sum()) == 19
+    assert int(tt.aciertos(de_la_app, reales).sum()) == 164 and int(tt.equivocadas(de_la_app, reales).sum()) == 18

@@ -4,6 +4,7 @@
 Lo que se defiende aquí: que reconocer una granja y explicar por qué no se puede analizar es mejor que mandarla a la
 categoría «más parecida», y que añadir ese paso no altera el sistema que se evaluó en la fase 3."""
 
+import re
 import sys
 from pathlib import Path
 
@@ -15,7 +16,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from src import sectores as sec  # noqa: E402
 from src.business_type_classifier import BUSINESS_TYPE_RULES  # noqa: E402
-from src.business_type_classifier import classify_business_type  # noqa: E402
+from src.business_type_classifier import classify_business_type, patron_palabra  # noqa: E402
 from src.ml.text_hibrido import CATEGORIAS, FUENTE_FUERA, FUENTE_PALABRAS, interpretar  # noqa: E402
 
 
@@ -84,11 +85,19 @@ def test_la_venta_gana_a_la_produccion():
         assert classify_business_type(texto) is not None, texto
 
 
-def test_ninguna_palabra_del_catalogo_esta_en_las_categorias():
-    """Si una palabra estuviera en los dos sitios, el orden decidiría en silencio cuál gana."""
-    de_categorias = {kw for kws in BUSINESS_TYPE_RULES.values() for kw in kws}
-    del_catalogo = {p for a in sec.FUERA_DE_ALCANCE for p in a.palabras}
-    assert not (de_categorias & del_catalogo)
+def test_ninguna_palabra_del_catalogo_choca_con_las_de_las_categorias():
+    """Misma comprobación de CONTENCIÓN que entre categorías, no un simple cruce de conjuntos: si «taller» entrara en
+    el catálogo, ningún «taller mecánico» volvería a analizarse, y un cruce de conjuntos no lo vería. Lo señaló un
+    code-review. Se usa el patrón real del clasificador, con su plural."""
+    de_categorias = [kw for kws in BUSINESS_TYPE_RULES.values() for kw in kws]
+    del_catalogo = [(a.clave, p) for a in sec.FUERA_DE_ALCANCE for p in a.palabras]
+    choques = [
+        (clave, palabra, kw)
+        for clave, palabra in del_catalogo
+        for kw in de_categorias
+        if re.search(patron_palabra(palabra), kw) or re.search(patron_palabra(kw), palabra)
+    ]
+    assert not choques, f"El catálogo y las categorías se pisan: {choques}"
 
 
 # ---- integración con el intérprete -------------------------------------------------------------------------------
@@ -122,3 +131,47 @@ def test_ninguna_frase_evaluada_toca_el_catalogo():
     for nombre, frases in (("entrenamiento", entrenamiento["frase"]), ("evaluacion", evaluacion["frase"])):
         tocadas = [f for f in frases if sec.actividad_fuera_de_alcance(f) is not None]
         assert not tocadas, f"{nombre}: {tocadas}"
+
+
+@pytest.mark.parametrize(
+    "texto,categoria,fuera",
+    [
+        ("una fabrica de muebles", None, "manufactura"),
+        ("un restaurante con huerto propio", "food_drink", None),
+        ("una panaderia que fabrica su pan", "food_drink", None),
+        ("una tienda de productos de granja", "business", None),
+        ("quiero poner un invernadero", None, "agricultura"),
+    ],
+)
+def test_cuando_ambos_aciertan_gana_el_que_nombra_el_negocio(texto, categoria, fuera):
+    """Code-review: con el catálogo siempre delante, «un restaurante con huerto propio» se rechazaba. Con las palabras
+    clave siempre delante, «una fábrica de muebles» se analizaba como tienda. Lo que decide es la POSICIÓN: en
+    castellano, el sustantivo que nombra el negocio va antes que su complemento."""
+    i = interpretar(texto)
+    assert i.categoria == categoria
+    assert (i.fuera.clave if i.fuera else None) == fuera
+
+
+def test_recommend_locations_explica_la_actividad_en_vez_de_pedir_que_reformule(tmp_path):
+    """Code-review: la otra entrada al sistema decía «sé más específico», mandando al usuario a reformular algo que
+    nunca iba a funcionar. Ahora devuelve el porqué y qué haría falta."""
+    from src.database import RouteDatabase
+    from src.location_scoring import recommend_locations
+
+    db = RouteDatabase(tmp_path / "t.csv", tmp_path / "t.db")
+    with pytest.raises(ValueError) as e:
+        recommend_locations(db, "quiero poner una granja")
+    mensaje = str(e.value)
+    assert "Agricultura" in mensaje and "primario" in mensaje
+    assert "Haría falta:" in mensaje
+    assert "más específica" not in mensaje  # no se le pide reformular lo que no tiene arreglo
+
+
+def test_un_negocio_que_no_se_entiende_sigue_pidiendo_que_reformule(tmp_path):
+    """Lo contrario también importa: si de verdad no se entiende, el mensaje de siempre."""
+    from src.database import RouteDatabase
+    from src.location_scoring import recommend_locations
+
+    db = RouteDatabase(tmp_path / "t.csv", tmp_path / "t.db")
+    with pytest.raises(ValueError, match="más específica"):
+        recommend_locations(db, "asdfgh qwerty")

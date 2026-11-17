@@ -67,8 +67,9 @@ class ActividadFueraDeAlcance:
 
 
 # Solo términos de PRODUCCIÓN, nunca de venta: «invernadero» está aquí, pero «centro de jardinería» es una tienda y se
-# queda en `business`. Por eso estas palabras se miran DESPUÉS de las de las categorías (ver `interpretar`): lo que el
-# sistema sí sabe analizar tiene preferencia.
+# queda en `business`. Cuando una frase nombra las dos cosas, `interpretar` desempata por POSICIÓN: gana la que aparece
+# antes, que en castellano es la que nombra el negocio («fábrica de muebles» es una fábrica; «restaurante con huerto
+# propio» es un restaurante).
 FUERA_DE_ALCANCE: Tuple[ActividadFueraDeAlcance, ...] = (
     ActividadFueraDeAlcance(
         "agricultura",
@@ -146,15 +147,24 @@ def nombre_sector(sector: Optional[str]) -> str:
     return SECTORES[sector]["nombre"] if sector in SECTORES else ""
 
 
-def actividad_fuera_de_alcance(texto: str) -> Optional[ActividadFueraDeAlcance]:
-    """La actividad no analizable que nombra el texto, o None.
+def buscar_fuera_de_alcance(texto: str) -> Tuple[Optional[ActividadFueraDeAlcance], Optional[int]]:
+    """(actividad no analizable, posición del acierto), o (None, None).
 
     Compara igual que las palabras clave de las categorías (límite de palabra y plural castellano, ver
-    `patron_palabra`): así «granja» no matchea dentro de otra palabra, pero «dos granjas» sí se reconoce."""
+    `patron_palabra`): «granja» no matchea dentro de otra palabra, pero «dos granjas» sí se reconoce. Devuelve el
+    acierto MÁS TEMPRANO del catálogo, porque quien llama desempata por posición."""
     if not texto or not texto.strip():
-        return None
+        return None, None
     normalizado = _normalize(texto)
+    mejor, donde = None, None
     for actividad, patrones in _FUERA_COMPILADAS:
-        if any(p.search(normalizado) for p in patrones):
-            return actividad
-    return None
+        for patron in patrones:
+            encontrado = patron.search(normalizado)
+            if encontrado and (donde is None or encontrado.start() < donde):
+                mejor, donde = actividad, encontrado.start()
+    return mejor, donde
+
+
+def actividad_fuera_de_alcance(texto: str) -> Optional[ActividadFueraDeAlcance]:
+    """La actividad no analizable que nombra el texto, o None."""
+    return buscar_fuera_de_alcance(texto)[0]

@@ -20,9 +20,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from src.business_type_classifier import classify_business_type
+from src.business_type_classifier import buscar_categoria
 from src.ml.text_classifier import ModeloTexto
-from src.sectores import ActividadFueraDeAlcance, actividad_fuera_de_alcance, sector_de
+from src.sectores import ActividadFueraDeAlcance, buscar_fuera_de_alcance, sector_de
 
 logger = logging.getLogger(__name__)
 
@@ -54,21 +54,27 @@ class Interpretacion:
 
 
 def interpretar(texto: str, modelo: Optional[ModeloTexto] = None) -> Interpretacion:
-    """Fuera de alcance primero, luego palabras clave y, solo si se abstienen, el modelo.
+    """Palabras clave y catálogo de actividades no analizables a la vez, y gana **el que aparezca antes en la frase**;
+    solo si ninguno acierta, el modelo.
 
-    El paso de «fuera de alcance» va DELANTE porque si no, una fábrica de muebles la atraparía la palabra «mueble» y
-    acabaría analizada como una tienda. Hoy ninguna de las 347 frases de entrenamiento ni de las 200 de evaluación
-    nombra una de esas actividades (hay un test que lo comprueba), así que anteponer este paso no cambia ninguna
-    respuesta medida: la aplicación sigue siendo exactamente el sistema que se evaluó."""
-    fuera = actividad_fuera_de_alcance(texto or "")
-    if fuera is not None:
+    Por qué la posición y no un orden fijo: las dos listas pueden acertar en la misma frase, y cualquiera de los dos
+    órdenes fijos se equivoca en la mitad de los casos. «Una fábrica de muebles» es una fábrica (y «mueble» es palabra
+    de comercio); «un restaurante con huerto propio» es un restaurante (y «huerto» es palabra de agricultura). Lo que
+    los distingue es cuál de los dos nombra el negocio, y en castellano ese va primero.
+
+    Hoy ninguna de las 347 frases de entrenamiento ni de las 200 de evaluación nombra una actividad del catálogo (hay
+    un test que lo comprueba), así que este paso no cambia ninguna respuesta medida: la aplicación sigue siendo
+    exactamente el sistema que se evaluó."""
+    texto = texto or ""
+    categoria, pos_categoria = buscar_categoria(texto)
+    fuera, pos_fuera = buscar_fuera_de_alcance(texto)
+    if fuera is not None and (categoria is None or pos_fuera < pos_categoria):
         return Interpretacion(None, FUENTE_FUERA, sector=fuera.sector, fuera=fuera)
-    categoria = classify_business_type(texto or "")
     if categoria is not None:
         return Interpretacion(categoria, FUENTE_PALABRAS, sector=sector_de(categoria))
     if modelo is None:
         return Interpretacion(None)
-    categoria, probabilidad = modelo.clasificar(texto or "")
+    categoria, probabilidad = modelo.clasificar(texto)
     if categoria is None:
         return Interpretacion(None)
     return Interpretacion(categoria, FUENTE_MODELO, probabilidad, sector=sector_de(categoria))

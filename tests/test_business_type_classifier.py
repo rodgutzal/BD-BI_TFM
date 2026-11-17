@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.business_type_classifier import BUSINESS_TYPE_RULES, classify_business_type
+from src.business_type_classifier import BUSINESS_TYPE_RULES, classify_business_type, patron_palabra
 from src.poi_client import CATEGORY_TAGS
 
 
@@ -70,17 +70,32 @@ def test_ninguna_palabra_clave_choca_con_otra_categoria():
     repetidas = {kw: c for kw, c in cats_por_palabra.items() if len(c) > 1}
     assert not repetidas, f"Palabras en más de una categoría: {repetidas}"
 
+    # Se compara con el MISMO patrón que usa el clasificador en producción (incluido el plural): si el test usara
+    # `\b{kw}\b` a mano, garantizaría algo distinto de lo que realmente hace el sistema. Lo señaló un code-review.
     choques = [
         (cat1, kw1, cat2, kw2)
         for cat1, kw1 in todas
         for cat2, kw2 in todas
-        if cat1 != cat2 and re.search(rf"\b{re.escape(kw1)}\b", kw2)
+        if cat1 != cat2 and re.search(patron_palabra(kw1), kw2)
     ]
     assert not choques, f"Palabras que se contienen entre categorías: {choques}"
 
 
+@pytest.mark.parametrize(
+    "frase,no_debe_ser",
+    [
+        ("una cerveceria para ingleses", "school"),  # «ingles» + plural daría «ingleses»
+        ("un local con boxes de aparcamiento", "sport"),  # «box» + plural daría «boxes»
+    ],
+)
+def test_el_plural_no_atrapa_palabras_que_son_otra_cosa(frase, no_debe_ser):
+    """El riesgo del sufijo de plural: una palabra corta cuyo plural es OTRA palabra. Por eso «ingles» y «box» no
+    están en el vocabulario (lo señaló un code-review, que encontró estos dos casos reales)."""
+    assert classify_business_type(frase) != no_debe_ser
+
+
 def test_cantidad_de_palabras_clave_documentada():
-    """El README dice 396 palabras clave (únicas). Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los
-    plurales subieron la exactitud del sistema de 76,0 % a 84,9 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2)."""
+    """El README dice 395 palabras clave (únicas). Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los
+    plurales subieron la exactitud del sistema de 76,0 % a 85,4 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2)."""
     unicas = {kw for kws in BUSINESS_TYPE_RULES.values() for kw in kws}
-    assert len(unicas) == 396
+    assert len(unicas) == 395

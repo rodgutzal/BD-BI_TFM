@@ -332,6 +332,14 @@ def recommend_locations(
     reconocen el negocio, el clasificador entrenado `modelo_texto` (si se da; sin él, solo palabras clave)."""
     interpretacion = interpretar(business_type_text, modelo_texto)
     category = interpretacion.categoria
+    if interpretacion.fuera is not None:
+        # No es que no se entienda: se entiende y no se puede analizar. Decir «sé más específico» mandaría al usuario
+        # a reformular algo que nunca va a funcionar, así que se devuelve el porqué.
+        actividad = interpretacion.fuera
+        raise ValueError(
+            f"{actividad.nombre} es una actividad del sector {actividad.sector}, y este sistema no puede recomendar "
+            f"dónde ubicarla. {actividad.motivo} Haría falta: {actividad.haria_falta}"
+        )
     if category is None:
         raise ValueError(
             f"No pude identificar el tipo de negocio en: '{business_type_text}'. "

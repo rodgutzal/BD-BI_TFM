@@ -124,7 +124,8 @@ BUSINESS_TYPE_RULES: Dict[str, Tuple[str, ...]] = {
         "primaria",
         "secundaria",
         "idiomas",
-        "ingles",
+        # «ingles» no: con el plural daría «ingleses», que es otra palabra («una cervecería para ingleses»).
+        "clases de ingles",
         "biblioteca",
         "centro de estudios",
     ),
@@ -167,7 +168,7 @@ BUSINESS_TYPE_RULES: Dict[str, Tuple[str, ...]] = {
         "zumba",
         "ballet",
         "patinaje",
-        "box",
+        # «box» no: con el plural daría «boxes», que en castellano son plazas de aparcamiento, no boxeo.
         "halterofilia",
         "calistenia",
     ),
@@ -465,7 +466,11 @@ def patron_palabra(keyword: str) -> str:
     porque en castellano el plural se marca en todas («salones de belleza»).
 
     `(?:e?s)?` cubre las dos formas regulares: +s (farmacia → farmacias) y +es (bar → bares). Las combinaciones que no
-    son palabras («dees») no aparecen en texto real, así que no generan falsos positivos."""
+    son palabras («dees») no aparecen en texto real, así que no molestan.
+
+    CUIDADO al añadir palabras clave: el riesgo de este patrón es la palabra cuyo plural es OTRA palabra distinta.
+    Por eso no están «ingles» (daría «ingleses») ni «box» (daría «boxes», plazas de aparcamiento); hay un test con
+    esos dos casos. Antes de añadir un término corto, piensa qué significa seguido de -s y de -es."""
     return r"\b" + r"(?:e?s)?\s+".join(re.escape(p) for p in keyword.split()) + r"(?:e?s)?\b"
 
 
@@ -476,17 +481,27 @@ _REGLAS_COMPILADAS: Tuple[Tuple[str, Tuple[re.Pattern, ...]], ...] = tuple(
 )
 
 
+def buscar_categoria(text: str) -> Tuple[Optional[str], Optional[int]]:
+    """(categoría, posición del acierto en el texto normalizado), o (None, None).
+
+    Gana la primera CATEGORÍA del registro que acierte, como siempre: el orden del diccionario es la prioridad y no
+    depende de dónde caiga la palabra. La posición se devuelve aparte, para que quien la necesite pueda desempatar
+    con otra cosa (ver `text_hibrido.interpretar`, que la compara con la del catálogo de actividades no analizables)."""
+    if not text or not text.strip():
+        return None, None
+    normalized = _normalize(text)
+
+    for category, patrones in _REGLAS_COMPILADAS:
+        for patron in patrones:
+            encontrado = patron.search(normalized)
+            if encontrado:
+                return category, encontrado.start()
+    return None, None
+
+
 def classify_business_type(text: str) -> Optional[str]:
     """Texto libre -> una de las 7 categorías de Overpass, o None si ninguna
     palabra clave matchea (el llamador decide qué hacer: pedir que
     reformule, usar una categoría por defecto, etc. — esta función nunca
     adivina)."""
-    if not text or not text.strip():
-        return None
-    normalized = _normalize(text)
-
-    for category, patrones in _REGLAS_COMPILADAS:
-        for patron in patrones:
-            if patron.search(normalized):
-                return category
-    return None
+    return buscar_categoria(text)[0]
