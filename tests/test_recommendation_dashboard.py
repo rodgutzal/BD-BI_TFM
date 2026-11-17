@@ -19,6 +19,7 @@ from src.locations import LOCATIONS
 from streamlit_app.dashboards.recommendation_dashboard import (
     build_contributions_table,
     build_results_table,
+    build_summary,
     normalize_weights,
 )
 
@@ -184,3 +185,37 @@ def test_si_el_filtro_deja_la_tabla_vacia_no_se_lee_la_primera_fila(out):
     pero la función que filtra sí puede devolver vacío y quien la use debe poder comprobarlo."""
     vacio = filter_zones(out, ["Atlantis"])
     assert vacio.empty and list(vacio.index) == []
+
+
+# ---- resumen final -----------------------------------------------------------------------------------------------
+def test_el_resumen_dice_la_zona_su_puntaje_y_que_la_hizo_ganar(out, criterios):
+    """El cierre de la pantalla: qué zona ganó y QUÉ la hizo ganar, ordenado por lo que aportó cada factor."""
+    zona = out.index[0]
+    r = build_summary(out, criterios, zona=zona)
+    assert r["zona"] == zona and r["posicion"] == 1 and r["zonas"] == len(LOCATIONS)
+    assert r["puntaje"] == pytest.approx(out.loc[zona, "score"])
+    aportes = [f["aporte"] for f in r["factores"]]
+    assert aportes == sorted(aportes, reverse=True)
+    assert sum(aportes) == pytest.approx(r["puntaje"])  # el resumen no se deja nada fuera
+    for f in r["factores"]:
+        assert f["parte"] == pytest.approx(f["aporte"] / r["puntaje"])
+
+
+def test_el_resumen_marca_los_factores_sin_dato_de_esa_zona(out, criterios):
+    """Un factor sin dato entra como neutral (0,5 × su peso): aporta sin ser mérito, y el resumen debe poder decirlo."""
+    r = build_summary(out, criterios, zona="Marsaskala")  # la zona que el fixture dejó sin demografía
+    poblacion = next(f for f in r["factores"] if f["etiqueta"] == "Población")
+    assert poblacion["sin_dato"] is True
+    assert not any(f["sin_dato"] for f in r["factores"] if f["etiqueta"] == "Baja competencia")
+
+
+def test_el_resumen_sin_zona_o_con_una_desconocida_no_falla(out, criterios):
+    for zona in (None, "Atlantis"):
+        r = build_summary(out, criterios, zona=zona)
+        assert r["zona"] is None and r["factores"] == [] and r["celdas"] is None
+
+
+def test_el_resumen_sin_panorama_no_nombra_celdas(out, criterios):
+    """Sin data/ml no hay celdas que concretar, pero la parte de zona sigue entera."""
+    r = build_summary(out, criterios, panorama=None, zona=out.index[0])
+    assert r["celdas"] is None and r["factores"]

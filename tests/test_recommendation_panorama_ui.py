@@ -1035,3 +1035,59 @@ def test_al_filtrar_zonas_el_mapa_no_dice_que_enseña_siete(pagina):
     pies = textos(pagina.caption)
     assert not any("las 7 zonas" in c for c in pies)
     assert any("las 2 zonas que comparas" in c or "Las 2 zonas que estás comparando" in c for c in pies)
+
+
+# ---- resumen final en pantalla -----------------------------------------------------------------------------------
+def test_el_resumen_final_cierra_el_circulo_de_la_ciudad_a_la_calle(pagina):
+    """Lo que el usuario pidió: al final, la zona ganadora con lo que la hizo ganar y las calles donde mirar."""
+    from src.ml import panorama_view as pv
+    from streamlit_app.dashboards import panorama_section as ps
+    from streamlit_app.dashboards import recommendation_dashboard as rd
+
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+
+    assert any("En resumen" in s.value for s in pagina.subheader)
+    md = textos(pagina.markdown)
+    zona = pagina.metric[0].value
+    assert any(f"**{zona}** es la mejor de las" in m for m in md)
+    assert any("Lo que más pesa en ese puntaje" in m for m in md)
+    assert any(f"Dónde mirar dentro de {zona}" in m for m in md)
+
+    # las celdas que nombra son las primeras de esa zona, con su calle y su enlace
+    guardado, counts, _ = ps.load_data(ROOT / "data" / "ml")
+    vista = pv.attach_places(
+        pv.compute_view(counts, bp.get_default_profile("food_drink"), guardado, "food_drink"),
+        ps.load_places(ROOT / "data" / "ml"),
+    )
+    esperadas = list(pv.candidate_cells(vista, zona).head(rd.CELDAS_RESUMEN).index)
+    assert esperadas, "la zona recomendada debería tener celdas"
+    for cell_id in esperadas:
+        assert any(f"`{cell_id}`" in m for m in md), cell_id
+    assert any("ver en el mapa" in m and "openstreetmap.org" in m for m in md)
+    assert any("El **puntaje es de la zona**" in c and "no una predicción" in c for c in textos(pagina.caption))
+
+
+def test_el_resumen_va_al_final_despues_del_panorama(pagina):
+    """«Al final»: el resumen cierra la pantalla, después de la ficha de celda del panorama."""
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    md = textos(pagina.markdown)
+    ficha = max(i for i, t in enumerate(md) if t.startswith("##### Ficha de la celda"))
+    resumen = next(i for i, t in enumerate(md) if "es la mejor de las" in t or "es la única zona" in t)
+    assert resumen > ficha
+
+
+def test_el_resumen_sigue_a_la_zona_cuando_se_filtra(pagina):
+    """Si filtras zonas, el resumen habla de la que gana entre esas, no de la que ganaba antes."""
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    next(m for m in pagina.multiselect if m.label == "Zonas a considerar").set_value(["Sliema", "Gzira"]).run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    zona = pagina.metric[0].value
+    assert zona in ("Sliema", "Gzira")
+    assert any(f"**{zona}** es la mejor de las 2 zonas" in m for m in textos(pagina.markdown))
