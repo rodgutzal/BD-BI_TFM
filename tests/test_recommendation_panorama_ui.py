@@ -1120,15 +1120,30 @@ rd.render_summary(out, [ls.POR_CLAVE["demanda"]], None, {zona!r})
 
 
 def test_el_resumen_dice_cuantos_factores_muestra_de_los_que_hay(pagina):
-    """Code-review: nombraba 3 de hasta 6 sin decir que eran solo 3."""
+    """Code-review: nombraba 3 de hasta 6 sin decir que eran solo 3.
+
+    QA de Codex: el test fijaba «3 de N» a mano, así que fallaría al cambiar los criterios aunque el resumen fuera
+    correcto. Ahora comprueba la coherencia entre lo que anuncia y lo que de verdad hay."""
+    import re as _re
+
+    from streamlit_app.dashboards import recommendation_dashboard as rd
+
     pagina.run()
     pagina.text_input[0].set_value("un restaurante")
     next(b for b in pagina.button if "Buscar" in b.label).click().run()
     linea = next(m for m in textos(pagina.markdown) if m.startswith("Lo que más pesa"))
-    import re as _re
 
-    hay = _re.search(r"\((\d+) de (\d+) factores con dato\)", linea)
-    assert hay, linea
-    mostrados, total = int(hay.group(1)), int(hay.group(2))
-    assert mostrados == 3 < total
-    assert linea.count(" · ") == mostrados - 1
+    db = rd.get_database()  # el de la pantalla: la fixture lo inyecta
+    criterios = rd._criterios(db, "food_drink")
+    pesos = rd.normalize_weights({c.clave: c.peso_defecto for c in criterios}, criterios)
+    out = rd._cached_recommend(db, "food_drink", tuple(sorted(pesos.items())))
+    resumen = rd.build_summary(out, criterios, zona=out.index[0])
+    con_dato = [f for f in resumen["factores"] if not f["sin_dato"]]
+    esperados = min(len(con_dato), rd.FACTORES_RESUMEN)
+
+    assert linea.count(" · ") == esperados - 1  # tantos factores nombrados como dice mostrar
+    anuncio = _re.search(r"\((\d+) de (\d+) factores con dato\)", linea)
+    if len(con_dato) > esperados:
+        assert anuncio and (int(anuncio.group(1)), int(anuncio.group(2))) == (esperados, len(con_dato))
+    else:
+        assert anuncio is None  # si caben todos, no hace falta decir «N de N»

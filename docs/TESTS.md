@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1276 funciones de test · 1497 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**59 archivos · 1277 funciones de test · 1498 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -58,7 +58,7 @@
 | [`tests/test_predictive_modeling_dashboard.py`](#teststest_predictive_modeling_dashboardpy) | 13 | 13 |
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
-| [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 16 | 16 |
+| [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 17 | 17 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
 | [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 77 | 77+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
@@ -1511,6 +1511,7 @@
 - `test_el_resumen_sin_zona_o_con_una_desconocida_no_falla`
 - `test_el_resumen_sin_panorama_no_nombra_celdas` — Sin data/ml no hay celdas que concretar, pero la parte de zona sigue entera.
 - `test_el_resumen_distingue_sin_panorama_de_zona_sin_celdas_con_confianza` — Code-review: `celdas is None` mezclaba dos cosas distintas. None = no hay datos por celda que mirar; vacío = esta zona no tiene ninguna celda con confianza media o alta. Afirmar lo segundo cuando pasa lo primero sería inventarse algo sobre los datos.
+- `test_con_puntaje_cero_no_se_afirma_una_parte_del_total` — QA de Codex: una zona que queda la última en TODOS los criterios saca exactamente 0, y entonces dividir entre el puntaje para sacar el «% del total» no tiene sentido. `parte` queda en None y la pantalla lo dice con palabras.
 
 ## `tests/test_recommendation_interpretacion_ui.py`
 

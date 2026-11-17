@@ -14,7 +14,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.database import RouteDatabase
-from src.location_scoring import POR_CLAVE, criterios_disponibles, filter_zones, pesos_por_defecto, recommend_locations
+from src.location_scoring import (
+    POR_CLAVE,
+    criterios_disponibles,
+    filter_zones,
+    pesos_por_defecto,
+    recommend_locations,
+    score_zones,
+)
 from src.locations import LOCATIONS
 from streamlit_app.dashboards.recommendation_dashboard import (
     build_contributions_table,
@@ -197,6 +204,7 @@ def test_el_resumen_dice_la_zona_su_puntaje_y_que_la_hizo_ganar(out, criterios):
     aportes = [f["aporte"] for f in r["factores"]]
     assert aportes == sorted(aportes, reverse=True)
     assert sum(aportes) == pytest.approx(r["puntaje"])  # el resumen no se deja nada fuera
+    assert r["puntaje"] > 0
     for f in r["factores"]:
         assert f["parte"] == pytest.approx(f["aporte"] / r["puntaje"])
 
@@ -247,3 +255,41 @@ def test_el_resumen_distingue_sin_panorama_de_zona_sin_celdas_con_confianza(out,
     flojo = ps.Panorama(vista=sin_confianza, perfil=bp.get_default_profile("food_drink"), marcadas=[])
     vacias = build_summary(out, criterios, panorama=flojo, zona=zona)["celdas"]
     assert vacias is not None and vacias.empty and isinstance(vacias, pd.DataFrame)
+
+
+def test_con_puntaje_cero_no_se_afirma_una_parte_del_total(out, criterios):
+    """QA de Codex: una zona que queda la última en TODOS los criterios saca exactamente 0, y entonces dividir entre el
+    puntaje para sacar el «% del total» no tiene sentido. `parte` queda en None y la pantalla lo dice con palabras."""
+    import pandas as pd
+    from streamlit.testing.v1 import AppTest
+
+    uno = [POR_CLAVE["demanda"]]
+    cero = score_zones(
+        pd.DataFrame({"demanda": [10.0, 5.0]}, index=pd.Index(["Sliema", "Gzira"], name="zone_name")),
+        {"demanda": 1.0},
+    )
+    assert cero.loc["Gzira", "score"] == 0.0  # la peor en el único criterio
+    r = build_summary(cero, uno, zona="Gzira")
+    assert r["puntaje"] == 0.0
+    assert all(f["parte"] is None for f in r["factores"])
+    assert all(f["aporte"] == 0.0 for f in r["factores"])
+
+    codigo = """
+import sys
+sys.path.insert(0, {raiz!r})
+import pandas as pd
+from src import location_scoring as ls
+from streamlit_app.dashboards import recommendation_dashboard as rd
+
+out = ls.score_zones(
+    pd.DataFrame({{"demanda": [10.0, 5.0]}}, index=pd.Index(["Sliema", "Gzira"], name="zone_name")),
+    {{"demanda": 1.0}},
+)
+rd.render_summary(out, [ls.POR_CLAVE["demanda"]], None, "Gzira")
+"""
+    at = AppTest.from_string(codigo.format(raiz=str(Path(__file__).resolve().parents[1])), default_timeout=60)
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    md = " ".join(m.value for m in at.markdown)
+    assert "Ningún factor suma a ese puntaje" in md
+    assert "0%" not in md and "0 %" not in md  # no se inventa un porcentaje

@@ -282,7 +282,9 @@ def build_summary(out, criterios, panorama=None, zona: Optional[str] = None, max
             {
                 "etiqueta": criterio.corta,
                 "aporte": aporte,
-                "parte": aporte / puntaje if puntaje else 0.0,
+                # None, no 0.0: con puntaje cero no hay un total que repartir, y un «0 %» afirmaría una parte relativa
+                # que no se puede calcular. Pasa cuando una zona queda la última en todos los criterios medidos.
+                "parte": (aporte / puntaje) if puntaje else None,
                 "sin_dato": crudo is None or pd.isna(crudo),
             }
         )
@@ -320,7 +322,12 @@ def render_summary(out, criterios, panorama=None, zona: Optional[str] = None):
     st.markdown(f"**{resumen['zona']}** es {cuantas}, con un puntaje de **{resumen['puntaje']:.3f}**.")
 
     con_dato = [f for f in resumen["factores"] if not f["sin_dato"]]
-    if con_dato:
+    if not resumen["puntaje"]:
+        st.markdown(
+            "Ningún factor suma a ese puntaje: esta zona queda la última en todos los que se miden, así que no hay "
+            "una parte del total que repartir."
+        )
+    elif con_dato:
         mostrados = con_dato[:FACTORES_RESUMEN]
         cuenta = f" ({len(mostrados)} de {len(con_dato)} factores con dato)" if len(con_dato) > len(mostrados) else ""
         detalle = " · ".join(f"**{f['etiqueta']}** {f['aporte']:.3f} ({f['parte']:.0%})" for f in mostrados)
