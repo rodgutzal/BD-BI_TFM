@@ -16,8 +16,8 @@
     }
   },
   "decision": {
-    "equivocadas_hibrido": 0.09375,
-    "equivocadas_palabras": 0.08854166666666667,
+    "equivocadas_hibrido": 0.109375,
+    "equivocadas_palabras": 0.10416666666666667,
     "exactitud": {
       "diferencia": 0.036458333333333336,
       "ic_inf": 0.010416666666666666,
@@ -46,7 +46,7 @@
     "sha256": "d57a4d86ccb9d96efbc877ef58a1f6e92b20b5e74d948fb0bc68f24d1135e34e"
   },
   "procedencia": {
-    "commit": "915ce80+",
+    "commit": "2c97f13+",
     "version.numpy": "2.4.6",
     "version.pandas": "3.0.3",
     "version.python": "3.13.14",
@@ -55,13 +55,13 @@
   },
   "resumen": {
     "hibrido": {
-      "equivocadas": 0.09375,
-      "exactitud": 0.8489583333333334,
+      "equivocadas": 0.109375,
+      "exactitud": 0.8333333333333334,
       "sin_respuesta": 0.057291666666666664
     },
     "hibrido_mlp": {
-      "equivocadas": 0.08854166666666667,
-      "exactitud": 0.8333333333333334,
+      "equivocadas": 0.10416666666666667,
+      "exactitud": 0.8177083333333334,
       "sin_respuesta": 0.078125
     },
     "logistica": {
@@ -75,8 +75,8 @@
       "sin_respuesta": 0.375
     },
     "palabras": {
-      "equivocadas": 0.08854166666666667,
-      "exactitud": 0.8125,
+      "equivocadas": 0.10416666666666667,
+      "exactitud": 0.796875,
       "sin_respuesta": 0.09895833333333333
     }
   },

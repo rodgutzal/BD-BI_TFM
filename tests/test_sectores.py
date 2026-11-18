@@ -21,8 +21,12 @@ from src.ml.text_hibrido import CATEGORIAS, FUENTE_FUERA, FUENTE_PALABRAS, inter
 
 
 # ---- sectores ----------------------------------------------------------------------------------------------------
-def test_las_siete_categorias_tienen_sector_y_todas_son_terciarias():
-    """Es el límite del sistema puesto por escrito: todo lo que sabe analizar son servicios y comercio."""
+def test_todas_las_categorias_tienen_sector_y_todas_son_terciarias():
+    """Es el límite del sistema puesto por escrito: todo lo que sabe analizar son servicios y comercio.
+
+    Eran siete hasta la fase 3, que añadió `belleza` y `taller`. Un taller obliga a pensarlo —reparar suena a
+    industria— pero presta un SERVICIO, no transforma materia prima para venderla: es terciario. La planta que
+    monta el coche sí sería secundaria, y sigue en el catálogo de lo que no se puede analizar."""
     assert set(sec.SECTOR_POR_CATEGORIA) == set(CATEGORIAS)
     assert set(sec.SECTOR_POR_CATEGORIA.values()) == {sec.TERCIARIO}
     for categoria in CATEGORIAS:

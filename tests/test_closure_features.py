@@ -57,6 +57,13 @@ def una_fila(elementos, ident, tipo="node"):
 
 # ---- columnas ---------------------------------------------------------------------------------------------------------------
 def test_las_variables_son_exactamente_las_del_protocolo_y_en_este_orden():
+    """Las 13 variables preregistradas del protocolo 3.M, en su orden, y las SIETE categorías con las que se ejecutó.
+
+    Antes esto comprobaba `cf.CATEGORIAS == tuple(CATEGORY_TAGS)`, que ataba un estudio de ejecución única a una
+    lista que el producto sí amplía: al añadir `belleza` y `taller` en la fase 3 el vector pasó a 15 columnas y el
+    código dejó de reproducir el estudio publicado. Ahora la lista está congelada en el módulo y aquí se comprueba
+    lo que de verdad hay que garantizar: que son esas siete y que siguen existiendo en el recolector.
+    """
     assert cf.COLUMNAS == (
         "cat_school",
         "cat_hospital",
@@ -72,7 +79,9 @@ def test_las_variables_son_exactamente_las_del_protocolo_y_en_este_orden():
         "dist_misma_m",
         "cadena",
     )
-    assert cf.CATEGORIAS == tuple(CATEGORY_TAGS)  # las siete categorías del recolector
+    assert cf.CATEGORIAS == ("school", "hospital", "food_drink", "leisure", "sport", "mall", "business")
+    # Congeladas, pero no inventadas: si alguien renombra una categoría del recolector, hay que enterarse.
+    assert set(cf.CATEGORIAS) <= set(CATEGORY_TAGS)
 
 
 def test_los_parametros_son_los_del_protocolo():

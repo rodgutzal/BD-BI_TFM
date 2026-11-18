@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**60 archivos · 1303 funciones de test · 1530 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**60 archivos · 1307 funciones de test · 1549 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -16,7 +16,7 @@
 | [`tests/test_analyze_weather_effect.py`](#teststest_analyze_weather_effectpy) | 4 | 4 |
 | [`tests/test_api.py`](#teststest_apipy) | 14 | 20 |
 | [`tests/test_api_clients.py`](#teststest_api_clientspy) | 22 | 22+ |
-| [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 11 | 26 |
+| [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 15 | 45 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_closure_features.py`](#teststest_closure_featurespy) | 22 | 23+ |
@@ -205,13 +205,17 @@
 - `test_barberia_no_se_confunde_con_bar` — Regresión: la palabra clave "bar" (comida y bebida) no debe matchear dentro de "barbería". Es el bug que ya ocurrió una vez con datos reales de Foursquare, y el clasificador usa límites de palabra (\b) para evitarlo.
 - `test_la_posicion_es_la_del_acierto_mas_temprano_aunque_la_categoria_la_decida_el_registro` — Las dos mitades que devuelve `buscar_categoria` salen de aciertos DISTINTOS, y es a propósito.
 - `test_una_palabra_generica_no_le_gana_a_una_especifica_por_aparecer_antes` — `business` es la categoría residual y va al final del registro justamente para esto: «oficina» no puede ganarle a «farmacia». Decidir la categoría por posición rompía el invariante, y sobre las mismas 192 frases bajaba la exactitud del 85,4 % al 84,9 % subiendo las equivocadas del 9,4 % al 9,9 % (lo señaló un code-review).
+- `test_las_dos_categorias_de_la_fase_3` ×9 — Belleza y taller salieron del cajón `business` en la fase 3: ya tienen competencia propia, no «cualquier comercio».
+- `test_un_taller_o_un_salon_de_otra_cosa_no_cuentan` ×8 — Por eso «taller» a secas NO es palabra clave: un taller puede ser de bicis, de motos o de costura, y a ninguno le sirve la competencia de un taller de coches. Lo encontró el propio conjunto de evaluación.
+- `test_quiero_poner_un_taller_se_queda_sin_categoria_a_proposito` — No se sabe de qué: no hay que adivinar. Es el mismo principio que «nunca elige una categoría al azar».
+- `test_limite_conocido_la_peluqueria_canina_se_clasifica_mal` — Límite declarado, no olvidado: «peluquería canina» (`shop=pet_grooming`) cae en `belleza`, y no compite con una barbería. Con palabras clave no se puede arreglar: añadir «peluqueria canina» a `business` rompería el test de choques, porque «peluqueria» está contenida dentro, y `belleza` va antes en el registro.
 - `test_rehabilitacion_de_obra_no_es_un_negocio_de_salud` ×2 — «rehabilitación» se retiró del vocabulario de `hospital`: en castellano es más de obra que de salud, y el sentido médico ya lo cubren «fisioterapia» y «terapia» (lo señaló un code-review).
 - `test_ignora_mayusculas_tildes_y_espacios_de_mas` — El clasificador no distingue mayúsculas, tildes ni espacios repetidos o sobrantes.
 - `test_sin_coincidencia_devuelve_none_y_nunca_adivina` ×5 — Un texto sin ninguna palabra clave devuelve `None`; nunca elige una categoría al azar.
 - `test_todas_las_categorias_existen_en_overpass` — El clasificador solo puede devolver categorías que realmente guarda la tabla `pois` (CATEGORY_TAGS de poi_client.py).
 - `test_ninguna_palabra_clave_choca_con_otra_categoria` — Una misma palabra no puede aparecer en dos categorías (el orden de las reglas decidiría en silencio), y ninguna palabra de una categoría puede estar contenida como palabra completa dentro de una frase de otra.
 - `test_el_plural_no_atrapa_palabras_que_son_otra_cosa` ×2 — El riesgo del sufijo de plural: una palabra corta cuyo plural es OTRA palabra. Por eso «ingles» y «box» no están en el vocabulario (lo señaló un code-review, que encontró estos dos casos reales).
-- `test_cantidad_de_palabras_clave_documentada` — El README dice 394 palabras clave únicas. Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los plurales subieron la exactitud del sistema de 76,0 % a 84,9 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2).
+- `test_cantidad_de_palabras_clave_documentada` — El README dice 406 palabras clave únicas. Fueron 140 hasta el 16-nov-2026 y 394 hasta la fase 3, que añadió las de `belleza` y `taller` (ver docs/DISENO_ML_RECOMENDACION.md §3.L2 y §E).
 
 ## `tests/test_causal_analysis.py`
 
@@ -292,7 +296,7 @@
 >
 > Datos sintéticos: cada test fija una regla del protocolo. No leen `data/osm_history/`.
 
-- `test_las_variables_son_exactamente_las_del_protocolo_y_en_este_orden`
+- `test_las_variables_son_exactamente_las_del_protocolo_y_en_este_orden` — Las 13 variables preregistradas del protocolo 3.M, en su orden, y las SIETE categorías con las que se ejecutó.
 - `test_los_parametros_son_los_del_protocolo`
 - `test_no_hay_ninguna_variable_del_estado_actual_ni_externa` — El protocolo excluye tiempo de viaje, población por zona y contexto estático actual.
 - `test_el_universo_incluye_elementos_sin_nombre_y_excluye_vacios_sin_categoria_y_sin_posicion`
@@ -1629,7 +1633,7 @@
 > Lo que se defiende aquí: que reconocer una granja y explicar por qué no se puede analizar es mejor que mandarla a la
 > categoría «más parecida», y que añadir ese paso no altera el sistema que se evaluó en la fase 3.
 
-- `test_las_siete_categorias_tienen_sector_y_todas_son_terciarias` — Es el límite del sistema puesto por escrito: todo lo que sabe analizar son servicios y comercio.
+- `test_todas_las_categorias_tienen_sector_y_todas_son_terciarias` — Es el límite del sistema puesto por escrito: todo lo que sabe analizar son servicios y comercio.
 - `test_una_categoria_desconocida_no_tiene_sector`
 - `test_los_tres_sectores_estan_descritos`
 - `test_reconoce_la_actividad_y_su_sector`

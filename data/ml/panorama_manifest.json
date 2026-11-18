@@ -3,18 +3,39 @@
   "archivos": {
     "cell_counts.csv": {
       "filas": 1447,
-      "sha256": "47bad22a5d4e90888fb57f9d419d4a797e675a499228e27ba4766027144af466"
+      "sha256": "3eb7eb11edf7af8d61739417cbe9e98f841a8cda10649078ce347069eecbff5a"
     },
     "panorama.csv": {
-      "filas": 7973,
-      "sha256": "dc789299eaa0dcd7e4746c02afa7c801d785816459ef2516f97084f04312931c"
+      "filas": 10251,
+      "sha256": "fa2d034389f1bfd9836a911eec2d77a24bba41a5f078011dcb1da8067667a12b"
     }
   },
   "brecha": {},
   "derivado": {
-    "herramienta": "tools/strip_panorama_gap.py",
-    "motivo": "La brecha de oferta dependía de la población de Data Commons y del tiempo de viaje medio, calculado con mediciones de TomTom (cuyas condiciones prohíben las bases de datos derivadas), y no estaba validada: se retiró del panorama publicado. Las lentes y cell_counts.csv no cambian.",
-    "panorama_sha256_anterior": "265a374718cf6c10a896e5c27218f805e20701b22079488a66a0c844179a35cb"
+    "cell_counts_sha256_anterior": "47bad22a5d4e90888fb57f9d419d4a797e675a499228e27ba4766027144af466",
+    "columnas_movidas": {
+      "business|beauty": "belleza|beauty",
+      "business|car_repair": "taller|car_repair",
+      "business|hairdresser": "belleza|hairdresser",
+      "business|truck_repair": "taller|truck_repair",
+      "business|tyres": "taller|tyres"
+    },
+    "derivado_anterior": {
+      "herramienta": "tools/strip_panorama_gap.py",
+      "motivo": "La brecha de oferta dependía de la población de Data Commons y del tiempo de viaje medio, calculado con mediciones de TomTom (cuyas condiciones prohíben las bases de datos derivadas), y no estaba validada: se retiró del panorama publicado. Las lentes y cell_counts.csv no cambian.",
+      "panorama_sha256_anterior": "265a374718cf6c10a896e5c27218f805e20701b22079488a66a0c844179a35cb"
+    },
+    "herramienta": "tools/resplit_panorama_categories.py",
+    "motivo": "Las peluquerías/estética (shop=hairdresser|beauty) y los talleres (shop=car_repair|truck_repair|tyres) ya se recolectaban dentro de `business`, el cajón de shop/office, así que su competencia era «cualquier comercio» y no se podían analizar como lo que son. Ahora tienen categoría propia en CATEGORY_TAGS y perfil propio. Derivado del panorama publicado para no perder el contexto de OSM, que no está versionado.",
+    "panorama_sha256_anterior": "dc789299eaa0dcd7e4746c02afa7c801d785816459ef2516f97084f04312931c",
+    "perfiles_intactos": [
+      "food_drink",
+      "hospital",
+      "school",
+      "sport",
+      "leisure",
+      "mall"
+    ]
   },
   "formato": 1,
   "parametros": {
@@ -33,10 +54,12 @@
     "school",
     "sport",
     "leisure",
-    "mall"
+    "mall",
+    "belleza",
+    "taller"
   ],
   "procedencia": {
-    "commit": "a05eb3e",
+    "commit": "2c97f13+",
     "ejecutado": "2026-11-09T03:38:37Z",
     "entrada_commit": "5fa6890",
     "entrada_creada": "2026-11-09T03:34:18Z",

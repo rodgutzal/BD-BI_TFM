@@ -28,7 +28,19 @@ from src.ml import closure_labels as cl
 from src.ml import grid
 from src.poi_client import CATEGORY_TAGS
 
-CATEGORIAS = tuple(CATEGORY_TAGS)  # las siete, en el orden del recolector
+# Las SIETE categorías con las que se PREREGISTRÓ y se ejecutó una sola vez el protocolo 3.M (13-nov-2026), escritas
+# a mano y CONGELADAS a propósito. Antes era `tuple(CATEGORY_TAGS)`, y eso ataba un estudio de ejecución única a una
+# lista que el producto sí puede ampliar: al añadir `belleza` y `taller` en la fase 3 (18-nov-2026) el vector de
+# variables pasó de 13 a 15 columnas y el código dejó de reproducir el estudio ya publicado en §3.M.
+#
+# Un protocolo preregistrado no cambia porque el producto crezca. Si algún día se repitiera el estudio con más
+# categorías sería OTRO estudio, con su propio preregistro y su propia ejecución única.
+CATEGORIAS = ("school", "hospital", "food_drink", "leisure", "sport", "mall", "business")
+
+# Si alguien renombra una categoría en el recolector, esto se rompe aquí y no en silencio dentro del análisis.
+_desconocidas = set(CATEGORIAS) - set(CATEGORY_TAGS)
+if _desconocidas:
+    raise ImportError(f"El protocolo 3.M nombra categorías que ya no existen en CATEGORY_TAGS: {sorted(_desconocidas)}")
 RADIOS_M = (250.0, 500.0)
 DISTANCIA_MAXIMA_M = 1000.0
 MIN_REPETICIONES_CADENA = 3

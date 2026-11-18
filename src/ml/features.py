@@ -22,6 +22,10 @@ from src.locations import LOCATIONS
 from src.ml import grid
 from src.ml.cell_counts import CellCounts, Selector
 
+# Las SIETE categorías con las que se construyeron y validaron los modelos de ubicación. Se quedan en siete a
+# propósito: `belleza` y `taller` (fase 3) no se añaden aquí porque las cifras de validación de §3.G/§3.H se midieron
+# con este vector de variables, igual que las del protocolo 3.M en `closure_features.CATEGORIAS`. Ampliar la lista
+# cambiaría en silencio unas cifras ya publicadas; si hiciera falta, sería una validación nueva.
 CATEGORIAS = ("school", "hospital", "food_drink", "leisure", "sport", "mall", "business")
 SIGMA_M = 1500.0
 

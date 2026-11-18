@@ -54,6 +54,18 @@ CATEGORY_TAGS: Dict[str, List[str]] = {
     ],
     "sport": ["leisure=fitness_centre|sports_centre|sports_hall|stadium|ice_rink"],
     "mall": ["shop=mall|department_store"],
+    # Fase 3 (18-nov-2026): dos comercios que ya se recolectaban dentro de
+    # "business" y ahora tienen categoría propia, porque son los dos tipos de
+    # local que más se preguntan después de la restauración y no se podían
+    # analizar como tales: su competencia era «cualquier comercio».
+    #
+    # Van AQUÍ a propósito: después de las categorías basadas en amenity/leisure
+    # /tourism y antes del cajón "business". Así ninguna clasificación anterior
+    # cambia (un local con shop=beauty y amenity=pharmacy sigue siendo hospital,
+    # que va antes) y solo dejan de caer en "business" los que nadie más reclama.
+    # Moverlas por encima de "hospital" sí cambiaría datos ya publicados.
+    "belleza": ["shop=hairdresser|beauty"],
+    "taller": ["shop=car_repair|truck_repair|tyres"],
     "business": ["shop", "office"],
 }
 
