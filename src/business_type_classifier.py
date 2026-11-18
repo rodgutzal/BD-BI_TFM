@@ -484,19 +484,20 @@ _REGLAS_COMPILADAS: Tuple[Tuple[str, Tuple[re.Pattern, ...]], ...] = tuple(
 def buscar_categoria(text: str) -> Tuple[Optional[str], Optional[int]]:
     """(categoría, posición del acierto en el texto normalizado), o (None, None).
 
-    Gana la primera CATEGORÍA del registro que acierte, como siempre: el orden del diccionario es la prioridad y no
-    depende de dónde caiga la palabra. La posición se devuelve aparte, para que quien la necesite pueda desempatar
-    con otra cosa (ver `text_hibrido.interpretar`, que la compara con la del catálogo de actividades no analizables)."""
+    Gana la coincidencia MÁS TEMPRANA en el texto. Si dos empiezan en la misma posición, conserva el orden del
+    diccionario como prioridad. La posición permite desempatar con el catálogo de actividades no analizables en
+    `text_hibrido.interpretar`."""
     if not text or not text.strip():
         return None, None
     normalized = _normalize(text)
 
+    mejor_categoria, donde = None, None
     for category, patrones in _REGLAS_COMPILADAS:
         for patron in patrones:
             encontrado = patron.search(normalized)
-            if encontrado:
-                return category, encontrado.start()
-    return None, None
+            if encontrado and (donde is None or encontrado.start() < donde):
+                mejor_categoria, donde = category, encontrado.start()
+    return mejor_categoria, donde
 
 
 def classify_business_type(text: str) -> Optional[str]:

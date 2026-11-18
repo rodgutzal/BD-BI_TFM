@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**60 archivos · 1299 funciones de test · 1525 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**60 archivos · 1300 funciones de test · 1526 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -16,7 +16,7 @@
 | [`tests/test_analyze_weather_effect.py`](#teststest_analyze_weather_effectpy) | 4 | 4 |
 | [`tests/test_api.py`](#teststest_apipy) | 14 | 20 |
 | [`tests/test_api_clients.py`](#teststest_api_clientspy) | 22 | 22+ |
-| [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 8 | 22 |
+| [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 9 | 23 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_closure_features.py`](#teststest_closure_featurespy) | 22 | 23+ |
@@ -203,12 +203,13 @@
 
 - `test_clasifica_negocios_comunes` ×10 — Cada texto de negocio común (parametrizado) se clasifica en la categoría esperada.
 - `test_barberia_no_se_confunde_con_bar` — Regresión: la palabra clave "bar" (comida y bebida) no debe matchear dentro de "barbería". Es el bug que ya ocurrió una vez con datos reales de Foursquare, y el clasificador usa límites de palabra (\b) para evitarlo.
+- `test_gana_la_coincidencia_de_categoria_mas_temprana` — El orden del registro no puede ocultar el negocio que aparece antes en la frase.
 - `test_ignora_mayusculas_tildes_y_espacios_de_mas` — El clasificador no distingue mayúsculas, tildes ni espacios repetidos o sobrantes.
 - `test_sin_coincidencia_devuelve_none_y_nunca_adivina` ×5 — Un texto sin ninguna palabra clave devuelve `None`; nunca elige una categoría al azar.
 - `test_todas_las_categorias_existen_en_overpass` — El clasificador solo puede devolver categorías que realmente guarda la tabla `pois` (CATEGORY_TAGS de poi_client.py).
 - `test_ninguna_palabra_clave_choca_con_otra_categoria` — Una misma palabra no puede aparecer en dos categorías (el orden de las reglas decidiría en silencio), y ninguna palabra de una categoría puede estar contenida como palabra completa dentro de una frase de otra.
 - `test_el_plural_no_atrapa_palabras_que_son_otra_cosa` ×2 — El riesgo del sufijo de plural: una palabra corta cuyo plural es OTRA palabra. Por eso «ingles» y «box» no están en el vocabulario (lo señaló un code-review, que encontró estos dos casos reales).
-- `test_cantidad_de_palabras_clave_documentada` — El README dice 395 palabras clave (únicas). Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los plurales subieron la exactitud del sistema de 76,0 % a 85,4 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2).
+- `test_cantidad_de_palabras_clave_documentada` — El README dice 395 palabras clave únicas. Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los plurales subieron la exactitud del sistema de 76,0 % a 84,9 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2).
 
 ## `tests/test_causal_analysis.py`
 

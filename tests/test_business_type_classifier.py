@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.business_type_classifier import BUSINESS_TYPE_RULES, classify_business_type, patron_palabra
+from src.business_type_classifier import BUSINESS_TYPE_RULES, buscar_categoria, classify_business_type, patron_palabra
 from src.poi_client import CATEGORY_TAGS
 
 
@@ -38,6 +38,16 @@ def test_barberia_no_se_confunde_con_bar():
     Foursquare, y el clasificador usa límites de palabra (\\b) para evitarlo."""
     assert classify_business_type("barbería") == "business"
     assert classify_business_type("quiero abrir una barbería") == "business"
+
+
+def test_gana_la_coincidencia_de_categoria_mas_temprana():
+    """El orden del registro no puede ocultar el negocio que aparece antes en la frase.
+
+    Es esencial para que `interpretar` pueda compararlo con una actividad fuera de alcance por posición: en «un
+    restaurante con fábrica y farmacia», restaurante debe ganar a farmacia aunque `hospital` aparezca antes que
+    `food_drink` en el registro.
+    """
+    assert buscar_categoria("un restaurante con fabrica y farmacia") == ("food_drink", 3)
 
 
 def test_ignora_mayusculas_tildes_y_espacios_de_mas():
@@ -95,7 +105,7 @@ def test_el_plural_no_atrapa_palabras_que_son_otra_cosa(frase, no_debe_ser):
 
 
 def test_cantidad_de_palabras_clave_documentada():
-    """El README dice 395 palabras clave (únicas). Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los
-    plurales subieron la exactitud del sistema de 76,0 % a 85,4 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2)."""
+    """El README dice 395 palabras clave únicas. Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los
+    plurales subieron la exactitud del sistema de 76,0 % a 84,9 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2)."""
     unicas = {kw for kws in BUSINESS_TYPE_RULES.values() for kw in kws}
     assert len(unicas) == 395

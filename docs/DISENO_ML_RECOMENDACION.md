@@ -392,21 +392,21 @@ Las 160 frases que sí describen un negocio se reparten así por categoría: `fo
 - **Sensibilidad al umbral (solo descriptiva):** el híbrido cumple la regla en todos los umbrales mostrados de 0,40 a 0,80 (la tabla avanza de 0,10 en 0,10); falla a 0,30 (13 % de respuestas equivocadas) y a 0,90 (ya no mejora a las palabras clave con claridad). El 0,50 elegido no está en el borde.
 - **Las cifras absolutas no son comparables con la sección L:** otro conjunto, otra composición y otras frases. Las palabras clave suben del 45 % al 66,7 % sobre todo porque aciertan mucho más dentro de cada tipo (sinónimos 0 % → 36 %, erratas 21 % → 69 %, frases largas 24 % → 69 %): las frases de este conjunto usan más a menudo palabras que el método ya conoce. No se debe leer como una mejora de las palabras clave.
 
-**Remedición del 16-nov-2026: el vocabulario de palabras clave pasó de 140 a 396 términos.**
+**Remedición del 16-nov-2026: el vocabulario de palabras clave pasó de 140 a 395 términos únicos.**
 
 Las cifras de arriba son las del 12-nov-2026 y **se conservan tal cual**: documentan la evaluación preregistrada, que se ejecutó una sola vez y no se puede repetir sin dejar de ser preregistrada. Lo que sigue es una **medición nueva** sobre el mismo conjunto y el mismo protocolo (192 frases, `--solo-coincidentes`), después de ampliar el vocabulario y de arreglar un fallo: el límite de palabra cortaba antes de la `-s`, así que **ningún plural se reconocía** («varias farmacias» no se entendía).
 
 | Sistema (192 frases) | Exactitud | Respuestas equivocadas | Sin respuesta |
 |---|---|---|---|
-| palabras clave | 66,7 % → **81,8 %** | 5,7 % → **8,9 %** | 27,6 % → **9,4 %** |
-| **híbrido** | 76,0 % → **85,4 %** | 6,2 % → **9,4 %** | 17,7 % → **5,2 %** |
+| palabras clave | 66,7 % → **81,2 %** | 5,7 % → **9,4 %** | 27,6 % → **9,4 %** |
+| **híbrido** | 76,0 % → **84,9 %** | 6,2 % → **9,9 %** | 17,7 % → **5,2 %** |
 
-- **La decisión no cambia:** el híbrido sigue mejorando a las palabras clave, ahora **+3,6 puntos [IC 95 %: +1,0, +6,8]** (antes +9,4), y sus respuestas equivocadas siguen dentro de la tolerancia (9,4 % frente a 8,9 %). Se adopta igual.
-- **El margen del híbrido se estrecha,** y era de esperar: las palabras clave suben 15,1 puntos, así que queda menos hueco donde el modelo aporte. El híbrido no es ahora «mejor», es **menos necesario**.
+- **La decisión no cambia:** el híbrido sigue mejorando a las palabras clave, ahora **+3,6 puntos [IC 95 %: +1,0, +6,8]** (antes +9,4), y sus respuestas equivocadas siguen dentro de la tolerancia (9,9 % frente a 9,4 %). Se adopta igual.
+- **El margen del híbrido se estrecha,** y era de esperar: las palabras clave suben 14,5 puntos, así que queda menos hueco donde el modelo aporte. El híbrido no es ahora «mejor», es **menos necesario**.
 - **Lo que se gana:** las abstenciones caen de 17,7 % a 5,2 %. El sistema responde a casi todo lo que se le pregunta.
-- **Lo que se paga:** las respuestas equivocadas suben de 6,2 % a 9,4 %. **Responder más implica equivocarse más**, y en las frases fuera de alcance el híbrido empeora (20 % → 22 %), porque más vocabulario significa más maneras de que una palabra suelta dispare una categoría.
+- **Lo que se paga:** las respuestas equivocadas suben de 6,2 % a 9,9 %. **Responder más implica equivocarse más**, y en las frases fuera de alcance el híbrido empeora (20 % → 22 %), porque más vocabulario significa más maneras de que una palabra suelta dispare una categoría.
 - **Umbral:** la validación cruzada del entrenamiento ahora elige **0,45** (antes 0,50). El umbral depende del híbrido, y el híbrido incluye las palabras clave: cambiarlas lo mueve. El modelo se reexportó para que la aplicación siga siendo exactamente el sistema evaluado.
-- **Por tipo de frase** (exactitud / equivocadas del híbrido): directa 97 %/3 %, errata 83 %/7 %, larga 88 %/6 %, sinónimo 82 %/8 %, fuera de alcance 78 %/22 %. **Los sinónimos pasan del 49 % al 82 %**, que es justo lo que el vocabulario corto penalizaba.
+- **Por tipo de frase** (exactitud / equivocadas del híbrido): directa 94 %/6 %, errata 83 %/7 %, larga 92 %/2 %, sinónimo 77 %/13 %, fuera de alcance 78 %/22 %. **Los sinónimos pasan del 49 % al 77 %**, que es justo lo que el vocabulario corto penalizaba.
 - **Un riesgo del plural, encontrado en revisión:** el sufijo opcional `-s`/`-es` puede convertir una palabra corta en otra distinta. «ingles» habría atrapado «una cervecería para **ingleses**» y «box», «un local con **boxes** de aparcamiento». Las dos se retiraron del vocabulario y hay un test con esos casos; antes de añadir un término corto hay que pensar qué significa seguido de -s y de -es.
 
 **Límites que condicionan la conclusión**
