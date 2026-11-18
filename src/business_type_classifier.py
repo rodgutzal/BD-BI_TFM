@@ -62,7 +62,9 @@ BUSINESS_TYPE_RULES: Dict[str, Tuple[str, ...]] = {
         "audifonos",
         "fisioterapia",
         "fisioterapeuta",
-        "rehabilitacion",
+        # «rehabilitacion» estuvo aquí y se retiró: en castellano es mucho más habitual en obra («rehabilitación de
+        # fachadas», «empresa de rehabilitación de edificios») que en salud, y el sentido médico ya lo cubren
+        # «fisioterapia», «fisioterapeuta» y «terapia». Lo señaló un code-review.
         "quiropractico",
         "podologia",
         "podologo",
@@ -482,22 +484,35 @@ _REGLAS_COMPILADAS: Tuple[Tuple[str, Tuple[re.Pattern, ...]], ...] = tuple(
 
 
 def buscar_categoria(text: str) -> Tuple[Optional[str], Optional[int]]:
-    """(categoría, posición del acierto en el texto normalizado), o (None, None).
+    """(categoría, posición de la mención de negocio más temprana), o (None, None).
 
-    Gana la coincidencia MÁS TEMPRANA en el texto. Si dos empiezan en la misma posición, conserva el orden del
-    diccionario como prioridad. La posición permite desempatar con el catálogo de actividades no analizables en
-    `text_hibrido.interpretar`."""
+    Las dos mitades responden a preguntas distintas, así que a propósito NO salen del mismo acierto:
+
+    - La CATEGORÍA la decide el orden del registro, el declarado arriba: gana la primera categoría que acierte, con
+      `business` al final para que una palabra genérica no le gane a una específica. Decidirla por posición se probó
+      y se descartó: «una oficina de farmacia» dejaba de ser `hospital`, y sobre las mismas 192 frases la exactitud
+      bajaba del 85,4 % al 84,9 % mientras las respuestas equivocadas subían del 9,4 % al 9,9 % (lo señaló un
+      code-review).
+    - La POSICIÓN es la del acierto más temprano de CUALQUIER categoría, que es lo único que sirve para saber si una
+      actividad no analizable se nombra antes que el negocio (ver `text_hibrido.interpretar`). Con la posición de la
+      categoría ganadora, «un restaurante con fábrica y farmacia» se rechazaba como fuera de alcance: la fábrica
+      está antes que «farmacia» aunque «restaurante» esté antes que las dos (lo señaló el QA de Codex).
+    """
     if not text or not text.strip():
         return None, None
     normalized = _normalize(text)
 
-    mejor_categoria, donde = None, None
+    categoria, donde = None, None
     for category, patrones in _REGLAS_COMPILADAS:
         for patron in patrones:
             encontrado = patron.search(normalized)
-            if encontrado and (donde is None or encontrado.start() < donde):
-                mejor_categoria, donde = category, encontrado.start()
-    return mejor_categoria, donde
+            if encontrado is None:
+                continue
+            if categoria is None:  # orden del registro = prioridad
+                categoria = category
+            if donde is None or encontrado.start() < donde:  # posición = el acierto más temprano de todos
+                donde = encontrado.start()
+    return categoria, donde
 
 
 def classify_business_type(text: str) -> Optional[str]:

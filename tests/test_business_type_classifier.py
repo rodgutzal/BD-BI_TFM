@@ -40,14 +40,31 @@ def test_barberia_no_se_confunde_con_bar():
     assert classify_business_type("quiero abrir una barbería") == "business"
 
 
-def test_gana_la_coincidencia_de_categoria_mas_temprana():
-    """El orden del registro no puede ocultar el negocio que aparece antes en la frase.
+def test_la_posicion_es_la_del_acierto_mas_temprano_aunque_la_categoria_la_decida_el_registro():
+    """Las dos mitades que devuelve `buscar_categoria` salen de aciertos DISTINTOS, y es a propósito.
 
-    Es esencial para que `interpretar` pueda compararlo con una actividad fuera de alcance por posición: en «un
-    restaurante con fábrica y farmacia», restaurante debe ganar a farmacia aunque `hospital` aparezca antes que
-    `food_drink` en el registro.
+    En «un restaurante con fábrica y farmacia» la categoría es `hospital`, porque el registro pone `hospital` antes
+    que `food_drink` y ese orden es la prioridad declarada. Pero la posición es la 3, la de «restaurante», no la 29
+    de «farmacia»: es la única que permite a `interpretar` ver que el negocio se nombra ANTES que la fábrica (19) y
+    no rechazar la frase como fuera de alcance. Con la posición de la categoría ganadora se rechazaba (QA de Codex).
     """
-    assert buscar_categoria("un restaurante con fabrica y farmacia") == ("food_drink", 3)
+    assert buscar_categoria("un restaurante con fabrica y farmacia") == ("hospital", 3)
+
+
+def test_una_palabra_generica_no_le_gana_a_una_especifica_por_aparecer_antes():
+    """`business` es la categoría residual y va al final del registro justamente para esto: «oficina» no puede
+    ganarle a «farmacia». Decidir la categoría por posición rompía el invariante, y sobre las mismas 192 frases
+    bajaba la exactitud del 85,4 % al 84,9 % subiendo las equivocadas del 9,4 % al 9,9 % (lo señaló un
+    code-review)."""
+    assert classify_business_type("una oficina de farmacia") == "hospital"
+    assert classify_business_type("un local en un centro comercial para poner una farmacia") == "hospital"
+
+
+@pytest.mark.parametrize("frase", ["rehabilitacion de fachadas", "una empresa de rehabilitacion de edificios"])
+def test_rehabilitacion_de_obra_no_es_un_negocio_de_salud(frase):
+    """«rehabilitación» se retiró del vocabulario de `hospital`: en castellano es más de obra que de salud, y el
+    sentido médico ya lo cubren «fisioterapia» y «terapia» (lo señaló un code-review)."""
+    assert classify_business_type(frase) != "hospital"
 
 
 def test_ignora_mayusculas_tildes_y_espacios_de_mas():
@@ -105,7 +122,7 @@ def test_el_plural_no_atrapa_palabras_que_son_otra_cosa(frase, no_debe_ser):
 
 
 def test_cantidad_de_palabras_clave_documentada():
-    """El README dice 395 palabras clave únicas. Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los
+    """El README dice 394 palabras clave únicas. Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los
     plurales subieron la exactitud del sistema de 76,0 % a 84,9 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2)."""
     unicas = {kw for kws in BUSINESS_TYPE_RULES.values() for kw in kws}
-    assert len(unicas) == 395
+    assert len(unicas) == 394

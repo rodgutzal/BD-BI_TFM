@@ -152,16 +152,24 @@ def buscar_fuera_de_alcance(texto: str) -> Tuple[Optional[ActividadFueraDeAlcanc
 
     Compara igual que las palabras clave de las categorías (límite de palabra y plural castellano, ver
     `patron_palabra`): «granja» no matchea dentro de otra palabra, pero «dos granjas» sí se reconoce. Devuelve el
-    acierto MÁS TEMPRANO del catálogo, porque quien llama desempata por posición."""
+    acierto MÁS TEMPRANO del catálogo, porque quien llama desempata por posición.
+
+    A igual posición gana la coincidencia MÁS LARGA, es decir la más específica. Si no, el catálogo se tapa a sí
+    mismo: «un criadero de peces» empata «criadero» (ganadería) con «criadero de peces» (pesca) en la misma
+    posición, y el usuario recibía el motivo de la ganadería —normativa de distancias y residuos— para una
+    piscifactoría, cuyo motivo real es el mar. Lo señaló un code-review."""
     if not texto or not texto.strip():
         return None, None
     normalizado = _normalize(texto)
-    mejor, donde = None, None
+    mejor, donde, hasta = None, None, None
     for actividad, patrones in _FUERA_COMPILADAS:
         for patron in patrones:
             encontrado = patron.search(normalizado)
-            if encontrado and (donde is None or encontrado.start() < donde):
-                mejor, donde = actividad, encontrado.start()
+            if encontrado is None:
+                continue
+            inicio, fin = encontrado.start(), encontrado.end()
+            if donde is None or inicio < donde or (inicio == donde and fin > hasta):
+                mejor, donde, hasta = actividad, inicio, fin
     return mejor, donde
 
 

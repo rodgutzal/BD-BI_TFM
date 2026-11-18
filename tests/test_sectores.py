@@ -109,8 +109,9 @@ def test_interpretar_devuelve_la_actividad_sin_categoria():
 
 
 def test_la_produccion_gana_a_una_palabra_clave_suelta():
-    """«fábrica de muebles» contiene «mueble», que es palabra de comercio. Si las palabras clave fueran primero, una
-    fábrica se analizaría como una tienda: por eso el paso de fuera de alcance va delante."""
+    """«fábrica de muebles» contiene «mueble», que es palabra de comercio. Si ganara la palabra clave sin más, una
+    fábrica se analizaría como una tienda: por eso quien decide es la POSICIÓN, y «fábrica» (4) va antes que
+    «mueble» (15)."""
     assert classify_business_type("una fabrica de muebles") == "business"  # la palabra suelta sí la atrapa
     i = interpretar("una fabrica de muebles")
     assert i.categoria is None and i.fuera.clave == "manufactura"
@@ -122,9 +123,9 @@ def test_una_categoria_reconocida_trae_su_sector():
 
 
 def test_ninguna_frase_evaluada_toca_el_catalogo():
-    """La guarda que mantiene cierto que «la aplicación es el sistema que se evaluó»: anteponer el paso de fuera de
-    alcance no cambia ninguna respuesta medida mientras ninguna frase del corpus lo dispare. Si alguien añade una
-    palabra que choque con el corpus, este test lo detiene y obliga a volver a medir."""
+    """La guarda que mantiene cierto que «la aplicación es el sistema que se evaluó»: el paso de fuera de alcance no
+    cambia ninguna respuesta medida mientras ninguna frase del corpus lo dispare. Si alguien añade una palabra que
+    choque con el corpus, este test lo detiene y obliga a volver a medir."""
     import evaluate_text_classifier as etc
 
     entrenamiento, evaluacion = etc.cargar(evaluacion=etc.DATA / "frases_evaluacion_v2.psv")
@@ -150,6 +151,20 @@ def test_cuando_ambos_aciertan_gana_el_que_nombra_el_negocio(texto, categoria, f
     i = interpretar(texto)
     assert i.categoria == categoria
     assert (i.fuera.clave if i.fuera else None) == fuera
+
+
+def test_a_igual_posicion_gana_la_actividad_mas_especifica():
+    """El catálogo no puede taparse a sí mismo. «criadero» (ganadería) y «criadero de peces» (pesca) empiezan en la
+    misma posición, y antes ganaba la ganadería por ir antes en el catálogo: a una piscifactoría se le explicaba la
+    normativa de distancias y residuos en vez del mar. Lo señaló un code-review.
+
+    La palabra genérica sigue funcionando sola, que es lo que hay que no romper al arreglarlo."""
+    peces = sec.actividad_fuera_de_alcance("un criadero de peces")
+    assert peces is not None and peces.clave == "pesca"
+    assert "mar" in peces.motivo
+
+    cerdos = sec.actividad_fuera_de_alcance("un criadero de cerdos")
+    assert cerdos is not None and cerdos.clave == "ganaderia"
 
 
 def test_recommend_locations_explica_la_actividad_en_vez_de_pedir_que_reformule(tmp_path):
