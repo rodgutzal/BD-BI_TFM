@@ -2,7 +2,7 @@
 
 Dos cosas que van juntas:
 
-1. **El sector de lo que se busca.** Las 7 categorías de Overpass son todas del sector TERCIARIO (servicios y
+1. **El sector de lo que se busca.** Las 9 categorías de Overpass son todas del sector TERCIARIO (servicios y
    comercio). Saberlo importa porque explica el límite del sistema: todo lo que mide —competencia entre comercios,
    mercado consumidor a pie, proveedores minoristas— son variables de servicios urbanos.
 

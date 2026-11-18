@@ -73,7 +73,7 @@ def test_una_palabra_generica_no_le_gana_a_una_especifica_por_aparecer_antes():
         ("un taller mecanico", "taller"),
         ("un taller de coches en Msida", "taller"),
         ("busco local para chapa y pintura", "taller"),
-        ("soy mecanico y quiero mi propio local", "taller"),
+        ("un local para mecanica rapida", "taller"),
         ("una tienda de neumaticos", "taller"),
     ],
 )
@@ -92,6 +92,7 @@ def test_las_dos_categorias_de_la_fase_3(frase, esperado):
         ("autopartes y repuestos", "taller"),
         ("una tienda de pinturas", "taller"),
         ("lavado de coches", "taller"),
+        ("oficina para un ingeniero mecanico", "taller"),
         ("un spa", "belleza"),
         ("masajes a domicilio", "belleza"),
     ],
@@ -182,7 +183,7 @@ def test_el_plural_no_atrapa_palabras_que_son_otra_cosa(frase, no_debe_ser):
 
 
 def test_cantidad_de_palabras_clave_documentada():
-    """El README dice 406 palabras clave únicas. Fueron 140 hasta el 16-nov-2026 y 394 hasta la fase 3, que añadió
+    """El README dice 407 palabras clave únicas. Fueron 140 hasta el 16-nov-2026 y 394 hasta la fase 3, que añadió
     las de `belleza` y `taller` (ver docs/DISENO_ML_RECOMENDACION.md §3.L2 y §E)."""
     unicas = {kw for kws in BUSINESS_TYPE_RULES.values() for kw in kws}
-    assert len(unicas) == 406
+    assert len(unicas) == 407

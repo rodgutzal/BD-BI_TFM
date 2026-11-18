@@ -64,6 +64,11 @@ POI_CATEGORY_STYLE = {
     "food_drink": {"color": "#d35400", "label": "🍽️ Restauración y bares"},
     "leisure": {"color": "#c2185b", "label": "🎭 Ocio y cultura"},
     "sport": {"color": "#27ae60", "label": "🏋️ Deporte"},
+    # Fase 3: salieron del cajón `business`. Sin entrada aquí, el multiselect del mapa se construye con estas claves
+    # y esos 219 POIs dejaban de poder mostrarse; además `recommendation_dashboard.etiqueta_categoria` caía al
+    # nombre crudo y la pantalla decía «belleza» y «taller» en vez de un nombre legible. Lo señaló un code-review.
+    "belleza": {"color": "#8e44ad", "label": "💅 Peluquería y estética"},
+    "taller": {"color": "#7f8c8d", "label": "🔧 Talleres mecánicos"},
 }
 
 # Categorías de Overpass marcadas por defecto. Las tres más nuevas

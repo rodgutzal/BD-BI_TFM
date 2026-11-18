@@ -147,7 +147,7 @@ class OverpassClient:
         return f"[out:json][timeout:{server_timeout}];\n(\n  {body}\n);\nout center tags;"
 
     @staticmethod
-    def _classify(tags: dict) -> Optional[Tuple[str, str]]:
+    def _classify(tags: dict, categorias: Optional[Dict[str, List[str]]] = None) -> Optional[Tuple[str, str]]:
         """Devuelve (categoría, subcategoría) del primer tag de CATEGORY_TAGS
         que matchee, o None si el elemento no encaja en ninguna categoría.
 
@@ -156,8 +156,13 @@ class OverpassClient:
         `amenity or shop or office`, lo que daba subcategorías equivocadas
         para categorías basadas en otras claves (un museo con tag
         `shop=gift` habría quedado como "gift" en vez de "museum").
+
+        `categorias` permite clasificar contra OTRO diccionario que el vigente, y existe por una razón concreta: un
+        estudio de ejecución única tiene que poder reproducir la clasificación del día en que se ejecutó. El protocolo
+        3.M usa su propia foto congelada (`closure_features.CATEGORY_TAGS_PROTOCOLO`); si clasificara con el
+        diccionario vivo, añadir una categoría le cambiaría las variables a posteriori. Lo señaló un code-review.
         """
-        for category, tag_specs in CATEGORY_TAGS.items():
+        for category, tag_specs in (categorias if categorias is not None else CATEGORY_TAGS).items():
             for tag_spec in tag_specs:
                 key, values = _parse_spec(tag_spec)
                 value = tags.get(key)

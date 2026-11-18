@@ -1,5 +1,5 @@
 """Interpreta texto libre en español ("quiero poner una pizzería") y lo
-mapea a una de las 7 categorías de `src/poi_client.CATEGORY_TAGS`
+mapea a una de las 9 categorías de `src/poi_client.CATEGORY_TAGS`
 (school, hospital, food_drink, leisure, sport, mall, business).
 
 Por qué existe: el usuario final describe su negocio con sus propias
@@ -319,7 +319,11 @@ BUSINESS_TYPE_RULES: Dict[str, Tuple[str, ...]] = {
         "taller de coches",
         "taller de automoviles",
         "taller de vehiculos",
-        "mecanico",
+        "taller de mecanica",
+        # NO está «mecanico» a secas: «oficina para un ingeniero mecanico» acababa en `taller`. Es el mismo riesgo
+        # que obligó a retirar «rehabilitacion» (más de obra que de salud) y lo señaló un code-review. El oficio
+        # solo se reconoce acompañado del local: «taller mecanico», «taller de mecanica», «mecanica rapida».
+        "mecanica rapida",
         "chapa y pintura",
         "reparacion de coches",
         "reparacion de automoviles",
@@ -554,7 +558,7 @@ def buscar_categoria(text: str) -> Tuple[Optional[str], Optional[int]]:
 
 
 def classify_business_type(text: str) -> Optional[str]:
-    """Texto libre -> una de las 7 categorías de Overpass, o None si ninguna
+    """Texto libre -> una de las 9 categorías de Overpass, o None si ninguna
     palabra clave matchea (el llamador decide qué hacer: pedir que
     reformule, usar una categoría por defecto, etc. — esta función nunca
     adivina)."""

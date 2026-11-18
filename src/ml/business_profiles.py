@@ -87,7 +87,7 @@ PROVEEDORES_POI: Dict[str, Tuple[Selector, ...]] = {
 
 @dataclass(frozen=True)
 class BusinessProfile:
-    """Perfil de un tipo de negocio (una de las 7 categorías de Overpass)."""
+    """Perfil de un tipo de negocio (una de las 9 categorías de Overpass)."""
 
     key: str
     nombre: str
@@ -198,7 +198,7 @@ DEFAULT_PROFILES: Dict[str, BusinessProfile] = {
 
 
 def get_default_profile(categoria: str) -> BusinessProfile:
-    """Perfil por defecto de una de las 7 categorías. Lanza ValueError si no existe."""
+    """Perfil por defecto de una de las 9 categorías. Lanza ValueError si no existe."""
     if categoria not in DEFAULT_PROFILES:
         raise ValueError(f"Categoría sin perfil: {categoria!r}. Disponibles: {sorted(DEFAULT_PROFILES)}")
     return DEFAULT_PROFILES[categoria]

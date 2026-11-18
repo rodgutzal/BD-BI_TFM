@@ -421,7 +421,7 @@ Las cifras de arriba son las del 12-nov-2026 y **se conservan tal cual**: docume
 - **Una palabra que se retiró por ser más de obra que de salud:** «rehabilitación». El sentido médico ya lo cubren «fisioterapia», «fisioterapeuta» y «terapia», mientras «rehabilitación de fachadas» o «empresa de rehabilitación de edificios» quedaban clasificadas como sanidad. Retirarla **cuesta una respuesta correcta de las 192** (pasa a abstención: 5,2 % → 5,7 %) y por eso la exactitud baja del 85,4 % al 84,9 %. Se acepta el coste porque el conjunto de evaluación no contiene ninguna frase de construcción, así que **no puede medir el error que esa palabra provocaba**: lo que se ve en la tabla es solo el lado malo del cambio.
 **Fase 3 (18-nov-2026): dos categorías nuevas, `belleza` y `taller`, y lo que le cuesta a esta tabla.**
 
-Las peluquerías/estética (`shop=hairdresser|beauty`) y los talleres (`shop=car_repair|truck_repair|tyres`) ya se recolectaban dentro de `business`, el cajón de `shop`/`office`, así que su competencia era «cualquier comercio». Ahora tienen categoría y perfil propios. Vocabulario: 394 → **406 términos únicos**.
+Las peluquerías/estética (`shop=hairdresser|beauty`) y los talleres (`shop=car_repair|truck_repair|tyres`) ya se recolectaban dentro de `business`, el cajón de `shop`/`office`, así que su competencia era «cualquier comercio». Ahora tienen categoría y perfil propios. Vocabulario: 394 → **407 términos únicos**.
 
 | Sistema (192 frases) | Exactitud | Respuestas equivocadas | Sin respuesta |
 |---|---|---|---|

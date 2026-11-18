@@ -107,6 +107,14 @@ def comparar(nuevo: pd.DataFrame, publicado: pd.DataFrame, perfiles: Tuple[str, 
         if len(a) != len(b):
             problemas.append(f"{clave}: {len(a)} filas publicadas frente a {len(b)}")
             continue
+        # Las columnas que falten o sobren son por sí mismas una diferencia: comparar solo las comunes dejaba pasar
+        # una columna renombrada o perdida por el mismo guardia que dice «salen idénticos». Lo señaló un code-review.
+        faltan = [c for c in a.columns if c not in b.columns and c != "perfil"]
+        sobran = [c for c in b.columns if c not in a.columns and c != "perfil"]
+        if faltan:
+            problemas.append(f"{clave}: faltan columnas que el panorama publicado sí tiene: {faltan}")
+        if sobran:
+            problemas.append(f"{clave}: aparecen columnas nuevas en un perfil que no debía cambiar: {sobran}")
         comunes = [c for c in a.columns if c in b.columns and c != "perfil"]
         for columna in comunes:
             x, y = a[columna], b[columna]
