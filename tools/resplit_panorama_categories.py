@@ -155,7 +155,13 @@ def main(argv=None) -> int:
     counts = panorama.read_counts(directorio, verificar=False)
 
     cuentas_viejas = counts.to_frame(counts.total_grid() > 0)
-    mapa = movimientos(list(cuentas_viejas.columns))
+    try:
+        mapa = movimientos(list(cuentas_viejas.columns))
+    except ValueError as e:
+        # El caso normal aquí es volver a ejecutarla cuando el reparto ya está hecho: es idempotente y se niega, pero
+        # merece un mensaje y no un traceback.
+        print(f"No se puede repartir: {e}")
+        return 1
     if not mapa:
         print("No hay nada que repartir: ninguna columna del cajón corresponde a las categorías nuevas.")
         return 1
