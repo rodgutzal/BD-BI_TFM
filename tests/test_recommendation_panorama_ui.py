@@ -1145,3 +1145,55 @@ def test_el_resumen_dice_cuantos_factores_muestra_de_los_que_hay(pagina):
         assert anuncio and (int(anuncio.group(1)), int(anuncio.group(2))) == (esperados, len(con_dato))
     else:
         assert anuncio is None  # si caben todos, no hace falta decir «N de N»
+
+
+# ---- sector y actividades fuera de alcance en la pantalla --------------------------------------------------------
+def test_la_pantalla_explica_lo_que_no_puede_analizar_en_vez_de_dar_un_puntaje(pagina):
+    """Lo decidido con el usuario: una granja se reconoce y se explica, no se manda a la categoria «mas parecida»."""
+    pagina.run()
+    pagina.text_input[0].set_value("quiero poner un invernadero")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+
+    assert any("Agricultura" in w.value and "sector primario" in w.value for w in pagina.warning)
+    md = " ".join(textos(pagina.markdown))
+    assert "Por qué no:" in md and "Qué haría falta:" in md
+    # y NO se da ninguna recomendacion
+    assert not any("Zona recomendada" in m.label for m in pagina.metric)
+    assert not any("Desglose por zona" in m for m in textos(pagina.markdown))
+
+
+def test_una_fabrica_no_se_analiza_como_una_tienda(pagina):
+    """«fábrica de muebles» contiene «mueble»: sin el paso nuevo acabaria en comercio con un puntaje que no vale."""
+    pagina.run()
+    pagina.text_input[0].set_value("una fabrica de muebles")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    assert any("Manufactura" in w.value and "sector secundario" in w.value for w in pagina.warning)
+    assert not any("Zona recomendada" in m.label for m in pagina.metric)
+
+
+def test_los_ajustes_siguen_visibles_cuando_no_se_puede_analizar(pagina):
+    """La pantalla no se queda coja: los controles siguen ahi para probar con otra cosa."""
+    pagina.run()
+    pagina.text_input[0].set_value("una cantera")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    assert pagina.slider and any(m.label == "Zonas a considerar" for m in pagina.multiselect)
+
+
+def test_un_negocio_reconocido_dice_su_sector(pagina):
+    pagina.run()
+    pagina.text_input[0].set_value("un restaurante")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    assert any("Sector terciario" in c for c in textos(pagina.caption))
+    assert any("Zona recomendada" in m.label for m in pagina.metric)
+
+
+def test_los_plurales_se_entienden_en_la_pantalla(pagina):
+    """El fallo de fondo que se arreglo: antes «varias farmacias» no se reconocia."""
+    pagina.run()
+    pagina.text_input[0].set_value("varias farmacias")
+    next(b for b in pagina.button if "Buscar" in b.label).click().run()
+    assert not pagina.exception, [e.value for e in pagina.exception]
+    assert any("Interpretado como" in s.value for s in pagina.success)
+    assert any("Zona recomendada" in m.label for m in pagina.metric)

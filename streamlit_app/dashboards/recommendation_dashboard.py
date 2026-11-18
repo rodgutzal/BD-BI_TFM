@@ -30,6 +30,7 @@ from src.locations import LOCATIONS
 from src.ml import panorama_view as pv
 from src.ml.business_profiles import DEFAULT_PROFILES
 from src.ml.text_hibrido import CATEGORIAS, FUENTE_MODELO, Interpretacion, cargar_modelo_adoptado, interpretar
+from src.sectores import SECTORES, nombre_sector, sector_de
 from streamlit_app.dashboards import panorama_section as ps
 from streamlit_app.dashboards.maps_dashboard import POI_CATEGORY_STYLE
 from streamlit_app.dashboards.panorama_section import render_panorama_section
@@ -85,6 +86,22 @@ def etiqueta_categoria(categoria: str) -> str:
     return POI_CATEGORY_STYLE.get(categoria, {}).get("label", categoria)
 
 
+def render_fuera_de_alcance(texto: str, actividad):
+    """Lo que el sistema reconoce pero no puede analizar. Se explica en vez de mandarlo a la categoría «más parecida»:
+    con los criterios de comercio urbano saldría un puntaje que parece sólido y no lo es."""
+    st.warning(
+        f"**{actividad.nombre}** — {nombre_sector(actividad.sector).lower()}. "
+        "Reconozco lo que buscas, pero **no puedo recomendarte dónde ponerlo**."
+    )
+    st.markdown(f"**Por qué no:** {actividad.motivo}")
+    st.markdown(f"**Qué haría falta:** {actividad.haria_falta}")
+    st.caption(
+        "Este sistema mide competencia entre comercios, mercado consumidor a pie y proveedores minoristas, sobre una "
+        f"rejilla de ~141 km² del este urbano de Malta. Sabe analizar {len(CATEGORIAS)} categorías, todas del sector "
+        "terciario. Prueba con un comercio o un servicio: restaurante, farmacia, gimnasio, tienda, oficina…"
+    )
+
+
 def render_interpretacion(texto: str, interpretacion: Interpretacion) -> str:
     """Dice cómo se entendió el texto y quién lo decidió, y deja cambiar la categoría. Devuelve la categoría a usar.
 
@@ -113,6 +130,12 @@ def render_interpretacion(texto: str, interpretacion: Interpretacion) -> str:
     if elegida != categoria:
         st.info(
             f"Usando la categoría que elegiste: **{etiqueta_categoria(elegida)}** (se había interpretado {etiqueta_categoria(categoria)})."
+        )
+    sector = sector_de(elegida)
+    if sector:
+        st.caption(
+            f"{nombre_sector(sector)}: {SECTORES[sector]['descripcion']} Las {len(CATEGORIAS)} categorías que sé "
+            "analizar son todas de este sector; el primario y el secundario quedan fuera de lo que miden estos datos."
         )
     return elegida
 
@@ -556,6 +579,10 @@ def main():
         return
 
     interpretacion = interpretar(texto, get_text_model())
+    if interpretacion.fuera is not None:
+        render_fuera_de_alcance(texto, interpretacion.fuera)
+        ajustes(CATEGORIA_INICIAL)
+        return
     if interpretacion.categoria is None:
         st.error(
             f"No pude identificar el tipo de negocio en: '{texto}'. "

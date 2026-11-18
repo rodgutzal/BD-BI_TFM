@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.business_type_classifier import BUSINESS_TYPE_RULES, classify_business_type
+from src.business_type_classifier import BUSINESS_TYPE_RULES, buscar_categoria, classify_business_type, patron_palabra
 from src.poi_client import CATEGORY_TAGS
 
 
@@ -38,6 +38,33 @@ def test_barberia_no_se_confunde_con_bar():
     Foursquare, y el clasificador usa límites de palabra (\\b) para evitarlo."""
     assert classify_business_type("barbería") == "business"
     assert classify_business_type("quiero abrir una barbería") == "business"
+
+
+def test_la_posicion_es_la_del_acierto_mas_temprano_aunque_la_categoria_la_decida_el_registro():
+    """Las dos mitades que devuelve `buscar_categoria` salen de aciertos DISTINTOS, y es a propósito.
+
+    En «un restaurante con fábrica y farmacia» la categoría es `hospital`, porque el registro pone `hospital` antes
+    que `food_drink` y ese orden es la prioridad declarada. Pero la posición es la 3, la de «restaurante», no la 29
+    de «farmacia»: es la única que permite a `interpretar` ver que el negocio se nombra ANTES que la fábrica (19) y
+    no rechazar la frase como fuera de alcance. Con la posición de la categoría ganadora se rechazaba (QA de Codex).
+    """
+    assert buscar_categoria("un restaurante con fabrica y farmacia") == ("hospital", 3)
+
+
+def test_una_palabra_generica_no_le_gana_a_una_especifica_por_aparecer_antes():
+    """`business` es la categoría residual y va al final del registro justamente para esto: «oficina» no puede
+    ganarle a «farmacia». Decidir la categoría por posición rompía el invariante, y sobre las mismas 192 frases
+    bajaba la exactitud del 85,4 % al 84,9 % subiendo las equivocadas del 9,4 % al 9,9 % (lo señaló un
+    code-review)."""
+    assert classify_business_type("una oficina de farmacia") == "hospital"
+    assert classify_business_type("un local en un centro comercial para poner una farmacia") == "hospital"
+
+
+@pytest.mark.parametrize("frase", ["rehabilitacion de fachadas", "una empresa de rehabilitacion de edificios"])
+def test_rehabilitacion_de_obra_no_es_un_negocio_de_salud(frase):
+    """«rehabilitación» se retiró del vocabulario de `hospital`: en castellano es más de obra que de salud, y el
+    sentido médico ya lo cubren «fisioterapia» y «terapia» (lo señaló un code-review)."""
+    assert classify_business_type(frase) != "hospital"
 
 
 def test_ignora_mayusculas_tildes_y_espacios_de_mas():
@@ -70,16 +97,32 @@ def test_ninguna_palabra_clave_choca_con_otra_categoria():
     repetidas = {kw: c for kw, c in cats_por_palabra.items() if len(c) > 1}
     assert not repetidas, f"Palabras en más de una categoría: {repetidas}"
 
+    # Se compara con el MISMO patrón que usa el clasificador en producción (incluido el plural): si el test usara
+    # `\b{kw}\b` a mano, garantizaría algo distinto de lo que realmente hace el sistema. Lo señaló un code-review.
     choques = [
         (cat1, kw1, cat2, kw2)
         for cat1, kw1 in todas
         for cat2, kw2 in todas
-        if cat1 != cat2 and re.search(rf"\b{re.escape(kw1)}\b", kw2)
+        if cat1 != cat2 and re.search(patron_palabra(kw1), kw2)
     ]
     assert not choques, f"Palabras que se contienen entre categorías: {choques}"
 
 
+@pytest.mark.parametrize(
+    "frase,no_debe_ser",
+    [
+        ("una cerveceria para ingleses", "school"),  # «ingles» + plural daría «ingleses»
+        ("un local con boxes de aparcamiento", "sport"),  # «box» + plural daría «boxes»
+    ],
+)
+def test_el_plural_no_atrapa_palabras_que_son_otra_cosa(frase, no_debe_ser):
+    """El riesgo del sufijo de plural: una palabra corta cuyo plural es OTRA palabra. Por eso «ingles» y «box» no
+    están en el vocabulario (lo señaló un code-review, que encontró estos dos casos reales)."""
+    assert classify_business_type(frase) != no_debe_ser
+
+
 def test_cantidad_de_palabras_clave_documentada():
-    """El README dice 140 palabras clave (únicas)."""
+    """El README dice 394 palabras clave únicas. Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los
+    plurales subieron la exactitud del sistema de 76,0 % a 84,9 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2)."""
     unicas = {kw for kws in BUSINESS_TYPE_RULES.values() for kw in kws}
-    assert len(unicas) == 140
+    assert len(unicas) == 394

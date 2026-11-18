@@ -475,7 +475,7 @@ def test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_es
     assert (
         "Las 8 frases ambiguas" in salida
         and "«Cine en St Julian's»" in salida
-        and "coincide con el autor en 5 y con el etiquetador en 2 de 8." in salida
+        and "coincide con el autor en 6 y con el etiquetador en 2 de 8." in salida
     )
     m = json.loads((tmp_path / "text_classifier_manifest.json").read_text(encoding="utf-8"))
     assert m["datos"]["evaluacion"]["frases"] == 192 and "Codex" in m["advertencia"]

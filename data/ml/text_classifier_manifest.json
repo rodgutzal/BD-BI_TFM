@@ -16,12 +16,12 @@
     }
   },
   "decision": {
-    "equivocadas_hibrido": 0.0625,
-    "equivocadas_palabras": 0.057291666666666664,
+    "equivocadas_hibrido": 0.09375,
+    "equivocadas_palabras": 0.08854166666666667,
     "exactitud": {
-      "diferencia": 0.09375,
-      "ic_inf": 0.052083333333333336,
-      "ic_sup": 0.13541666666666666
+      "diferencia": 0.036458333333333336,
+      "ic_inf": 0.010416666666666666,
+      "ic_sup": 0.06770833333333333
     },
     "tolerancia_errores": 0.02
   },
@@ -43,10 +43,10 @@
       2,
       5
     ],
-    "sha256": "d18f93db34202d835070d899ff84b31c152f74bba5998ec3a3eea1f06cbe0291"
+    "sha256": "d57a4d86ccb9d96efbc877ef58a1f6e92b20b5e74d948fb0bc68f24d1135e34e"
   },
   "procedencia": {
-    "commit": "d0462dd+",
+    "commit": "915ce80+",
     "version.numpy": "2.4.6",
     "version.pandas": "3.0.3",
     "version.python": "3.13.14",
@@ -55,19 +55,19 @@
   },
   "resumen": {
     "hibrido": {
-      "equivocadas": 0.0625,
-      "exactitud": 0.7604166666666666,
-      "sin_respuesta": 0.17708333333333334
+      "equivocadas": 0.09375,
+      "exactitud": 0.8489583333333334,
+      "sin_respuesta": 0.057291666666666664
     },
     "hibrido_mlp": {
-      "equivocadas": 0.057291666666666664,
-      "exactitud": 0.7447916666666666,
-      "sin_respuesta": 0.19791666666666666
+      "equivocadas": 0.08854166666666667,
+      "exactitud": 0.8333333333333334,
+      "sin_respuesta": 0.078125
     },
     "logistica": {
-      "equivocadas": 0.026041666666666668,
-      "exactitud": 0.5833333333333334,
-      "sin_respuesta": 0.390625
+      "equivocadas": 0.036458333333333336,
+      "exactitud": 0.6145833333333334,
+      "sin_respuesta": 0.3489583333333333
     },
     "mlp": {
       "equivocadas": 0.010416666666666666,
@@ -75,10 +75,10 @@
       "sin_respuesta": 0.375
     },
     "palabras": {
-      "equivocadas": 0.057291666666666664,
-      "exactitud": 0.6666666666666666,
-      "sin_respuesta": 0.2760416666666667
+      "equivocadas": 0.08854166666666667,
+      "exactitud": 0.8125,
+      "sin_respuesta": 0.09895833333333333
     }
   },
-  "umbral": 0.5
+  "umbral": 0.45
 }

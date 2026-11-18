@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**59 archivos · 1277 funciones de test · 1498 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**60 archivos · 1303 funciones de test · 1530 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -16,7 +16,7 @@
 | [`tests/test_analyze_weather_effect.py`](#teststest_analyze_weather_effectpy) | 4 | 4 |
 | [`tests/test_api.py`](#teststest_apipy) | 14 | 20 |
 | [`tests/test_api_clients.py`](#teststest_api_clientspy) | 22 | 22+ |
-| [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 7 | 20 |
+| [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 11 | 26 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_closure_features.py`](#teststest_closure_featurespy) | 22 | 23+ |
@@ -60,7 +60,8 @@
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 17 | 17 |
 | [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
-| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 77 | 77+ |
+| [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 82 | 82+ |
+| [`tests/test_sectores.py`](#teststest_sectorespy) | 17 | 21+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
 | [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
@@ -202,11 +203,15 @@
 
 - `test_clasifica_negocios_comunes` ×10 — Cada texto de negocio común (parametrizado) se clasifica en la categoría esperada.
 - `test_barberia_no_se_confunde_con_bar` — Regresión: la palabra clave "bar" (comida y bebida) no debe matchear dentro de "barbería". Es el bug que ya ocurrió una vez con datos reales de Foursquare, y el clasificador usa límites de palabra (\b) para evitarlo.
+- `test_la_posicion_es_la_del_acierto_mas_temprano_aunque_la_categoria_la_decida_el_registro` — Las dos mitades que devuelve `buscar_categoria` salen de aciertos DISTINTOS, y es a propósito.
+- `test_una_palabra_generica_no_le_gana_a_una_especifica_por_aparecer_antes` — `business` es la categoría residual y va al final del registro justamente para esto: «oficina» no puede ganarle a «farmacia». Decidir la categoría por posición rompía el invariante, y sobre las mismas 192 frases bajaba la exactitud del 85,4 % al 84,9 % subiendo las equivocadas del 9,4 % al 9,9 % (lo señaló un code-review).
+- `test_rehabilitacion_de_obra_no_es_un_negocio_de_salud` ×2 — «rehabilitación» se retiró del vocabulario de `hospital`: en castellano es más de obra que de salud, y el sentido médico ya lo cubren «fisioterapia» y «terapia» (lo señaló un code-review).
 - `test_ignora_mayusculas_tildes_y_espacios_de_mas` — El clasificador no distingue mayúsculas, tildes ni espacios repetidos o sobrantes.
 - `test_sin_coincidencia_devuelve_none_y_nunca_adivina` ×5 — Un texto sin ninguna palabra clave devuelve `None`; nunca elige una categoría al azar.
 - `test_todas_las_categorias_existen_en_overpass` — El clasificador solo puede devolver categorías que realmente guarda la tabla `pois` (CATEGORY_TAGS de poi_client.py).
 - `test_ninguna_palabra_clave_choca_con_otra_categoria` — Una misma palabra no puede aparecer en dos categorías (el orden de las reglas decidiría en silencio), y ninguna palabra de una categoría puede estar contenida como palabra completa dentro de una frase de otra.
-- `test_cantidad_de_palabras_clave_documentada` — El README dice 140 palabras clave (únicas).
+- `test_el_plural_no_atrapa_palabras_que_son_otra_cosa` ×2 — El riesgo del sufijo de plural: una palabra corta cuyo plural es OTRA palabra. Por eso «ingles» y «box» no están en el vocabulario (lo señaló un code-review, que encontró estos dos casos reales).
+- `test_cantidad_de_palabras_clave_documentada` — El README dice 394 palabras clave únicas. Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los plurales subieron la exactitud del sistema de 76,0 % a 84,9 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2).
 
 ## `tests/test_causal_analysis.py`
 
@@ -1610,6 +1615,37 @@
 - `test_el_resumen_sigue_a_la_zona_cuando_se_filtra` — Si filtras zonas, el resumen habla de la que gana entre esas, no de la que ganaba antes.
 - `test_el_resumen_no_corona_a_una_zona_que_no_gano` — Code-review: el texto decía «es la mejor» por el número de filas, sin mirar la posición real.
 - `test_el_resumen_dice_cuantos_factores_muestra_de_los_que_hay` — Code-review: nombraba 3 de hasta 6 sin decir que eran solo 3.
+- `test_la_pantalla_explica_lo_que_no_puede_analizar_en_vez_de_dar_un_puntaje` — Lo decidido con el usuario: una granja se reconoce y se explica, no se manda a la categoria «mas parecida».
+- `test_una_fabrica_no_se_analiza_como_una_tienda` — «fábrica de muebles» contiene «mueble»: sin el paso nuevo acabaria en comercio con un puntaje que no vale.
+- `test_los_ajustes_siguen_visibles_cuando_no_se_puede_analizar` — La pantalla no se queda coja: los controles siguen ahi para probar con otra cosa.
+- `test_un_negocio_reconocido_dice_su_sector`
+- `test_los_plurales_se_entienden_en_la_pantalla` — El fallo de fondo que se arreglo: antes «varias farmacias» no se reconocia.
+
+## `tests/test_sectores.py`
+
+> Tests del sector económico de cada categoría y del catálogo de actividades que el sistema NO puede analizar
+> (src/sectores.py).
+>
+> Lo que se defiende aquí: que reconocer una granja y explicar por qué no se puede analizar es mejor que mandarla a la
+> categoría «más parecida», y que añadir ese paso no altera el sistema que se evaluó en la fase 3.
+
+- `test_las_siete_categorias_tienen_sector_y_todas_son_terciarias` — Es el límite del sistema puesto por escrito: todo lo que sabe analizar son servicios y comercio.
+- `test_una_categoria_desconocida_no_tiene_sector`
+- `test_los_tres_sectores_estan_descritos`
+- `test_reconoce_la_actividad_y_su_sector`
+- `test_cada_actividad_explica_el_porque_y_que_haria_falta` — Sin el porqué, «no puedo» es una pared. Con él, el usuario sabe si el problema es suyo o del sistema.
+- `test_el_plural_tambien_se_reconoce` — Mismo arreglo que en las palabras clave: «dos granjas» no puede quedarse sin reconocer.
+- `test_un_texto_vacio_o_sin_actividad_no_devuelve_nada`
+- `test_la_venta_gana_a_la_produccion` — «Centro de jardinería» es una tienda (se puede analizar); «invernadero» es producción (no). El catálogo solo lleva términos de producción para que no se trague comercios de verdad.
+- `test_ninguna_palabra_del_catalogo_choca_con_las_de_las_categorias` — Misma comprobación de CONTENCIÓN que entre categorías, no un simple cruce de conjuntos: si «taller» entrara en el catálogo, ningún «taller mecánico» volvería a analizarse, y un cruce de conjuntos no lo vería. Lo señaló un code-review. Se usa el patrón real del clasificador, con su plural.
+- `test_interpretar_devuelve_la_actividad_sin_categoria` — `categoria` queda en None a propósito: no hay puntaje que dar, pero sí hay algo que explicar.
+- `test_la_produccion_gana_a_una_palabra_clave_suelta` — «fábrica de muebles» contiene «mueble», que es palabra de comercio. Si ganara la palabra clave sin más, una fábrica se analizaría como una tienda: por eso quien decide es la POSICIÓN, y «fábrica» (4) va antes que «mueble» (15).
+- `test_una_categoria_reconocida_trae_su_sector`
+- `test_ninguna_frase_evaluada_toca_el_catalogo` — La guarda que mantiene cierto que «la aplicación es el sistema que se evaluó»: el paso de fuera de alcance no cambia ninguna respuesta medida mientras ninguna frase del corpus lo dispare. Si alguien añade una palabra que choque con el corpus, este test lo detiene y obliga a volver a medir.
+- `test_cuando_ambos_aciertan_gana_el_que_nombra_el_negocio` ×5 — Code-review: con el catálogo siempre delante, «un restaurante con huerto propio» se rechazaba. Con las palabras clave siempre delante, «una fábrica de muebles» se analizaba como tienda. Lo que decide es la POSICIÓN: en castellano, el sustantivo que nombra el negocio va antes que su complemento.
+- `test_a_igual_posicion_gana_la_actividad_mas_especifica` — El catálogo no puede taparse a sí mismo. «criadero» (ganadería) y «criadero de peces» (pesca) empiezan en la misma posición, y antes ganaba la ganadería por ir antes en el catálogo: a una piscifactoría se le explicaba la normativa de distancias y residuos en vez del mar. Lo señaló un code-review.
+- `test_recommend_locations_explica_la_actividad_en_vez_de_pedir_que_reformule` — Code-review: la otra entrada al sistema decía «sé más específico», mandando al usuario a reformular algo que nunca iba a funcionar. Ahora devuelve el porqué y qué haría falta.
+- `test_un_negocio_que_no_se_entiende_sigue_pidiendo_que_reformule` — Lo contrario también importa: si de verdad no se entiende, el mensaje de siempre.
 
 ## `tests/test_strip_panorama_gap.py`
 
@@ -1671,7 +1707,7 @@
 - `test_un_modelo_que_el_manifiesto_no_da_por_adoptado_no_se_usa` — Aunque el archivo exista y su hash cuadre, si el manifiesto dice adoptado=false no se usa.
 - `test_un_modelo_alterado_no_se_usa` — Si el archivo del modelo cambia (hash distinto al del manifiesto), no se carga.
 - `test_un_manifiesto_roto_o_incompleto_no_rompe_la_carga` — JSON inválido o sin el hash del modelo: se vuelve a las palabras clave en vez de lanzar una excepción.
-- `test_la_aplicacion_da_la_misma_respuesta_que_la_evaluacion_para_cada_frase` — El híbrido de la aplicación y el de la evaluación de la fase 3 coinciden frase a frase sobre las 192 del conjunto principal (mismo modelo, mismo umbral, mismas palabras clave). Así las cifras de docs/DISENO_ML_RECOMENDACION.md §3.L2 (76,0 % de exactitud, 6,2 % de respuestas equivocadas) son las de lo que ve el usuario.
+- `test_la_aplicacion_da_la_misma_respuesta_que_la_evaluacion_para_cada_frase` — El híbrido de la aplicación y el de la evaluación de la fase 3 coinciden frase a frase sobre las 192 del conjunto principal (mismo modelo, mismo umbral, mismas palabras clave). Así las cifras de docs/DISENO_ML_RECOMENDACION.md §3.L2 son las de lo que ve el usuario.
 
 ## `tests/test_time_series.py`
 
