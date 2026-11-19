@@ -26,7 +26,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.ml import data_access, grid  # noqa: E402
+from src.ml import data_access, grid, osm_context  # noqa: E402
 from src.ml.business_profiles import DEFAULT_PROFILES  # noqa: E402
 from src.ml.cell_counts import CellCounts  # noqa: E402
 from src.ml.lenses import compute_lenses, lens_coverage  # noqa: E402
@@ -104,7 +104,8 @@ def main(argv=None) -> int:
             f"Contexto de OSM cargado: {contexto.groupby('category').size().to_dict() if not contexto.empty else 'sin datos'}"
         )
     if not contexto.empty:
-        counts = CellCounts.from_pois(pd.concat([pois, contexto], ignore_index=True))
+        # Sin deduplicar, `alojamiento` se contaría dos veces desde la fase 2 (ver osm_context.combinar_sin_duplicar).
+        counts = CellCounts.from_pois(osm_context.combinar_sin_duplicar(pois, contexto))
     else:
         counts = CellCounts.from_pois(pois)
     activas = counts.active_mask()

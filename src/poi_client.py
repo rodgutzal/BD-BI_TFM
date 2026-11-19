@@ -66,6 +66,23 @@ CATEGORY_TAGS: Dict[str, List[str]] = {
     # Moverlas por encima de "hospital" sí cambiaría datos ya publicados.
     "belleza": ["shop=hairdresser|beauty"],
     "taller": ["shop=car_repair|truck_repair|tyres"],
+    # Fase 2 (18-nov-2026). CUIDADO: `alojamiento` es la única categoría que también está en
+    # `osm_context.CONTEXTO`, y ahí se queda. No es un descuido:
+    #
+    # - En `CATEGORY_TAGS` porque ahora el recolector la guarda en la tabla `pois`, que es lo único que permite
+    #   calcular su competencia por zona (`location_scoring.zone_competition` lee de ahí, no de los conteos).
+    # - En `CONTEXTO` porque esa tupla decide dos cosas más: qué categorías NO definen una celda activa
+    #   (`cell_counts.active_mask`) y cuáles no cuentan para `pois_vecindad` (la confianza del panorama).
+    #   Sacarla movería las 1.139 celdas activas y la confianza de TODOS los perfiles, o sea el panorama entero,
+    #   por añadir una categoría. No se toca.
+    #
+    # El riesgo que eso crea es contar el mismo hotel dos veces, porque el panorama suma POIs y contexto. Lo
+    # resuelve `osm_context.combinar_sin_duplicar`, que descarta del contexto las categorías que los POIs YA traen.
+    #
+    # Los valores son los mismos ocho que pide el tema `alojamiento` de tools/download_osm_context.py (de hecho esa
+    # herramienta los lee de aquí), para que la subcategoría sea la misma venga de donde venga: en las dos es el
+    # valor de `tourism`. En la rejilla de Malta solo tienen POIs cinco de los ocho.
+    "alojamiento": ["tourism=hotel|hostel|guest_house|apartment|motel|resort|chalet|camp_site"],
     "business": ["shop", "office"],
 }
 

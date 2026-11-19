@@ -121,6 +121,42 @@ def test_limite_conocido_la_peluqueria_canina_se_clasifica_mal():
     assert classify_business_type("Peluquería canina en Mosta") == "belleza"
 
 
+@pytest.mark.parametrize(
+    "frase, esperado",
+    [
+        ("quiero abrir un hotel en Sliema", "alojamiento"),
+        ("varios hoteles pequenos", "alojamiento"),
+        ("un hostal para mochileros", "alojamiento"),
+        ("un albergue juvenil", "alojamiento"),
+        ("montar apartamentos turisticos", "alojamiento"),
+        ("una casa de huespedes", "alojamiento"),
+        ("un bed and breakfast", "alojamiento"),
+        ("quiero poner un camping", "alojamiento"),
+        ("gestionar un airbnb", "alojamiento"),
+    ],
+)
+def test_el_alojamiento_de_la_fase_2(frase, esperado):
+    """El alojamiento turístico ya existía como CONTEXTO de OSM (198 POIs), pero no como categoría que el usuario
+    pudiera pedir. Desde la fase 2 sí."""
+    assert classify_business_type(frase) == esperado
+
+
+@pytest.mark.parametrize(
+    "frase, no_debe_ser",
+    [
+        ("una oficina de pensiones", "alojamiento"),
+        ("gestion de pensiones y jubilaciones", "alojamiento"),
+        ("busco un apartamento para vivir", "alojamiento"),
+        ("un apartamento de dos habitaciones", "alojamiento"),
+    ],
+)
+def test_las_dos_palabras_que_el_alojamiento_no_puede_usar(frase, no_debe_ser):
+    """«pension» es mucho más la prestación que la casa de huéspedes (y su plural «pensiones» lo confirma), y
+    «apartamento» a secas suele ser para vivir, no para explotarlo. Por eso el vocabulario exige el adjetivo:
+    «apartamento turistico». Es el mismo criterio que retiró «rehabilitacion» y «mecanico»."""
+    assert classify_business_type(frase) != no_debe_ser
+
+
 @pytest.mark.parametrize("frase", ["rehabilitacion de fachadas", "una empresa de rehabilitacion de edificios"])
 def test_rehabilitacion_de_obra_no_es_un_negocio_de_salud(frase):
     """«rehabilitación» se retiró del vocabulario de `hospital`: en castellano es más de obra que de salud, y el
@@ -183,7 +219,7 @@ def test_el_plural_no_atrapa_palabras_que_son_otra_cosa(frase, no_debe_ser):
 
 
 def test_cantidad_de_palabras_clave_documentada():
-    """El README dice 407 palabras clave únicas. Fueron 140 hasta el 16-nov-2026 y 394 hasta la fase 3, que añadió
-    las de `belleza` y `taller` (ver docs/DISENO_ML_RECOMENDACION.md §3.L2 y §E)."""
+    """El README dice 419 palabras clave únicas. Fueron 140 hasta el 16-nov-2026, 394 hasta la fase 3 (`belleza`,
+    `taller`) y 407 hasta la fase 2 (`alojamiento`); ver docs/DISENO_ML_RECOMENDACION.md §3.L2 y §E."""
     unicas = {kw for kws in BUSINESS_TYPE_RULES.values() for kw in kws}
-    assert len(unicas) == 407
+    assert len(unicas) == 419

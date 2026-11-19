@@ -58,6 +58,7 @@ SECTOR_POR_CATEGORIA: Dict[str, str] = {
     "mall": TERCIARIO,
     "belleza": TERCIARIO,
     "taller": TERCIARIO,
+    "alojamiento": TERCIARIO,
 }
 
 

@@ -144,3 +144,36 @@ def load_context(directorio) -> pd.DataFrame:
     if not partes:
         return pd.DataFrame(columns=["category", "subcategory", "latitude", "longitude"])
     return pd.concat(partes, ignore_index=True)
+
+
+def combinar_sin_duplicar(pois: pd.DataFrame, contexto: pd.DataFrame) -> pd.DataFrame:
+    """POIs y contexto en una sola tabla, descartando del contexto las categorías que los POIs YA traen.
+
+    Existe por la fase 2: `alojamiento` pasó a ser también categoría de `CATEGORY_TAGS` (para tener competencia por
+    zona) pero sigue siendo categoría de contexto (porque `CONTEXTO` decide las celdas activas y la confianza, y
+    sacarla de ahí movería el panorama entero). Las dos fuentes describen el MISMO hotel con la misma subcategoría
+    —en las dos es el valor de `tourism`—, así que sumarlas sin más lo contaba dos veces e inflaba el segmento de
+    mercado «turistas» de todos los perfiles.
+
+    Se decide por lo que hay REALMENTE en `pois`, no por lo que diga `CATEGORY_TAGS`, y es deliberado: entre que la
+    categoría se declara y que el recolector hace su primera pasada, `pois` todavía no la tiene. Deduplicar por la
+    declaración habría hecho desaparecer los 198 alojamientos en ese hueco, en silencio. Así la transición es segura
+    en los dos sentidos y se arregla sola en cuanto el recolector pasa.
+
+    No deduplica elemento a elemento (ninguna de las dos tablas guarda el id de OSM aquí): descarta la categoría
+    entera. Es correcto porque cada fuente trae esa categoría completa, no un trozo."""
+    if contexto is None or contexto.empty:
+        return pois if pois is not None else pd.DataFrame(columns=["category", "subcategory", "latitude", "longitude"])
+    if pois is None or pois.empty:
+        return contexto
+    ya_en_pois = set(pois["category"].dropna().unique())
+    recortado = contexto[~contexto["category"].isin(ya_en_pois)]
+    return pd.concat([pois, recortado], ignore_index=True)
+
+
+def categorias_duplicadas(pois: pd.DataFrame, contexto: pd.DataFrame) -> list:
+    """Las categorías que `combinar_sin_duplicar` descartaría del contexto. Para que las herramientas lo digan en voz
+    alta en vez de que el usuario vea un número distinto sin explicación."""
+    if pois is None or pois.empty or contexto is None or contexto.empty:
+        return []
+    return sorted(set(contexto["category"].dropna().unique()) & set(pois["category"].dropna().unique()))

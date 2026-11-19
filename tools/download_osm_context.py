@@ -26,14 +26,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.ml import grid  # noqa: E402
-from src.poi_client import OverpassClient  # noqa: E402
+from src.poi_client import CATEGORY_TAGS, OverpassClient, _parse_spec  # noqa: E402
 
 PAUSA_S = 12
 TIMEOUT_SERVIDOR_S = 150
 TIMEOUT_HTTP_S = 190
 FRANJAS_EDIFICIOS = 3
 
-ALOJAMIENTO = "hotel|hostel|guest_house|apartment|motel|resort|chalet|camp_site"
+# Los mismos valores que `CATEGORY_TAGS["alojamiento"]`, leídos de allí y no copiados: desde la fase 2 el alojamiento
+# también lo recolecta el cliente de POIs, y si las dos listas se desalinearan la subcategoría dejaría de ser la misma
+# según de qué fuente viniera, que es justo lo que `osm_context.combinar_sin_duplicar` da por hecho. Un test lo fija.
+ALOJAMIENTO = "|".join(_parse_spec(CATEGORY_TAGS["alojamiento"][0])[1])
 
 # Cada tema: lista de cláusulas Overpass con {bbox}. `franjas`: en cuántas franjas de latitud se parte el área.
 TEMAS: Dict[str, dict] = {

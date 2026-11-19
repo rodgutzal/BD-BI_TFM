@@ -26,7 +26,8 @@ from src.ml.business_profiles import (
 )
 from src.ml.cell_counts import CellCounts, Selector, selector
 from src.ml.osm_context import CONTEXTO
-from src.ml.panorama import COLUMNAS_BRECHA, build_panorama
+from src.ml.panorama import COLUMNAS_BRECHA, build_panorama, percentile_rank
+from src.poi_client import CATEGORY_TAGS
 
 # Capas del mapa: etiqueta → (columna con el valor, columna con el percentil). Las tres lentes por separado; la brecha
 # va aparte y etiquetada (sección «capa exploratoria»).
@@ -63,10 +64,15 @@ def expand_selectors(selectors: Sequence[Selector]) -> Dict[str, Selector]:
 
 def available_pairs(counts: CellCounts) -> Dict[str, Selector]:
     """(categoría: subcategoría) que existen en los datos, sin las categorías de contexto de OSM (edificios, transporte...),
-    que no son comercios. Sirven para AÑADIR competencia a un perfil."""
+    que no son comercios. Sirven para AÑADIR competencia a un perfil.
+
+    `alojamiento` es la excepción y está a propósito: desde la fase 2 es a la vez categoría de contexto y categoría
+    del recolector (ver `poi_client.CATEGORY_TAGS`). Si se filtrara solo por `CONTEXTO`, el usuario no podría ver ni
+    ajustar la competencia de su propio perfil de alojamiento, que son precisamente los hoteles."""
+    recolectadas = set(CATEGORY_TAGS)
     out: Dict[str, Selector] = {}
     for categoria, sub in counts.pairs():
-        if categoria in CONTEXTO or counts.arrays[(categoria, sub)].sum() <= 0:
+        if (categoria in CONTEXTO and categoria not in recolectadas) or counts.arrays[(categoria, sub)].sum() <= 0:
             continue
         out[f"{categoria}: {sub}" if sub else f"{categoria}: (sin subcategoría)"] = (
             selector(categoria, sub) if sub else Selector(categoria, frozenset({""}))
@@ -149,11 +155,40 @@ def gap_table(guardado: pd.DataFrame, categoria: str) -> Tuple[Optional[pd.DataF
     )
 
 
+# Oferta de local industrial: naves y edificios industriales cartografiados (categoría de contexto `edificio`).
+#
+# Es lo que quedó de la «logística» de la fase 2 cuando se midió lo que hay. Como CATEGORÍA de negocio no se sostiene:
+# en toda la rejilla hay 1 POI `logistics`, 1 `storage_rental`, 1 `wholesale`, 2 `trade` y 2 `truck`, siete en total, y
+# una lente de competencia sobre siete POIs no dice nada. Lo que sí hay en cantidad son EDIFICIOS: 464 industriales y
+# 13 naves. Eso no es competencia ni mercado ni proveedores, así que NO es una cuarta lente: es un dato de la celda,
+# como `pois_vecindad`, y responde a otra pregunta —«¿hay nave por aquí?»— no a «¿cuánta competencia tengo?».
+#
+# Se calcula en la VISTA y no en `panorama.build_panorama` a propósito: así no cambia el esquema de `panorama.csv`
+# publicado ni hay que relajar el guardia de fidelidad de `tools/resplit_panorama_categories.py`. Sale del
+# `cell_counts.csv` publicado, que ya trae esas columnas del contexto de OSM.
+NAVES: Tuple[Selector, ...] = (selector("edificio", "warehouse", "industrial"),)
+
+
+def attach_naves(vista: pd.DataFrame, counts: CellCounts) -> pd.DataFrame:
+    """Añade `naves_vecindad` (naves y edificios industriales en la celda y su anillo) y su percentil.
+
+    Mismo radio que las lentes y que `pois_vecindad`: la celda más sus 8 vecinas, para que una nave justo al otro lado
+    del límite de la celda no desaparezca."""
+    if vista.empty or "fila" not in vista or "col" not in vista:
+        return vista
+    matriz = counts.grid(NAVES)
+    filas, cols = vista["fila"].to_numpy(), vista["col"].to_numpy()
+    vista = vista.copy()
+    vista["naves_vecindad"] = (grid.ring_sum(matriz, 0) + grid.ring_sum(matriz, 1))[filas, cols]
+    vista["pct_naves_vecindad"] = percentile_rank(vista["naves_vecindad"])
+    return vista
+
+
 def compute_view(counts: CellCounts, perfil: BusinessProfile, guardado: pd.DataFrame, categoria: str) -> pd.DataFrame:
     """Panorama de las celdas activas con `perfil`, recalculado desde los conteos, con la brecha precalculada de la
-    categoría (que no depende del perfil)."""
+    categoría (que no depende del perfil), más la oferta de local industrial de cada celda (ver `attach_naves`)."""
     brecha, modelo, validada = gap_table(guardado, categoria)
-    return build_panorama(counts, perfil, brecha, modelo, validada)
+    return attach_naves(build_panorama(counts, perfil, brecha, modelo, validada), counts)
 
 
 def opportunity_mask(vista: pd.DataFrame) -> pd.Series:
@@ -304,7 +339,12 @@ def export_frame(vista: pd.DataFrame, ids: Sequence[str], perfil: BusinessProfil
     out["localidad"] = sub["localidad"] if "localidad" in sub else ""
     out["zona_referencia"], out["dist_zona_m"] = sub["zona_cercana"], sub["dist_zona_m"]
     out["lat"], out["lon"] = sub["lat"], sub["lon"]
-    out = pd.concat([out, sub[lentes + pcts + ["confianza", "confianza_nivel", "pois_vecindad"]]], axis=1)
+    # `naves_vecindad` va con los datos de celda (no es una lente) pero TIENE que salir si sale su percentil: un
+    # `pct_` sin su columna base deja un CSV en el que no se puede comprobar de dónde viene el número. Lo cazó el
+    # test que fija que cada percentil conserva su base.
+    de_celda = ["confianza", "confianza_nivel", "pois_vecindad"]
+    de_celda += [c for c in ("naves_vecindad",) if c in sub.columns]
+    out = pd.concat([out, sub[lentes + pcts + de_celda]], axis=1)
     out["oportunidad_estrella"] = opportunity_mask(vista).reindex(sub.index)
     out["perfil"], out["perfil_personalizado"] = perfil.nombre, bool(perfil.personalizado)
     out["enlace_mapa"] = [map_link(la, lo) for la, lo in zip(sub["lat"], sub["lon"])]

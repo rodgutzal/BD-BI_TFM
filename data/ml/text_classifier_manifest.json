@@ -46,7 +46,7 @@
     "sha256": "d57a4d86ccb9d96efbc877ef58a1f6e92b20b5e74d948fb0bc68f24d1135e34e"
   },
   "procedencia": {
-    "commit": "2a4dd94+",
+    "commit": "dcf033d+",
     "version.numpy": "2.4.6",
     "version.pandas": "3.0.3",
     "version.python": "3.13.14",

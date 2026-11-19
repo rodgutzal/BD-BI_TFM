@@ -33,7 +33,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.ml import data_access, inputs_bundle, panorama  # noqa: E402
+from src.ml import data_access, inputs_bundle, osm_context, panorama  # noqa: E402
 from src.ml.business_profiles import DEFAULT_PROFILES  # noqa: E402
 from src.ml.cell_counts import CellCounts  # noqa: E402
 
@@ -116,8 +116,11 @@ def main(argv=None) -> int:
     pois = data_access.load_pois(args.db)
     contexto = data_access.load_context(args.db, args.contexto)
     con_contexto = not contexto.empty
-    counts = CellCounts.from_pois(pd.concat([pois, contexto], ignore_index=True) if con_contexto else pois)
+    repetidas = osm_context.categorias_duplicadas(pois, contexto) if con_contexto else []
+    counts = CellCounts.from_pois(osm_context.combinar_sin_duplicar(pois, contexto) if con_contexto else pois)
     print(f"POIs: {len(pois)} | contexto de OSM: {len(contexto)} | celdas activas: {int(counts.active_mask().sum())}")
+    if repetidas:
+        print(f"   del contexto se descartan {repetidas}: los POIs ya traen esas categorías (no se cuentan dos veces)")
 
     brechas = {}
     if not args.sin_brecha:
