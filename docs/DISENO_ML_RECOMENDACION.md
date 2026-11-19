@@ -138,6 +138,19 @@ Lo que ya hay **no basta** para todos los tipos: donde los proveedores casi no e
 - **Es la única categoría que está a la vez en `CATEGORY_TAGS` y en `CONTEXTO`,** y no es un descuido. En `CATEGORY_TAGS` porque solo así el recolector la guarda en la tabla `pois`, que es de donde `location_scoring.zone_competition` saca la competencia por zona. En `CONTEXTO` porque esa tupla decide además **qué categorías no definen una celda activa** y cuáles no cuentan para la confianza: sacarla de ahí movería las 1.139 celdas activas y la confianza de todos los perfiles —el panorama entero— por añadir una categoría. El riesgo que esa dualidad crea es contar el mismo hotel dos veces, porque el panorama suma POIs y contexto; lo resuelve `osm_context.combinar_sin_duplicar`, que descarta del contexto las categorías que los POIs **ya traen**. Decide por lo que hay realmente en `pois`, no por lo que declare `CATEGORY_TAGS`, para que entre la declaración y la primera pasada del recolector los 198 alojamientos no desaparezcan en silencio.
 - **Sus propios hoteles no se cuentan dos veces dentro del perfil.** `turistas` incluye el alojamiento para los demás perfiles, pero `compute_lenses` calcula mercado y proveedores con `exclude=competidores`, así que para este perfil el segmento se queda solo con los 61 atractivos (museos, galerías, teatros, casinos, zoo y parques), que es justo la señal que interesa. Contraste medido: `turistas` vale 61 POIs en el perfil de alojamiento y 259 en el de restauración.
 
+**Recolección del 19-nov-2026: 188 alojamientos en la tabla `pois`, y por qué no son 198.** La categoría quedó declarada el 18-nov, pero la competencia **por zona** (`location_scoring.zone_competition`) lee de la tabla `pois`, no de los conteos por celda, así que devolvía 0 en las siete zonas hasta que el recolector hiciera una pasada. Se intentó ese mismo día y los tres espejos de Overpass fallaron (502 por capacidad en overpass-api.de, timeout de lectura en kumi, timeout de conexión en openstreetmap.ru); se repitió el 19-nov y entró.
+
+| Fuente | Fecha | Alojamientos | Desglose |
+|---|---|---|---|
+| Contexto de OSM (fase 1b) → `cell_counts.csv` | 09-nov-2026 | **198** | 129 hotel, 29 guest_house, 21 apartment, 18 hostel, 1 camp_site |
+| Recolector de POIs → tabla `pois` | 19-nov-2026 | **188** | 127 hotel, 22 guest_house, 21 apartment, 17 hostel, 1 camp_site |
+
+Las dos cifras son correctas y describen cosas distintas: **198 es lo que hay en el panorama publicado** (sus lentes se calculan sobre `cell_counts.csv`, que se congeló con el contexto del 09-nov) y **188 es lo que OpenStreetMap tiene hoy**. La diferencia de 10 es deriva real del mapa en diez días, no un error de ninguna de las dos: con la misma consulta de ocho valores de `tourism`, lo que cambió fue el mapa. Las lentes del panorama siguen siendo las de 198 y no se regeneran por esto; la competencia por zona usa las 188 de hoy, y ahora da `[29, 80, 70, 50, 90, 4, 4]` en las siete zonas.
+
+Esa diferencia es también el recordatorio de que **una cifra de OSM lleva fecha**: cualquier número de este diseño vale para el día en que se midió, y por eso los artefactos publicados llevan manifiesto con fecha y hash.
+
+De paso, esa misma pasada **reetiquetó 218 POIs** que el contenedor del recolector —cuya imagen es anterior a las categorías nuevas— había devuelto a `business`: es el mecanismo de `RouteDatabase._reclasificar_pois`. Mientras la imagen no se reconstruya, el contenedor seguirá deshaciéndolo en cada ciclo.
+
 **La «logística» de la fase 2 no existe como categoría, y eso es un resultado.** Se planteó junto al alojamiento y al medir lo que hay en OpenStreetMap no se sostiene: en toda la rejilla hay **7 POIs** que podrían ser logística (1 `logistics`, 1 `storage_rental`, 1 `wholesale`, 2 `trade`, 2 `truck`). Una lente de competencia sobre siete elementos no informa de nada, y declararla sería exactamente el tipo de afirmación que este diseño evita.
 
 Lo que sí hay en cantidad son **edificios**: 464 industriales y 13 naves. Eso no es competencia, ni mercado, ni proveedores, así que **no se convierte en una cuarta lente**: se expone como un dato de la celda —`naves_vecindad`, con su percentil—, igual que `pois_vecindad`, y responde a otra pregunta, «¿hay nave por aquí?», no a «¿cuánta competencia tengo?». Se calcula en la capa de vista (`panorama_view.attach_naves`) a propósito, para no cambiar el esquema de `panorama.csv` ni relajar el guardia de fidelidad de la herramienta que lo reconstruye. Cubre 308 de las 1.139 celdas activas, con un máximo de 152 alrededor de Msida.
@@ -231,7 +244,7 @@ Validación cruzada espacial: 10 repeticiones, bloques de 4×4 celdas (~1 km), 1
 | Tema | Elementos | Observaciones |
 |---|---|---|
 | Edificios | 15.608 | **78 % son `building=yes`** (genéricos); solo el 11 % está marcado como residencial; el 16 % tiene número de plantas. Hay edificios en 1.419 celdas (los POIs activaban 1.139) |
-| Alojamiento | 198 | 129 hoteles, 29 casas de huéspedes, 21 apartamentos, 18 hostales; solo 7 con habitaciones o camas, así que solo se pueden **contar** |
+| Alojamiento | 198 | 129 hoteles, 29 casas de huéspedes, 21 apartamentos, 18 hostales; solo 7 con habitaciones o camas, así que solo se pueden **contar**. Esta es la foto del **09-nov-2026**, la que llevan dentro los conteos del panorama publicado; el recolector de POIs trajo **188** el 19-nov (ver §E) y las dos son correctas: la diferencia es deriva del mapa |
 | Transporte | 1.156 | 1.134 paradas de autobús, 18 de ferry, 3 estaciones y 1 andén (las 427 `stop_position` se descartan: duplican las paradas) |
 | Industria / mayoristas | 149 | 145 áreas industriales y **un único mayorista** (el mismo de antes) |
 
