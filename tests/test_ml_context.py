@@ -89,6 +89,64 @@ def test_alojamiento_e_industria():
     assert ind["subcategory"].tolist() == ["industrial", "wholesale"]
 
 
+def _tabla(*filas):
+    return pd.DataFrame(list(filas), columns=["category", "subcategory", "latitude", "longitude"])
+
+
+HOTEL_CTX = ("alojamiento", "hotel", 35.9, 14.5)
+HOTEL_POI = ("alojamiento", "hotel", 35.9, 14.5)
+EDIFICIO = ("edificio", "yes", 35.9, 14.5)
+TIENDA = ("business", "clothes", 35.9, 14.5)
+
+
+def test_el_contexto_no_vuelve_a_sumar_una_categoria_que_los_pois_ya_traen():
+    """La trampa de la fase 2: `alojamiento` pasó a ser categoría de `CATEGORY_TAGS` sin dejar de ser categoría de
+    contexto, porque `CONTEXTO` también decide las celdas activas y la confianza. El panorama suma POIs y contexto,
+    así que sin deduplicar el MISMO hotel se contaba dos veces e inflaba el segmento «turistas» de todos los perfiles.
+    """
+    pois = _tabla(HOTEL_POI, TIENDA)
+    contexto = _tabla(HOTEL_CTX, EDIFICIO)
+    combinado = osm_context.combinar_sin_duplicar(pois, contexto)
+    assert combinado["category"].tolist() == ["alojamiento", "business", "edificio"]
+    assert osm_context.categorias_duplicadas(pois, contexto) == ["alojamiento"]
+
+
+def test_se_decide_por_lo_que_hay_en_pois_no_por_lo_que_declare_category_tags():
+    """Deliberado: entre que la categoría se declara y que el recolector hace su primera pasada, `pois` todavía no la
+    tiene. Si se deduplicara por la DECLARACIÓN, los 198 alojamientos habrían desaparecido en ese hueco, en silencio.
+    Así la transición es segura y se arregla sola en cuanto el recolector pasa."""
+    pois_sin_alojamiento = _tabla(TIENDA)
+    contexto = _tabla(HOTEL_CTX, EDIFICIO)
+    combinado = osm_context.combinar_sin_duplicar(pois_sin_alojamiento, contexto)
+    assert sorted(combinado["category"]) == ["alojamiento", "business", "edificio"]
+    assert osm_context.categorias_duplicadas(pois_sin_alojamiento, contexto) == []
+
+
+@pytest.mark.parametrize("vacio", ["pois", "contexto", "ambos"])
+def test_combinar_aguanta_que_falte_una_de_las_dos_tablas(vacio):
+    """Sin contexto descargado (el caso normal con la base completa) no debe fallar ni perder los POIs."""
+    pois = _tabla() if vacio in ("pois", "ambos") else _tabla(TIENDA)
+    contexto = _tabla() if vacio in ("contexto", "ambos") else _tabla(EDIFICIO)
+    combinado = osm_context.combinar_sin_duplicar(pois, contexto)
+    assert list(combinado.columns) == ["category", "subcategory", "latitude", "longitude"]
+    assert len(combinado) == (0 if vacio == "ambos" else 1)
+
+
+def test_las_etiquetas_del_alojamiento_son_las_mismas_en_el_recolector_y_en_el_contexto():
+    """La deduplicación da por hecho que la subcategoría es la misma venga de donde venga (en las dos es el valor de
+    `tourism`). Si las dos listas se desalinearan, el mismo hotel aparecería con dos columnas distintas y se seguiría
+    contando dos veces. Por eso la herramienta de contexto lee los valores de CATEGORY_TAGS en vez de copiarlos."""
+    from src.poi_client import CATEGORY_TAGS, _parse_spec
+
+    descarga = importlib.util.spec_from_file_location(
+        "download_osm_context", Path(__file__).resolve().parents[1] / "tools" / "download_osm_context.py"
+    )
+    modulo = importlib.util.module_from_spec(descarga)
+    descarga.loader.exec_module(modulo)
+    assert modulo.ALOJAMIENTO == "|".join(_parse_spec(CATEGORY_TAGS["alojamiento"][0])[1])
+    assert "hotel" in modulo.ALOJAMIENTO and "camp_site" in modulo.ALOJAMIENTO
+
+
 def test_un_tema_desconocido_o_sin_uso_da_un_dataframe_vacio_con_las_columnas():
     """Un tema desconocido o que no se usa devuelve una tabla vacía pero con sus columnas."""
     df = osm_context.elements_to_pois("suelo_residencial", [via(20, 20, landuse="residential")])

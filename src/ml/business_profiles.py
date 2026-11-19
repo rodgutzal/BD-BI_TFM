@@ -82,6 +82,9 @@ PROVEEDORES_POI: Dict[str, Tuple[Selector, ...]] = {
     # no informaba de nada. Siguen siendo pocos POIs y las dos lentes lo declaran.
     "recambios": (selector("business", "car_parts"),),
     "cosmetica": (selector("business", "cosmetics", "perfumery", "hairdresser_supply"),),
+    # Fase 2: el proveedor típico de un alojamiento que SÍ está cartografiado. Son 13 POIs, pocos, y la lente lo
+    # declara; el resto de lo que compra un hotel (alimentación, amenities) iría por `mayoristas`, que tiene 3.
+    "lavanderia": (selector("business", "laundry", "dry_cleaning"),),
 }
 
 
@@ -192,6 +195,24 @@ DEFAULT_PROFILES: Dict[str, BusinessProfile] = {
             [selector("business", "car", "motorcycle")],
             ["residentes", "oficinistas"],
             ["recambios", "mayoristas"],
+        ),
+        # Fase 2 (18-nov-2026). Único perfil cuya categoría está también en `osm_context.CONTEXTO`: ver el comentario
+        # de `alojamiento` en `poi_client.CATEGORY_TAGS`.
+        #
+        # Sin competencia indirecta: en OSM no hay nada cartografiado que sustituya a un hotel (el alquiler de corta
+        # estancia no está etiquetado), igual que le pasa a `sport`. Vale más decirlo que inventar un sustituto.
+        #
+        # NO se le pone `residentes`: quien vive en la zona no compra noches de hotel. Y aunque `turistas` incluye
+        # `selector("alojamiento")` para los demás perfiles, aquí no se cuenta dos veces: `compute_lenses` calcula
+        # mercado y proveedores con `exclude=competidores`, así que para este perfil el segmento se queda solo con
+        # los atractivos (museos, galerías, teatros, casinos, zoo y parques), que es justo la señal que interesa.
+        _perfil(
+            "alojamiento",
+            "Hotel, hostal o apartamento turístico",
+            [selector("alojamiento")],
+            [],
+            ["turistas", "oficinistas"],
+            ["lavanderia", "mayoristas"],
         ),
     ]
 }

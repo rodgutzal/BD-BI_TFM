@@ -51,6 +51,37 @@ def datos_con_brecha(datos_ml_con_brecha):
     return panorama.read_panorama(datos_ml_con_brecha), panorama.read_counts(datos_ml_con_brecha)
 
 
+# ---- oferta de local industrial y alojamiento (fase 2) -----------------------------------------------------------
+def test_las_naves_se_cuentan_en_la_celda_y_su_anillo_y_no_tocan_el_panorama_publicado(datos):
+    """Lo que quedó de la «logística» al medir lo que hay: como categoría de negocio no se sostiene (7 POIs en toda
+    la rejilla), pero hay 464 edificios industriales y 13 naves. Eso no es competencia ni mercado ni proveedores, así
+    que NO es una cuarta lente: es un dato de la celda, como `pois_vecindad`.
+
+    Se calcula en la VISTA justamente para no tocar el esquema de `panorama.csv`, y este test lo fija."""
+    guardado, counts = datos
+    vista = pv.compute_view(counts, bp.get_default_profile("alojamiento"), guardado, "alojamiento")
+    assert "naves_vecindad" in vista and "pct_naves_vecindad" in vista
+    assert "naves_vecindad" not in guardado.columns  # el artefacto publicado NO gana columnas
+    assert (vista["naves_vecindad"] >= 0).all() and vista["naves_vecindad"].max() > 0
+    assert vista["pct_naves_vecindad"].between(0, 1).all()
+
+
+def test_una_vista_sin_celdas_no_rompe_el_calculo_de_naves(counts):
+    """Si no hay celdas que mirar, se devuelve la tabla tal cual en vez de fallar al indexar la rejilla."""
+    assert pv.attach_naves(pd.DataFrame(), counts).empty
+
+
+def test_el_alojamiento_si_aparece_entre_las_opciones_de_competencia(datos):
+    """`available_pairs` esconde las categorías de contexto porque no son comercios, pero `alojamiento` es a la vez
+    contexto y categoría del recolector desde la fase 2. Si se filtrara solo por `CONTEXTO`, el usuario no podría ver
+    ni ajustar la competencia de su propio perfil de alojamiento, que son precisamente los hoteles."""
+    _, counts = datos
+    opciones = pv.available_pairs(counts)
+    assert any(e.startswith("alojamiento: ") for e in opciones), sorted(opciones)[:5]
+    # El resto del contexto sigue fuera: edificios y paradas no son competencia de nadie.
+    assert not any(e.startswith(("edificio: ", "transporte: ", "industria: ")) for e in opciones)
+
+
 # ---- opciones ----------------------------------------------------------------------------------------------------
 def test_expand_selectors_separa_las_subcategorias_y_etiqueta_el_resto():
     """Cada subcategoría de un selector queda por separado; una categoría entera y un «todo salvo» tienen su etiqueta."""

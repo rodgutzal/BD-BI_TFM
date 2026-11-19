@@ -331,6 +331,26 @@ BUSINESS_TYPE_RULES: Dict[str, Tuple[str, ...]] = {
         "neumaticos",
         "llantas",
     ),
+    # Fase 2: alojamiento turístico. Dos trampas evitadas a propósito:
+    #
+    # - NO está «pension»: en castellano es muchísimo más habitual la prestación («oficina de pensiones») que la casa
+    #   de huéspedes, y además el plural «pensiones» la dispararía. Es el mismo riesgo que retiró «rehabilitacion».
+    # - NO está «apartamento» a secas, porque «busco un apartamento» suele ser para vivir, no para explotarlo. Hace
+    #   falta el adjetivo: «apartamento turistico» (que con el plural ya reconoce «apartamentos turisticos»).
+    "alojamiento": (
+        "hotel",
+        "hostal",
+        "albergue",
+        "motel",
+        "resort",
+        "camping",
+        "alojamiento",
+        "hospedaje",
+        "casa de huespedes",
+        "apartamento turistico",
+        "bed and breakfast",
+        "airbnb",
+    ),
     # Residual: comercio y oficinas en general (igual definición que en Overpass).
     "business": (
         "tienda",

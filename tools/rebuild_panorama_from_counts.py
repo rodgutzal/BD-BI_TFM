@@ -1,26 +1,27 @@
-"""Reparte en categorías propias unos POIs que ya estaban recolectados dentro de otra, y recalcula el panorama.
+"""Reconstruye el panorama publicado a partir de su propio `cell_counts.csv`, sin red y sin la base de datos.
+
+Dos usos, los dos de añadir categorías al sistema:
+  1. Un perfil NUEVO sobre categorías que ya están en los conteos (fase 2: `alojamiento`).
+  2. Repartir en categoría propia unos POIs que estaban recolectados dentro de otra (fase 3: `belleza`, `taller`),
+     renombrando las columnas `business|<valor>` a `<categoría>|<valor>` según `poi_client.CATEGORY_TAGS`.
+Los dos se pueden dar a la vez, y el caso 2 puede no tener nada que mover: entonces solo se recalculan las lentes.
 
 Por qué DERIVA en vez de regenerar (la misma razón que `tools/strip_panorama_gap.py`): el `cell_counts.csv`
 publicado lleva dentro el contexto de OSM (`edificio|*`, `alojamiento|*`, `transporte|*`, `industria|*`), que es
 lo que alimenta la lente de mercado «residentes». Ese contexto NO está versionado: lo descarga
 `tools/download_osm_context.py` de Overpass. Regenerar el panorama desde la base de datos lo perdería y cambiaría
-las lentes de mercado de las SIETE categorías anteriores sin que nadie lo pidiera. Partiendo del CSV publicado y
-verificado por hash, en cambio, los conteos por celda son exactamente los mismos: lo único que cambia es la
-ETIQUETA con la que están agrupados.
-
-Lo que hace, en una frase: renombra las columnas `business|<valor>` a `<categoría nueva>|<valor>` para los valores
-que `poi_client.CATEGORY_TAGS` asigna ahora a una categoría propia, y vuelve a calcular las lentes de todos los
-perfiles. Los totales por celda no cambian; el reparto, sí.
+las lentes de mercado de las categorías anteriores sin que nadie lo pidiera. Partiendo del CSV publicado y
+verificado por hash, en cambio, los conteos por celda son exactamente los mismos.
 
 Qué cambia y qué no:
-  - `cell_counts.csv`: cambian los NOMBRES de 5 columnas. Ningún número se mueve de celda.
-  - `panorama.csv`: aparecen los perfiles nuevos, y el perfil `business` cambia, porque esos POIs dejan de ser su
-    competencia directa y pasan a indirecta (ver `business_profiles.DEFAULT_PROFILES`). Los otros seis perfiles
-    tienen que salir IDÉNTICOS, y la herramienta lo comprueba y aborta si no.
+  - `cell_counts.csv`: solo si hay reparto, y entonces cambian NOMBRES de columnas. Ningún número se mueve de celda.
+  - `panorama.csv`: aparecen las filas de los perfiles nuevos. Un perfil anterior solo puede cambiar si el reparto le
+    quitó competencia (le pasó a `business` en la fase 3). El resto tiene que salir IDÉNTICO, y la herramienta lo
+    comprueba y ABORTA si no, incluidas las columnas que falten o sobren.
 
 Uso:
-    python tools/resplit_panorama_categories.py                  # comprueba y escribe en data/ml
-    python tools/resplit_panorama_categories.py --solo-comprobar  # no escribe nada
+    python tools/rebuild_panorama_from_counts.py                  # comprueba y escribe en data/ml
+    python tools/rebuild_panorama_from_counts.py --solo-comprobar  # no escribe nada
 """
 
 import argparse
@@ -46,26 +47,34 @@ DEFAULT_DIR = ROOT / "data" / "ml"
 # Categorías que antes caían en el cajón y ahora tienen la suya. Está escrito a mano, y no deducido, para que
 # añadir una categoría obligue a declararlo aquí y a volver a ejecutar la comprobación de fidelidad.
 CAJON = "business"
-NUEVAS = ("belleza", "taller")
 
-# Perfiles que NO deben cambiar ni un dígito al repartir. `business` sí cambia (pierde competencia directa) y los
-# nuevos no existían.
+# Categorías que SALIERON del cajón y por eso hay que repartir sus columnas. Escrito a mano, no deducido, para que
+# añadir una obligue a declararlo aquí y a volver a pasar la comprobación de fidelidad.
+#
+# `alojamiento` (fase 2) NO está aquí, y es importante: nunca estuvo en el cajón. Ya venía en los conteos como
+# categoría de contexto, con las mismas columnas `alojamiento|*`, así que no hay nada que renombrar; lo único que
+# hace falta es calcular su perfil. Meterla aquí buscaría columnas `business|hotel` que no existen.
+SALIERON_DEL_CAJON = ("belleza", "taller")
+
 MOTIVO = (
-    "Las peluquerías/estética (shop=hairdresser|beauty) y los talleres (shop=car_repair|truck_repair|tyres) ya se "
-    "recolectaban dentro de `business`, el cajón de shop/office, así que su competencia era «cualquier comercio» y "
-    "no se podían analizar como lo que son. Ahora tienen categoría propia en CATEGORY_TAGS y perfil propio. Derivado "
-    "del panorama publicado para no perder el contexto de OSM, que no está versionado."
+    "Reconstruido del panorama publicado, no regenerado desde la base, para no perder el contexto de OSM, que no "
+    "está versionado. Cubre las categorías que salieron del cajón `business` (fase 3: belleza, taller) y los perfiles "
+    "nuevos sobre categorías que ya estaban en los conteos (fase 2: alojamiento)."
 )
 
 
 def movimientos(columnas: List[str]) -> Dict[str, str]:
-    """{columna vieja: columna nueva} para las columnas que cambian de categoría.
+    """{columna vieja: columna nueva} para las columnas que cambian de categoría. Vacío si no hay nada que mover.
 
-    Los valores de cada categoría nueva salen de CATEGORY_TAGS, que es la única fuente de verdad, así que el reparto
-    no puede desalinearse con lo que clasificaría una extracción nueva."""
+    Los valores de cada categoría salen de CATEGORY_TAGS, que es la única fuente de verdad, así que el reparto no
+    puede desalinearse con lo que clasificaría una extracción nueva.
+
+    Un reparto YA HECHO no es un error: devuelve el movimiento vacío y la herramienta sigue, porque su otro trabajo
+    —recalcular las lentes con los perfiles de hoy— sigue teniendo sentido. Solo se queja si encuentra las dos
+    columnas a la vez, que sería un reparto a medias y nadie debería tapar."""
     mapa: Dict[str, str] = {}
     presentes = set(columnas)
-    for categoria in NUEVAS:
+    for categoria in SALIERON_DEL_CAJON:
         especificaciones = CATEGORY_TAGS.get(categoria)
         if not especificaciones:
             raise ValueError(f"{categoria!r} no está en CATEGORY_TAGS: no se puede repartir lo que no está definido")
@@ -75,8 +84,8 @@ def movimientos(columnas: List[str]) -> Dict[str, str]:
                 raise ValueError(f"{categoria!r} usa la clave {clave!r} entera; esta herramienta reparte por valor")
             for valor in valores.split("|"):
                 vieja, nueva = f"{CAJON}|{valor}", f"{categoria}|{valor}"
-                if nueva in presentes:
-                    raise ValueError(f"{nueva!r} ya existe: el reparto ya estaba hecho")
+                if vieja in presentes and nueva in presentes:
+                    raise ValueError(f"{vieja!r} y {nueva!r} existen las dos: el reparto quedó a medias")
                 if vieja in presentes:
                     mapa[vieja] = nueva
     return mapa
@@ -101,6 +110,7 @@ def construir(counts: CellCounts) -> pd.DataFrame:
 def comparar(nuevo: pd.DataFrame, publicado: pd.DataFrame, perfiles: Tuple[str, ...]) -> List[str]:
     """Diferencias en los perfiles que NO deberían cambiar. Lista vacía = el reparto fue fiel."""
     problemas = []
+    vacias = set()  # columnas que el esquema gana pero que este perfil deja vacías: se informan, no son un fallo
     for clave in perfiles:
         a = publicado[publicado["perfil"] == clave].set_index("cell_id").sort_index()
         b = nuevo[nuevo["perfil"] == clave].sort_index()
@@ -113,8 +123,14 @@ def comparar(nuevo: pd.DataFrame, publicado: pd.DataFrame, perfiles: Tuple[str, 
         sobran = [c for c in b.columns if c not in a.columns and c != "perfil"]
         if faltan:
             problemas.append(f"{clave}: faltan columnas que el panorama publicado sí tiene: {faltan}")
-        if sobran:
-            problemas.append(f"{clave}: aparecen columnas nuevas en un perfil que no debía cambiar: {sobran}")
+        # Una columna NUEVA solo se tolera si para este perfil está entera vacía. Las columnas de `panorama.csv` son
+        # la UNIÓN de las lentes de todos los perfiles, así que declarar un tipo de proveedor nuevo (la fase 2 añadió
+        # `lavanderia` para el alojamiento) ensancha el esquema de todas las filas; a quien no lo usa le queda en NaN,
+        # y entonces no ha cambiado nada suyo. Si trae algún valor, sí es un cambio y aborta.
+        con_valor = [c for c in sobran if b[c].notna().any()]
+        if con_valor:
+            problemas.append(f"{clave}: columnas nuevas CON VALOR en un perfil que no debía cambiar: {con_valor}")
+        vacias.update(c for c in sobran if c not in con_valor)
         comunes = [c for c in a.columns if c in b.columns and c != "perfil"]
         for columna in comunes:
             x, y = a[columna], b[columna]
@@ -128,6 +144,8 @@ def comparar(nuevo: pd.DataFrame, publicado: pd.DataFrame, perfiles: Tuple[str, 
                 iguales = x.fillna("").astype(str).equals(y.fillna("").astype(str))
             if not iguales:
                 problemas.append(f"{clave}.{columna}: cambió y no debía")
+    if vacias and not problemas:
+        print(f"   el esquema gana {sorted(vacias)}, vacías en los perfiles que no las usan: no cambia ningún valor")
     return problemas
 
 
@@ -158,16 +176,20 @@ def main(argv=None) -> int:
     try:
         mapa = movimientos(list(cuentas_viejas.columns))
     except ValueError as e:
-        # El caso normal aquí es volver a ejecutarla cuando el reparto ya está hecho: es idempotente y se niega, pero
-        # merece un mensaje y no un traceback.
         print(f"No se puede repartir: {e}")
         return 1
-    if not mapa:
-        print("No hay nada que repartir: ninguna columna del cajón corresponde a las categorías nuevas.")
+    if mapa:
+        print("Columnas que cambian de categoría (los conteos no se tocan):")
+        for vieja, nueva in sorted(mapa.items()):
+            print(f"   {vieja:28} -> {nueva:24} {int(cuentas_viejas[vieja].sum()):5} POIs")
+    else:
+        print("Nada que repartir: los conteos ya están agrupados como dice CATEGORY_TAGS.")
+
+    nuevos = [c for c in DEFAULT_PROFILES if c not in anterior.get("perfiles", ())]
+    print(f"Perfiles nuevos a calcular: {nuevos if nuevos else 'ninguno'}")
+    if not mapa and not nuevos:
+        print("No hay nada que hacer: ni columnas que repartir ni perfiles nuevos.")
         return 1
-    print("Columnas que cambian de categoría (los conteos no se tocan):")
-    for vieja, nueva in sorted(mapa.items()):
-        print(f"   {vieja:28} -> {nueva:24} {int(cuentas_viejas[vieja].sum()):5} POIs")
 
     nuevos_counts = repartir(counts, mapa)
     total_antes = sum(m.sum() for m in counts.arrays.values())
@@ -177,13 +199,16 @@ def main(argv=None) -> int:
         return 1
 
     tabla = construir(nuevos_counts)
-    intactos = tuple(c for c in anterior.get("perfiles", ()) if c != CAJON)
+    # Solo se le permite cambiar al cajón, y solo si de verdad se le quitaron columnas. Sin reparto, ni él cambia.
+    puede_cambiar = {CAJON} if mapa else set()
+    intactos = tuple(c for c in anterior.get("perfiles", ()) if c not in puede_cambiar)
     fallos = comparar(tabla, publicado, intactos)
     if fallos:
         print("\nABORTA: perfiles que tenían que salir idénticos y no lo hicieron:\n  " + "\n  ".join(fallos))
         return 1
     print(f"\nFidelidad: los {len(intactos)} perfiles que no debían cambiar salen idénticos al panorama publicado.")
-    print(f"Cambian a propósito: {CAJON} (pierde competencia directa) y los nuevos {', '.join(NUEVAS)}.")
+    cambian = sorted(puede_cambiar) + nuevos
+    print(f"Cambian a propósito: {', '.join(cambian) if cambian else 'ninguno'}.")
 
     if args.solo_comprobar:
         print("\n--solo-comprobar: no se ha escrito nada.")
@@ -196,7 +221,7 @@ def main(argv=None) -> int:
         "brecha": anterior.get("brecha", {}),
         "advertencia": anterior.get("advertencia", ""),
         "derivado": {
-            "herramienta": "tools/resplit_panorama_categories.py",
+            "herramienta": "tools/rebuild_panorama_from_counts.py",
             "motivo": MOTIVO,
             "columnas_movidas": {k: v for k, v in sorted(mapa.items())},
             "perfiles_intactos": list(intactos),

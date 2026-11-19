@@ -232,7 +232,8 @@ def main(argv=None) -> int:
             return 1
         print(f"Paquete de entrada íntegro (creado {inputs_bundle.read_manifest(args.db).get('creado')})")
     contexto = data_access.load_context(args.db, args.contexto)
-    todos = pd.concat([pois, contexto], ignore_index=True) if contexto is not None and not contexto.empty else pois
+    # Deduplicado: desde la fase 2 `alojamiento` está en las dos fuentes (ver osm_context.combinar_sin_duplicar).
+    todos = osm_context.combinar_sin_duplicar(pois, contexto)
     counts = CellCounts.from_pois(todos)
     print(
         f"POIs de Overpass: {len(pois)} | Foursquare: {len(fsq)} | zonas con población: {int(zonas['demanda'].notna().sum())}/{len(zonas)}"

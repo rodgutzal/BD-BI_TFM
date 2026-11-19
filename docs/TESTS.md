@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**60 archivos · 1308 funciones de test · 1551 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**60 archivos · 1317 funciones de test · 1573 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -16,7 +16,7 @@
 | [`tests/test_analyze_weather_effect.py`](#teststest_analyze_weather_effectpy) | 4 | 4 |
 | [`tests/test_api.py`](#teststest_apipy) | 14 | 20 |
 | [`tests/test_api_clients.py`](#teststest_api_clientspy) | 22 | 22+ |
-| [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 15 | 46 |
+| [`tests/test_business_type_classifier.py`](#teststest_business_type_classifierpy) | 17 | 59 |
 | [`tests/test_causal_analysis.py`](#teststest_causal_analysispy) | 49 | 59 |
 | [`tests/test_check_collection_gaps.py`](#teststest_check_collection_gapspy) | 10 | 10 |
 | [`tests/test_closure_features.py`](#teststest_closure_featurespy) | 22 | 23+ |
@@ -41,12 +41,12 @@
 | [`tests/test_medallion.py`](#teststest_medallionpy) | 20 | 20 |
 | [`tests/test_merge_legacy_data.py`](#teststest_merge_legacy_datapy) | 1 | 1 |
 | [`tests/test_migrations.py`](#teststest_migrationspy) | 18 | 18 |
-| [`tests/test_ml_context.py`](#teststest_ml_contextpy) | 33 | 33+ |
+| [`tests/test_ml_context.py`](#teststest_ml_contextpy) | 37 | 39+ |
 | [`tests/test_ml_grid.py`](#teststest_ml_gridpy) | 19 | 22 |
 | [`tests/test_ml_inputs_bundle.py`](#teststest_ml_inputs_bundlepy) | 36 | 36 |
 | [`tests/test_ml_lenses.py`](#teststest_ml_lensespy) | 38 | 38+ |
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
-| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 40 | 40 |
+| [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 43 | 43 |
 | [`tests/test_ml_places.py`](#teststest_ml_placespy) | 31 | 31 |
 | [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 43 | 56 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
@@ -209,13 +209,15 @@
 - `test_un_taller_o_un_salon_de_otra_cosa_no_cuentan` ×9 — Por eso «taller» a secas NO es palabra clave: un taller puede ser de bicis, de motos o de costura, y a ninguno le sirve la competencia de un taller de coches. Lo encontró el propio conjunto de evaluación.
 - `test_quiero_poner_un_taller_se_queda_sin_categoria_a_proposito` — No se sabe de qué: no hay que adivinar. Es el mismo principio que «nunca elige una categoría al azar».
 - `test_limite_conocido_la_peluqueria_canina_se_clasifica_mal` — Límite declarado, no olvidado: «peluquería canina» (`shop=pet_grooming`) cae en `belleza`, y no compite con una barbería. Con palabras clave no se puede arreglar: añadir «peluqueria canina» a `business` rompería el test de choques, porque «peluqueria» está contenida dentro, y `belleza` va antes en el registro.
+- `test_el_alojamiento_de_la_fase_2` ×9 — El alojamiento turístico ya existía como CONTEXTO de OSM (198 POIs), pero no como categoría que el usuario pudiera pedir. Desde la fase 2 sí.
+- `test_las_dos_palabras_que_el_alojamiento_no_puede_usar` ×4 — «pension» es mucho más la prestación que la casa de huéspedes (y su plural «pensiones» lo confirma), y «apartamento» a secas suele ser para vivir, no para explotarlo. Por eso el vocabulario exige el adjetivo: «apartamento turistico». Es el mismo criterio que retiró «rehabilitacion» y «mecanico».
 - `test_rehabilitacion_de_obra_no_es_un_negocio_de_salud` ×2 — «rehabilitación» se retiró del vocabulario de `hospital`: en castellano es más de obra que de salud, y el sentido médico ya lo cubren «fisioterapia» y «terapia» (lo señaló un code-review).
 - `test_ignora_mayusculas_tildes_y_espacios_de_mas` — El clasificador no distingue mayúsculas, tildes ni espacios repetidos o sobrantes.
 - `test_sin_coincidencia_devuelve_none_y_nunca_adivina` ×5 — Un texto sin ninguna palabra clave devuelve `None`; nunca elige una categoría al azar.
 - `test_todas_las_categorias_existen_en_overpass` — El clasificador solo puede devolver categorías que realmente guarda la tabla `pois` (CATEGORY_TAGS de poi_client.py).
 - `test_ninguna_palabra_clave_choca_con_otra_categoria` — Una misma palabra no puede aparecer en dos categorías (el orden de las reglas decidiría en silencio), y ninguna palabra de una categoría puede estar contenida como palabra completa dentro de una frase de otra.
 - `test_el_plural_no_atrapa_palabras_que_son_otra_cosa` ×2 — El riesgo del sufijo de plural: una palabra corta cuyo plural es OTRA palabra. Por eso «ingles» y «box» no están en el vocabulario (lo señaló un code-review, que encontró estos dos casos reales).
-- `test_cantidad_de_palabras_clave_documentada` — El README dice 407 palabras clave únicas. Fueron 140 hasta el 16-nov-2026 y 394 hasta la fase 3, que añadió las de `belleza` y `taller` (ver docs/DISENO_ML_RECOMENDACION.md §3.L2 y §E).
+- `test_cantidad_de_palabras_clave_documentada` — El README dice 419 palabras clave únicas. Fueron 140 hasta el 16-nov-2026, 394 hasta la fase 3 (`belleza`, `taller`) y 407 hasta la fase 2 (`alojamiento`); ver docs/DISENO_ML_RECOMENDACION.md §3.L2 y §E.
 
 ## `tests/test_causal_analysis.py`
 
@@ -983,6 +985,10 @@
 - `test_los_elementos_sin_coordenadas_se_descartan` — Los elementos de OSM sin coordenadas se descartan.
 - `test_transporte_conserva_paradas_y_descarta_las_posiciones_duplicadas` — En transporte se conservan paradas, estaciones, andenes y terminales de ferry, y se descartan las posiciones de parada duplicadas.
 - `test_alojamiento_e_industria` — Alojamiento e industria se convierten en POIs con el tipo de OSM como subcategoría.
+- `test_el_contexto_no_vuelve_a_sumar_una_categoria_que_los_pois_ya_traen` — La trampa de la fase 2: `alojamiento` pasó a ser categoría de `CATEGORY_TAGS` sin dejar de ser categoría de contexto, porque `CONTEXTO` también decide las celdas activas y la confianza. El panorama suma POIs y contexto, así que sin deduplicar el MISMO hotel se contaba dos veces e inflaba el segmento «turistas» de todos los perfiles.
+- `test_se_decide_por_lo_que_hay_en_pois_no_por_lo_que_declare_category_tags` — Deliberado: entre que la categoría se declara y que el recolector hace su primera pasada, `pois` todavía no la tiene. Si se deduplicara por la DECLARACIÓN, los 198 alojamientos habrían desaparecido en ese hueco, en silencio. Así la transición es segura y se arregla sola en cuanto el recolector pasa.
+- `test_combinar_aguanta_que_falte_una_de_las_dos_tablas` ×3 — Sin contexto descargado (el caso normal con la base completa) no debe fallar ni perder los POIs.
+- `test_las_etiquetas_del_alojamiento_son_las_mismas_en_el_recolector_y_en_el_contexto` — La deduplicación da por hecho que la subcategoría es la misma venga de donde venga (en las dos es el valor de `tourism`). Si las dos listas se desalinearan, el mismo hotel aparecería con dos columnas distintas y se seguiría contando dos veces. Por eso la herramienta de contexto lee los valores de CATEGORY_TAGS en vez de copiarlos.
 - `test_un_tema_desconocido_o_sin_uso_da_un_dataframe_vacio_con_las_columnas` — Un tema desconocido o que no se usa devuelve una tabla vacía pero con sus columnas.
 - `test_load_context_lee_los_json_ignora_los_corruptos_y_un_directorio_vacio_da_vacio` — `load_context` lee los JSON de la carpeta, ignora los corruptos y devuelve una tabla vacía si el directorio no tiene datos.
 - `test_no_residenciales_excluye_lo_que_no_es_vivienda` — La lista de edificios no residenciales incluye los industriales, iglesias, escuelas y garajes, y no las viviendas.
@@ -1171,6 +1177,9 @@
 > Tests de la fase 2b, parte sin interfaz (src/ml/panorama_view.py): opciones de competencia, perfil personalizado con sus
 > avisos, panorama recalculado con ese perfil, brecha precalculada que no cambia con el perfil y filtro de oportunidad.
 
+- `test_las_naves_se_cuentan_en_la_celda_y_su_anillo_y_no_tocan_el_panorama_publicado` — Lo que quedó de la «logística» al medir lo que hay: como categoría de negocio no se sostiene (7 POIs en toda la rejilla), pero hay 464 edificios industriales y 13 naves. Eso no es competencia ni mercado ni proveedores, así que NO es una cuarta lente: es un dato de la celda, como `pois_vecindad`.
+- `test_una_vista_sin_celdas_no_rompe_el_calculo_de_naves` — Si no hay celdas que mirar, se devuelve la tabla tal cual en vez de fallar al indexar la rejilla.
+- `test_el_alojamiento_si_aparece_entre_las_opciones_de_competencia` — `available_pairs` esconde las categorías de contexto porque no son comercios, pero `alojamiento` es a la vez contexto y categoría del recolector desde la fase 2. Si se filtrara solo por `CONTEXTO`, el usuario no podría ver ni ajustar la competencia de su propio perfil de alojamiento, que son precisamente los hoteles.
 - `test_expand_selectors_separa_las_subcategorias_y_etiqueta_el_resto` — Cada subcategoría de un selector queda por separado; una categoría entera y un «todo salvo» tienen su etiqueta.
 - `test_expandir_no_cambia_lo_que_se_cuenta` — La unión de los selectores expandidos cuenta lo mismo que los originales: dividir no altera el perfil.
 - `test_available_pairs_omite_el_contexto_y_lo_vacio` — Edificios y transporte no son comercios: no se ofrecen como competencia. La subcategoría vacía se etiqueta.

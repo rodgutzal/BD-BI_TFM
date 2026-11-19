@@ -69,6 +69,8 @@ POI_CATEGORY_STYLE = {
     # nombre crudo y la pantalla decía «belleza» y «taller» en vez de un nombre legible. Lo señaló un code-review.
     "belleza": {"color": "#8e44ad", "label": "💅 Peluquería y estética"},
     "taller": {"color": "#7f8c8d", "label": "🔧 Talleres mecánicos"},
+    # Fase 2. Hasta ahora el alojamiento solo existía como contexto y no se podía pintar en el mapa de POIs.
+    "alojamiento": {"color": "#16a085", "label": "🏨 Alojamiento turístico"},
 }
 
 # Categorías de Overpass marcadas por defecto. Las tres más nuevas
