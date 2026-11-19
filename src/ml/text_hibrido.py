@@ -34,8 +34,15 @@ ARCHIVO_MANIFIESTO = "text_classifier_manifest.json"
 FUENTE_PALABRAS = "palabras"
 FUENTE_MODELO = "modelo"
 FUENTE_FUERA = "fuera_de_alcance"
-# Las siete categorías que sabe interpretar el sistema (las mismas del método de palabras clave y del modelo).
-CATEGORIAS = ("food_drink", "hospital", "school", "sport", "leisure", "mall", "business")
+# Las nueve categorías que sabe analizar el sistema, y las que ofrece el selector de la pantalla.
+#
+# CUIDADO con una asimetría real desde la fase 3 (18-nov-2026): las palabras clave sí reconocen `belleza` y `taller`,
+# pero el MODELO entrenado no, porque se entrenó con las ocho clases anteriores (las siete de entonces más
+# «ninguna») y no se ha vuelto a entrenar. Es decir: el modelo nunca va a proponer esas dos, solo las palabras clave,
+# y para una frase que no contenga una palabra conocida («busco local para cortar el pelo») el sistema caerá en la
+# categoría más parecida de las siete viejas. Reentrenar con las nueve clases es la fase 4; mientras no se haga, esta
+# lista dice lo que el sistema puede ANALIZAR, no lo que el modelo puede ADIVINAR.
+CATEGORIAS = ("food_drink", "hospital", "school", "sport", "leisure", "mall", "business", "belleza", "taller")
 
 
 @dataclass(frozen=True)

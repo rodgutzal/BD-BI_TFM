@@ -55,6 +55,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.ml import grid  # noqa: E402
+from src.ml.closure_features import CATEGORIAS as CATEGORIAS_PROTOCOLO  # noqa: E402
 from src.poi_client import CATEGORY_TAGS, OverpassClient, _parse_spec  # noqa: E402
 
 PAUSA_S = 12
@@ -81,11 +82,16 @@ CAMPOS_DE_LA_HUELLA = ("sha256", "elementos", "fecha_pedida", "espejo", "descarg
 
 
 def clausulas_categorias() -> List[str]:
-    """Una cláusula `node` y una `way` por cada etiqueta de CATEGORY_TAGS, con {bbox} por rellenar (mismas que usa
-    `OverpassClient._build_query`: un test comprueba que no se desincronizan)."""
+    """Una cláusula `node` y una `way` por cada etiqueta de las SIETE categorías del protocolo 3.M, con {bbox} por
+    rellenar (las mismas que usa `OverpassClient._build_query`: un test comprueba que no se desincronizan).
+
+    Se limita a `closure_features.CATEGORIAS` y no a todo CATEGORY_TAGS por la misma razón que esa lista está
+    congelada: esta herramienta descarga el histórico del estudio de riesgo de cierre, que se ejecutó una vez y cuyos
+    datos están fijados en `docs/HUELLA_OSM_HISTORY.json`. Si pidiera también las categorías que la fase 3 añadió
+    (`belleza`, `taller`), una descarga nueva ya no sería la del estudio publicado."""
     clausulas = []
-    for specs in CATEGORY_TAGS.values():
-        for spec in specs:
+    for categoria in CATEGORIAS_PROTOCOLO:
+        for spec in CATEGORY_TAGS[categoria]:
             clave, valores = _parse_spec(spec)
             if valores is None:
                 selector = f'["{clave}"]'

@@ -29,7 +29,25 @@ import numpy as np
 import pandas as pd
 
 from src.ml import grid, validation
-from src.poi_client import OverpassClient
+from src.poi_client import CATEGORY_TAGS, OverpassClient
+
+# Las SIETE categorías del protocolo 3.M y la FOTO del diccionario del recolector con la que se clasificó el día de
+# la ejecución única (13-nov-2026), en su orden. Las dos cosas están congeladas a propósito.
+#
+# Congelar solo los nombres no bastaba, y es el fallo que encontró un code-review: `categoria()` clasificaba con el
+# diccionario VIVO, así que al añadir `belleza` y `taller` en la fase 3 un `shop=hairdresser` pasaba a ser `belleza`
+# —que no es ninguna de las siete— y el estudio publicado dejaba de ser reproducible: las columnas `cat_*` de ese
+# local salían todas a cero y cambiaban los vecinos «de la misma categoría» de cada local `business`.
+#
+# Con esta foto se reproduce exactamente, porque `business` vuelve a ser el último y, al pedir `shop` y `office`
+# enteros, reabsorbe las peluquerías y los talleres: es lo que eran cuando se ejecutó el estudio.
+#
+# Un protocolo preregistrado no cambia porque el producto crezca. Repetirlo con más categorías sería OTRO estudio.
+CATEGORIAS: Tuple[str, ...] = ("school", "hospital", "food_drink", "leisure", "sport", "mall", "business")
+_faltan = [c for c in CATEGORIAS if c not in CATEGORY_TAGS]
+if _faltan:
+    raise ImportError(f"El protocolo 3.M nombra categorías que ya no existen en CATEGORY_TAGS: {_faltan}")
+CATEGORY_TAGS_PROTOCOLO: Dict[str, List[str]] = {c: list(CATEGORY_TAGS[c]) for c in CATEGORIAS}
 
 # Marcas de ciclo de vida (las mismas que descarga `tools/download_osm_history.py`; un test lo fija).
 CLAVES_CICLO_DE_VIDA = ("amenity", "shop", "office", "leisure", "tourism")
@@ -59,10 +77,13 @@ def normalizar_nombre(nombre) -> str:
 
 
 def categoria(tags: Optional[dict]) -> Optional[str]:
-    """Una de las siete categorías (la misma clasificación del recolector) o None si el elemento no encaja en ninguna."""
+    """Una de las SIETE categorías del protocolo, o None si el elemento no encaja en ninguna.
+
+    Clasifica con `CATEGORY_TAGS_PROTOCOLO`, la foto congelada, y NO con el diccionario vivo del recolector: ver el
+    comentario de esa constante. Es lo que mantiene reproducible un estudio que se ejecutó una sola vez."""
     if not isinstance(tags, dict):
         return None
-    clasificado = OverpassClient._classify(tags)
+    clasificado = OverpassClient._classify(tags, CATEGORY_TAGS_PROTOCOLO)
     return clasificado[0] if clasificado else None
 
 

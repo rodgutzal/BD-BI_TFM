@@ -26,9 +26,13 @@ import pandas as pd
 
 from src.ml import closure_labels as cl
 from src.ml import grid
-from src.poi_client import CATEGORY_TAGS
 
-CATEGORIAS = tuple(CATEGORY_TAGS)  # las siete, en el orden del recolector
+# Las SIETE categorías del protocolo 3.M y la foto del diccionario con la que se clasificó: las dos CONGELADAS y
+# definidas en `closure_labels`, que es quien clasifica (aquí solo se reexportan, para no importar en círculo).
+# Antes esto era `tuple(CATEGORY_TAGS)`, y eso ataba un estudio de ejecución única a una lista que el producto sí
+# amplía: al añadir `belleza` y `taller` el vector pasaba de 13 a 15 columnas. Ver el comentario de `cl.CATEGORIAS`.
+CATEGORIAS = cl.CATEGORIAS
+CATEGORY_TAGS_PROTOCOLO = cl.CATEGORY_TAGS_PROTOCOLO
 RADIOS_M = (250.0, 500.0)
 DISTANCIA_MAXIMA_M = 1000.0
 MIN_REPETICIONES_CADENA = 3

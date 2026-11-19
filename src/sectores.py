@@ -2,7 +2,7 @@
 
 Dos cosas que van juntas:
 
-1. **El sector de lo que se busca.** Las 7 categorías de Overpass son todas del sector TERCIARIO (servicios y
+1. **El sector de lo que se busca.** Las 9 categorías de Overpass son todas del sector TERCIARIO (servicios y
    comercio). Saberlo importa porque explica el límite del sistema: todo lo que mide —competencia entre comercios,
    mercado consumidor a pie, proveedores minoristas— son variables de servicios urbanos.
 
@@ -41,8 +41,13 @@ SECTORES: Dict[str, Dict[str, str]] = {
     },
 }
 
-# Las 7 categorías de Overpass son todas terciarias. Está escrito una por una, y no con un valor por defecto, para que
+# Las 9 categorías de Overpass son todas terciarias. Está escrito una por una, y no con un valor por defecto, para que
 # añadir una categoría de otro sector obligue a decidir cuál es en vez de heredar «terciario» sin pensarlo.
+#
+# «taller» obliga a pararse a pensarlo, y por eso está escrito aquí: reparar un coche puede sonar a industria, pero es
+# un SERVICIO prestado al cliente final, no transformación de materia prima para venderla. Un taller es terciario; una
+# planta de montaje de coches sería secundaria, y esa sigue estando en el catálogo de lo que no se puede analizar
+# (`manufactura`). La frontera es si se produce un bien o se presta un servicio.
 SECTOR_POR_CATEGORIA: Dict[str, str] = {
     "food_drink": TERCIARIO,
     "business": TERCIARIO,
@@ -51,6 +56,8 @@ SECTOR_POR_CATEGORIA: Dict[str, str] = {
     "sport": TERCIARIO,
     "leisure": TERCIARIO,
     "mall": TERCIARIO,
+    "belleza": TERCIARIO,
+    "taller": TERCIARIO,
 }
 
 

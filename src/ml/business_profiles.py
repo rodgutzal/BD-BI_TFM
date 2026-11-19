@@ -77,12 +77,17 @@ PROVEEDORES_POI: Dict[str, Tuple[Selector, ...]] = {
     "equipamiento_deportivo": (selector("business", "sports", "outdoor"),),
     "droguerias": (selector("business", "chemist"),),
     "distribuidores_sanitarios": (),  # no hay etiqueta en OSM para esto: sin datos
+    # Fase 3: proveedores de los dos perfiles nuevos. Se crean en vez de reusar
+    # «mayoristas» porque con 3 mayoristas cartografiados en toda Malta esa lente
+    # no informaba de nada. Siguen siendo pocos POIs y las dos lentes lo declaran.
+    "recambios": (selector("business", "car_parts"),),
+    "cosmetica": (selector("business", "cosmetics", "perfumery", "hairdresser_supply"),),
 }
 
 
 @dataclass(frozen=True)
 class BusinessProfile:
-    """Perfil de un tipo de negocio (una de las 7 categorías de Overpass)."""
+    """Perfil de un tipo de negocio (una de las 9 categorías de Overpass)."""
 
     key: str
     nombre: str
@@ -111,11 +116,15 @@ DEFAULT_PROFILES: Dict[str, BusinessProfile] = {
         ),
         # Comercio GENÉRICO: las oficinas no son competencia (son mercado: 'oficinistas'). Para un comercio concreto
         # (panadería, peluquería...) hará falta elegir la subcategoría; el proveedor típico de un comercio genérico es el mayorista.
+        # Desde la fase 3, peluquerías/estética y talleres ya NO están en la categoría `business`, así que dejan de
+        # ser competencia DIRECTA de un comercio genérico y pasan a indirecta: siguen siendo comercio que compite por
+        # el mismo escaparate y el mismo alquiler, pero no por el mismo oficio. Es la razón por la que las lentes de
+        # `business` cambian respecto al panorama publicado el 09-nov-2026.
         _perfil(
             "business",
             "Comercio u oficina",
             [selector_except("business", *_OFICINAS)],
-            [selector("mall")],
+            [selector("mall"), selector("belleza"), selector("taller")],
             ["residentes", "oficinistas", "turistas", "estudiantes"],
             ["mayoristas"],
         ),
@@ -159,12 +168,37 @@ DEFAULT_PROFILES: Dict[str, BusinessProfile] = {
             ["residentes", "turistas", "oficinistas"],
             ["mayoristas"],
         ),
+        # Fase 3 (18-nov-2026). Las dos lentes de competencia y de mercado son conocimiento de negocio del autor,
+        # igual que las siete anteriores: borrador a revisar, ajustable por el usuario con apply_overrides.
+        #
+        # Belleza vende SERVICIO, no producto: las tiendas de cosmética y perfumería son su PROVEEDOR (el salón
+        # compra ahí), no su sustituto, y por eso están en `cosmetica` y no en la competencia indirecta. Lo que sí
+        # compite por el mismo gasto en cuidado personal es el masaje y el tatuaje.
+        _perfil(
+            "belleza",
+            "Peluquería o centro de estética",
+            [selector("belleza")],
+            [selector("business", "massage", "tattoo")],
+            ["residentes", "oficinistas", "turistas"],
+            ["cosmetica", "mayoristas"],
+        ),
+        # El taller tiene el mismo reparto: la tienda de recambios es proveedor, no competencia. El concesionario
+        # (`car`) y la tienda de motos sí compiten, porque casi siempre hacen también mantenimiento.
+        # No se le ponen `estudiantes` ni `turistas`: quien arregla un coche en Malta vive o trabaja allí.
+        _perfil(
+            "taller",
+            "Taller mecánico",
+            [selector("taller")],
+            [selector("business", "car", "motorcycle")],
+            ["residentes", "oficinistas"],
+            ["recambios", "mayoristas"],
+        ),
     ]
 }
 
 
 def get_default_profile(categoria: str) -> BusinessProfile:
-    """Perfil por defecto de una de las 7 categorías. Lanza ValueError si no existe."""
+    """Perfil por defecto de una de las 9 categorías. Lanza ValueError si no existe."""
     if categoria not in DEFAULT_PROFILES:
         raise ValueError(f"Categoría sin perfil: {categoria!r}. Disponibles: {sorted(DEFAULT_PROFILES)}")
     return DEFAULT_PROFILES[categoria]

@@ -1,5 +1,5 @@
 """Interpreta texto libre en español ("quiero poner una pizzería") y lo
-mapea a una de las 7 categorías de `src/poi_client.CATEGORY_TAGS`
+mapea a una de las 9 categorías de `src/poi_client.CATEGORY_TAGS`
 (school, hospital, food_drink, leisure, sport, mall, business).
 
 Por qué existe: el usuario final describe su negocio con sus propias
@@ -291,6 +291,46 @@ BUSINESS_TYPE_RULES: Dict[str, Tuple[str, ...]] = {
         "buffet",
         "catering",
     ),
+    # Fase 3: dos comercios con categoría propia. Van ANTES de `business` por la misma razón que en
+    # `poi_client.CATEGORY_TAGS`: `business` es el cajón y tiene que ser el último en reclamar una frase.
+    "belleza": (
+        "peluqueria",
+        "peluquero",
+        "barberia",
+        "barbero",
+        "salon de belleza",
+        "centro de belleza",
+        "estetica",
+        "esteticista",
+        "centro de estetica",
+        "manicura",
+        "pedicura",
+        "depilacion",
+        "corte de pelo",
+        # Nada de «uñas»: normaliza a «unas», que es una palabra castellana corriente y atraparía
+        # «unas tiendas». Es el mismo riesgo que ya costó retirar «ingles» y «box».
+    ),
+    "taller": (
+        # NO está «taller» a secas, y es deliberado: un taller puede ser de bicis, de motos, de costura o de
+        # carpintería, y a ninguno de esos le sirve la competencia de un taller de coches. Con «taller» suelto el
+        # conjunto de evaluación lo demostró en el acto («taller de bicis», «taller de motos» pasaban a `taller`).
+        # Hay que nombrar el vehículo. «quiero poner un taller» se queda a propósito sin categoría: no se sabe de qué.
+        "taller mecanico",
+        "taller de coches",
+        "taller de automoviles",
+        "taller de vehiculos",
+        "taller de mecanica",
+        # NO está «mecanico» a secas: «oficina para un ingeniero mecanico» acababa en `taller`. Es el mismo riesgo
+        # que obligó a retirar «rehabilitacion» (más de obra que de salud) y lo señaló un code-review. El oficio
+        # solo se reconoce acompañado del local: «taller mecanico», «taller de mecanica», «mecanica rapida».
+        "mecanica rapida",
+        "chapa y pintura",
+        "reparacion de coches",
+        "reparacion de automoviles",
+        "reparacion de vehiculos",
+        "neumaticos",
+        "llantas",
+    ),
     # Residual: comercio y oficinas en general (igual definición que en Overpass).
     "business": (
         "tienda",
@@ -302,17 +342,18 @@ BUSINESS_TYPE_RULES: Dict[str, Tuple[str, ...]] = {
         "ferreteria",
         "mueble",
         "joyeria",
-        "peluqueria",
-        "salon de belleza",
-        "barberia",
+        # «peluqueria», «salon de belleza», «barberia» y «estetica» se fueron a `belleza` en la fase 3.
+        # «spa» se queda aquí a propósito: un spa no compite con una peluquería, y mandarlo a `belleza` le daría
+        # una lente de competencia que no es la suya. Lo mismo con «masajes», «sauna» y «tatuajes» más abajo.
         "spa",
-        "estetica",
         "lavanderia",
         "tintoreria",
         "oficina",
         "despacho",
         "agencia",
-        "taller mecanico",
+        # «taller mecanico», «taller», «taller de coches», «chapa y pintura» y «neumaticos» se fueron a `taller`.
+        # «autopartes», «pinturas», «lavado de coches» y «alquiler de coches» NO: la tienda de recambios es el
+        # PROVEEDOR del taller, la de pinturas vende pintura (no hace chapa), y lavar o alquilar no es reparar.
         "banco",
         "inmobiliaria",
         "aseguradora",
@@ -366,8 +407,10 @@ BUSINESS_TYPE_RULES: Dict[str, Tuple[str, ...]] = {
         "motos",
         "repuestos",
         "autopartes",
-        "llantas",
-        "neumaticos",
+        # «llantas» y «neumaticos» se fueron a `taller`: las dos son `shop=tyres`, que además de vender monta.
+        # «bici» (y su plural «bicis») se añadió al quitar «taller» suelto: sin ella «un taller de bicis» se quedaba
+        # sin categoría, cuando una tienda-taller de bicicletas es `shop=bicycle`, o sea comercio.
+        "bici",
         "electrodomesticos",
         "informatica",
         "videojuegos",
@@ -392,10 +435,10 @@ BUSINESS_TYPE_RULES: Dict[str, Tuple[str, ...]] = {
         "souvenirs",
         "artesania",
         # --- servicios personales ---
+        # «manicura», «pedicura» y «depilacion» se fueron a `belleza` (son lo que hace un `shop=beauty`).
+        # «masajes», «tatuajes», «piercing» y «solarium» se quedan: son los oficios que `belleza` cuenta como
+        # competencia INDIRECTA, así que no pueden ser a la vez la categoría (un POI, una lente).
         "masajes",
-        "manicura",
-        "pedicura",
-        "depilacion",
         "tatuajes",
         "piercing",
         "solarium",
@@ -442,9 +485,8 @@ BUSINESS_TYPE_RULES: Dict[str, Tuple[str, ...]] = {
         "reparacion de moviles",
         "reparacion de ordenadores",
         # --- talleres de reparación (servicio, no manufactura) ---
-        "taller",
-        "taller de coches",
-        "chapa y pintura",
+        # «taller», «taller de coches» y «chapa y pintura» se fueron a `taller` en la fase 3. «lavado de coches» y
+        # «car wash» se quedan: lavar no es reparar y su competencia son otros lavaderos, no los talleres.
         "lavado de coches",
         "car wash",
         "electricista",
@@ -516,7 +558,7 @@ def buscar_categoria(text: str) -> Tuple[Optional[str], Optional[int]]:
 
 
 def classify_business_type(text: str) -> Optional[str]:
-    """Texto libre -> una de las 7 categorías de Overpass, o None si ninguna
+    """Texto libre -> una de las 9 categorías de Overpass, o None si ninguna
     palabra clave matchea (el llamador decide qué hacer: pedir que
     reformule, usar una categoría por defecto, etc. — esta función nunca
     adivina)."""

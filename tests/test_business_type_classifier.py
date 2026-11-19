@@ -35,9 +35,12 @@ def test_clasifica_negocios_comunes(texto, esperado):
 def test_barberia_no_se_confunde_con_bar():
     """Regresión: la palabra clave "bar" (comida y bebida) no debe matchear
     dentro de "barbería". Es el bug que ya ocurrió una vez con datos reales de
-    Foursquare, y el clasificador usa límites de palabra (\\b) para evitarlo."""
-    assert classify_business_type("barbería") == "business"
-    assert classify_business_type("quiero abrir una barbería") == "business"
+    Foursquare, y el clasificador usa límites de palabra (\\b) para evitarlo.
+
+    Desde la fase 3 una barbería es `belleza` y no `business`; lo que este test protege es que NUNCA sea
+    `food_drink`, que es el bug de verdad."""
+    assert classify_business_type("barbería") == "belleza"
+    assert classify_business_type("quiero abrir una barbería") == "belleza"
 
 
 def test_la_posicion_es_la_del_acierto_mas_temprano_aunque_la_categoria_la_decida_el_registro():
@@ -60,6 +63,64 @@ def test_una_palabra_generica_no_le_gana_a_una_especifica_por_aparecer_antes():
     assert classify_business_type("un local en un centro comercial para poner una farmacia") == "hospital"
 
 
+@pytest.mark.parametrize(
+    "frase, esperado",
+    [
+        ("quiero abrir una peluqueria", "belleza"),
+        ("un salon de belleza en Sliema", "belleza"),
+        ("montar un centro de estetica", "belleza"),
+        ("hago manicura y pedicura", "belleza"),
+        ("un taller mecanico", "taller"),
+        ("un taller de coches en Msida", "taller"),
+        ("busco local para chapa y pintura", "taller"),
+        ("un local para mecanica rapida", "taller"),
+        ("una tienda de neumaticos", "taller"),
+    ],
+)
+def test_las_dos_categorias_de_la_fase_3(frase, esperado):
+    """Belleza y taller salieron del cajón `business` en la fase 3: ya tienen competencia propia, no «cualquier
+    comercio»."""
+    assert classify_business_type(frase) == esperado
+
+
+@pytest.mark.parametrize(
+    "frase, no_debe_ser",
+    [
+        ("un taller de bicis en Birkirkara", "taller"),
+        ("Taller de motos por Birkirkara", "taller"),
+        ("una tienda de motos", "taller"),
+        ("autopartes y repuestos", "taller"),
+        ("una tienda de pinturas", "taller"),
+        ("lavado de coches", "taller"),
+        ("oficina para un ingeniero mecanico", "taller"),
+        ("un spa", "belleza"),
+        ("masajes a domicilio", "belleza"),
+    ],
+)
+def test_un_taller_o_un_salon_de_otra_cosa_no_cuentan(frase, no_debe_ser):
+    """Por eso «taller» a secas NO es palabra clave: un taller puede ser de bicis, de motos o de costura, y a
+    ninguno le sirve la competencia de un taller de coches. Lo encontró el propio conjunto de evaluación.
+
+    Y al contrario: lo que es PROVEEDOR del taller (recambios, pinturas) o un oficio vecino (spa, masajes) se queda
+    en `business`, porque un POI solo puede contar en una lente."""
+    assert classify_business_type(frase) != no_debe_ser
+
+
+def test_quiero_poner_un_taller_se_queda_sin_categoria_a_proposito():
+    """No se sabe de qué: no hay que adivinar. Es el mismo principio que «nunca elige una categoría al azar»."""
+    assert classify_business_type("quiero poner un taller") is None
+
+
+def test_limite_conocido_la_peluqueria_canina_se_clasifica_mal():
+    """Límite declarado, no olvidado: «peluquería canina» (`shop=pet_grooming`) cae en `belleza`, y no compite con
+    una barbería. Con palabras clave no se puede arreglar: añadir «peluqueria canina» a `business` rompería el test
+    de choques, porque «peluqueria» está contenida dentro, y `belleza` va antes en el registro.
+
+    Se deja fijado aquí para que se vea que es sabido y para que, si alguien añade un mecanismo de contexto
+    negativo, este test le avise de que ya puede mejorarlo. Es 1 de las 192 frases de la evaluación."""
+    assert classify_business_type("Peluquería canina en Mosta") == "belleza"
+
+
 @pytest.mark.parametrize("frase", ["rehabilitacion de fachadas", "una empresa de rehabilitacion de edificios"])
 def test_rehabilitacion_de_obra_no_es_un_negocio_de_salud(frase):
     """«rehabilitación» se retiró del vocabulario de `hospital`: en castellano es más de obra que de salud, y el
@@ -70,7 +131,7 @@ def test_rehabilitacion_de_obra_no_es_un_negocio_de_salud(frase):
 def test_ignora_mayusculas_tildes_y_espacios_de_mas():
     """El clasificador no distingue mayúsculas, tildes ni espacios repetidos o sobrantes."""
     assert classify_business_type("  PIZZERÍA  ") == "food_drink"
-    assert classify_business_type("salon   de   belleza") == "business"
+    assert classify_business_type("salon   de   belleza") == "belleza"
 
 
 @pytest.mark.parametrize("texto", ["", "   ", None, "xyz", "asdfgh qwerty"])
@@ -122,7 +183,7 @@ def test_el_plural_no_atrapa_palabras_que_son_otra_cosa(frase, no_debe_ser):
 
 
 def test_cantidad_de_palabras_clave_documentada():
-    """El README dice 394 palabras clave únicas. Eran 140 hasta el 16-nov-2026; la ampliación y el arreglo de los
-    plurales subieron la exactitud del sistema de 76,0 % a 84,9 % (ver docs/DISENO_ML_RECOMENDACION.md §3.L2)."""
+    """El README dice 407 palabras clave únicas. Fueron 140 hasta el 16-nov-2026 y 394 hasta la fase 3, que añadió
+    las de `belleza` y `taller` (ver docs/DISENO_ML_RECOMENDACION.md §3.L2 y §E)."""
     unicas = {kw for kws in BUSINESS_TYPE_RULES.values() for kw in kws}
-    assert len(unicas) == 394
+    assert len(unicas) == 407

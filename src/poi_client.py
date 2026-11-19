@@ -54,6 +54,18 @@ CATEGORY_TAGS: Dict[str, List[str]] = {
     ],
     "sport": ["leisure=fitness_centre|sports_centre|sports_hall|stadium|ice_rink"],
     "mall": ["shop=mall|department_store"],
+    # Fase 3 (18-nov-2026): dos comercios que ya se recolectaban dentro de
+    # "business" y ahora tienen categoría propia, porque son los dos tipos de
+    # local que más se preguntan después de la restauración y no se podían
+    # analizar como tales: su competencia era «cualquier comercio».
+    #
+    # Van AQUÍ a propósito: después de las categorías basadas en amenity/leisure
+    # /tourism y antes del cajón "business". Así ninguna clasificación anterior
+    # cambia (un local con shop=beauty y amenity=pharmacy sigue siendo hospital,
+    # que va antes) y solo dejan de caer en "business" los que nadie más reclama.
+    # Moverlas por encima de "hospital" sí cambiaría datos ya publicados.
+    "belleza": ["shop=hairdresser|beauty"],
+    "taller": ["shop=car_repair|truck_repair|tyres"],
     "business": ["shop", "office"],
 }
 
@@ -135,7 +147,7 @@ class OverpassClient:
         return f"[out:json][timeout:{server_timeout}];\n(\n  {body}\n);\nout center tags;"
 
     @staticmethod
-    def _classify(tags: dict) -> Optional[Tuple[str, str]]:
+    def _classify(tags: dict, categorias: Optional[Dict[str, List[str]]] = None) -> Optional[Tuple[str, str]]:
         """Devuelve (categoría, subcategoría) del primer tag de CATEGORY_TAGS
         que matchee, o None si el elemento no encaja en ninguna categoría.
 
@@ -144,8 +156,13 @@ class OverpassClient:
         `amenity or shop or office`, lo que daba subcategorías equivocadas
         para categorías basadas en otras claves (un museo con tag
         `shop=gift` habría quedado como "gift" en vez de "museum").
+
+        `categorias` permite clasificar contra OTRO diccionario que el vigente, y existe por una razón concreta: un
+        estudio de ejecución única tiene que poder reproducir la clasificación del día en que se ejecutó. El protocolo
+        3.M usa su propia foto congelada (`closure_features.CATEGORY_TAGS_PROTOCOLO`); si clasificara con el
+        diccionario vivo, añadir una categoría le cambiaría las variables a posteriori. Lo señaló un code-review.
         """
-        for category, tag_specs in CATEGORY_TAGS.items():
+        for category, tag_specs in (categorias if categorias is not None else CATEGORY_TAGS).items():
             for tag_spec in tag_specs:
                 key, values = _parse_spec(tag_spec)
                 value = tags.get(key)

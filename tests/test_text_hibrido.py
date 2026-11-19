@@ -143,13 +143,18 @@ def test_la_aplicacion_da_la_misma_respuesta_que_la_evaluacion_para_cada_frase(m
     principal (mismo modelo, mismo umbral, mismas palabras clave). Así las cifras de docs/DISENO_ML_RECOMENDACION.md §3.L2
     son las de lo que ve el usuario.
 
-    Las cifras son las de la REMEDICIÓN del 16-nov-2026, tras ampliar el vocabulario de 140 a 394 términos únicos y arreglar
-    el reconocimiento de plurales: 84,9 % de exactitud y 9,4 % de respuestas equivocadas (antes 76,0 % y 6,2 %).
-    Responder más implica equivocarse más, y ese intercambio está documentado en el diseño."""
+    Cifras de la FASE 3 (18-nov-2026), que añadió las categorías `belleza` y `taller`: 83,3 % de exactitud y 10,9 % de
+    respuestas equivocadas, frente al 84,9 % / 9,4 % de la remedición del 16-nov y el 76,0 % / 6,2 % del 12-nov.
+
+    La bajada de 1,6 puntos son TRES frases, y no todas son un error: el conjunto está congelado con las ocho clases
+    anteriores, así que en «una barbería de toda la vida» y «una peluquería en Msida» el sistema responde `belleza`
+    —que es la respuesta correcta— y se le cuenta como fallo porque la etiqueta solo podía decir `business`. La
+    tercera, «Peluquería canina en Mosta», sí es un error real y está documentada como límite conocido. Medir nueve
+    clases con honestidad exige un conjunto etiquetado nuevo: eso es la fase 4."""
     tr, ev = etc.cargar(evaluacion=etc.DATA / "frases_evaluacion_v2.psv")
     ev = etc.solo_coincidentes(ev)
     evaluado = etc.evaluar(tr, ev, n_boot=50, con_mlp=False)["sistemas"]["hibrido"]
     de_la_app = [th.interpretar(f, modelo_real).categoria for f in ev["frase"]]
     assert de_la_app == evaluado
     reales = list(ev["categoria"])
-    assert int(tt.aciertos(de_la_app, reales).sum()) == 163 and int(tt.equivocadas(de_la_app, reales).sum()) == 18
+    assert int(tt.aciertos(de_la_app, reales).sum()) == 160 and int(tt.equivocadas(de_la_app, reales).sum()) == 21

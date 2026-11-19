@@ -20,9 +20,11 @@ import logging
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
+
+from src.poi_client import CATEGORY_TAGS
 
 logger = logging.getLogger(__name__)
 
@@ -356,10 +358,55 @@ class RouteDatabase:
             )
             """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_poi_category ON pois(category)")
+        self._reclasificar_pois(cursor)
 
         conn.commit()
         conn.close()
         self._poi_initialized = True
+
+    @staticmethod
+    def _reclasificar_pois(cursor) -> int:
+        """Reetiqueta los POIs guardados cuando `CATEGORY_TAGS` separa en una categoría propia algo que antes caía en
+        otra. Devuelve cuántas filas cambiaron. Idempotente: si no hay nada que mover, no escribe.
+
+        Por qué hace falta. Las categorías nuevas de la fase 3 (`belleza`, `taller`) salieron del cajón `business`,
+        pero las filas ya guardadas conservan la categoría con la que se recolectaron, y nada volvería a tocarlas
+        hasta la siguiente pasada completa del recolector. Mientras tanto `location_scoring.zone_competition` las
+        buscaba por su categoría nueva y devolvía 0 en las siete zonas: la pantalla puntuaba una competencia
+        inexistente en vez de la real. Lo encontró un code-review.
+
+        Se puede hacer sin volver a consultar Overpass porque `subcategory` guarda el VALOR de la etiqueta que
+        decidió la categoría (`shop=hairdresser` -> "hairdresser"), así que la reclasificación es determinista.
+
+        Dos límites deliberados, porque `subcategory` guarda el valor pero NO la clave que lo puso:
+        - solo se mueven filas que están en un CAJÓN (una categoría que pide una clave entera, como
+          `business: [shop, office]`), que es la única que pudo tragarse un valor que hoy reclama otra categoría;
+        - y solo hacia categorías que lo reclaman de forma explícita (`clave=valor`).
+        Así una categoría específica nunca pierde filas por una coincidencia de valor bajo otra clave."""
+        cajones = {
+            c for c, especificaciones in CATEGORY_TAGS.items() if any("=" not in str(e) for e in especificaciones)
+        }
+        reclamado: Dict[str, str] = {}
+        for categoria, especificaciones in CATEGORY_TAGS.items():
+            if categoria in cajones:
+                continue
+            for especificacion in especificaciones:
+                _, _, valores = str(especificacion).partition("=")
+                for valor in valores.split("|"):
+                    reclamado.setdefault(valor, categoria)  # gana la primera, igual que en _classify
+        if not reclamado or not cajones:
+            return 0
+        huecos = ",".join("?" * len(cajones))
+        movidas = 0
+        for valor, categoria in reclamado.items():
+            cursor.execute(
+                f"UPDATE pois SET category = ? WHERE subcategory = ? AND category IN ({huecos})",
+                (categoria, valor, *sorted(cajones)),
+            )
+            movidas += cursor.rowcount or 0
+        if movidas:
+            logger.info(f"POIs reetiquetados tras un cambio de CATEGORY_TAGS: {movidas}")
+        return movidas
 
     def save_pois(self, pois: List[dict]) -> int:
         """Guarda/actualiza POIs (upsert por osm_type+osm_id), para que

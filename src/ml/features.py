@@ -22,6 +22,17 @@ from src.locations import LOCATIONS
 from src.ml import grid
 from src.ml.cell_counts import CellCounts, Selector
 
+# Las SIETE categorías con las que se construyeron y validaron los modelos de ubicación (§3.G/§3.H). No se añaden
+# `belleza` ni `taller` (fase 3) porque el vector de variables de esa validación tenía estas columnas.
+#
+# CUIDADO con el alcance real de esta congelación, que no es la del protocolo 3.M. Aquí la lista fija los NOMBRES de
+# las columnas, pero no el CONTENIDO de `business`: `Selector("business")` cuenta lo que diga la columna `category`
+# de los POIs que se le pasen. Las cifras publicadas se reproducen desde el PAQUETE DE ENTRADA congelado (su sha256
+# está en el manifiesto del panorama), porque ahí la categoría viene ya escrita de cuando se exportó. Pero un
+# paquete exportado HOY traería esos 219 POIs como `belleza`/`taller`, y entonces las columnas de `business`
+# saldrían más bajas y la validación daría otros números. Si alguna vez hay que reexportar, eso es una validación
+# NUEVA, no la misma repetida. Lo señaló un code-review; en el protocolo 3.M, que clasifica al analizar en vez de
+# leerlo del paquete, el mismo problema sí exigía congelar también la clasificación (ver `closure_labels`).
 CATEGORIAS = ("school", "hospital", "food_drink", "leisure", "sport", "mall", "business")
 SIGMA_M = 1500.0
 
