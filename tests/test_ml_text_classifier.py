@@ -257,11 +257,20 @@ def test_por_tipo_agrupa_las_metricas():
 # ---- los datos ---------------------------------------------------------------------------------------------------
 def test_los_datos_versionados_son_validos_y_el_conjunto_de_evaluacion_es_el_prometido(datos):
     """Sin categorías raras, sin repetidas, sin frases en ambos conjuntos; ≥200 frases de evaluación con los cinco tipos
-    del diseño y las siete categorías más las fuera de alcance."""
+    del diseño y solo categorías conocidas (más las fuera de alcance).
+
+    Las categorías se comprueban como un ENCADENADO, ev ⊆ tr ⊆ conocidas, y no como una igualdad: no se puede evaluar
+    una clase con la que el modelo nunca se entrenó (ev ⊆ tr), y el entrenamiento no puede traer una clase que el
+    sistema no conoce (tr ⊆ conocidas). La igualdad ya no se sostiene: `CATEGORIAS` tiene diez clases (belleza, taller
+    y alojamiento se añadieron después) y el entrenamiento las incluye, pero los conjuntos de evaluación v1 y v2 están
+    congelados con ocho clases y un conjunto congelado en el pasado no contiene lo que se añadió después. El tercero
+    (protocolo §L3) sí traerá las diez."""
     tr, ev = datos
     assert etc.validar_datos(tr, ev) == []
     assert len(ev) >= 200 and set(ev["tipo"]) == {"directa", "sinonimo", "errata", "larga", "fuera"}
-    assert set(ev["categoria"]) == set(etc.CATEGORIAS) | {"ninguna"} and set(tr["categoria"]) == set(ev["categoria"])
+    conocidas = set(etc.CATEGORIAS) | {"ninguna"}
+    assert set(tr["categoria"]) <= conocidas
+    assert set(ev["categoria"]) <= set(tr["categoria"])
     assert (ev.loc[ev["tipo"] == "fuera", "categoria"] == "ninguna").all()
     assert not (ev.loc[ev["tipo"] != "fuera", "categoria"] == "ninguna").any()
 
@@ -475,7 +484,7 @@ def test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_es
     assert (
         "Las 8 frases ambiguas" in salida
         and "«Cine en St Julian's»" in salida
-        and "coincide con el autor en 6 y con el etiquetador en 2 de 8." in salida
+        and "coincide con el autor en 5 y con el etiquetador en 2 de 8." in salida
     )
     m = json.loads((tmp_path / "text_classifier_manifest.json").read_text(encoding="utf-8"))
     assert m["datos"]["evaluacion"]["frases"] == 192 and "Codex" in m["advertencia"]

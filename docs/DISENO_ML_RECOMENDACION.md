@@ -519,6 +519,34 @@ Las 200 que describen un negocio se reparten así por categoría: `food_drink` 3
 5. **Este tercer conjunto también quedará consumido.** Una cuarta medición exigiría un cuarto conjunto.
 6. **El vocabulario de palabras clave no se congela.** Se mide el sistema tal y como está el 19-nov-2026 (419 términos); si alguien lo amplía después, las cifras dejan de describir la aplicación.
 
+#### Resultado de L3 (ejecutado UNA vez, 19-nov-2026): el híbrido NO se adopta
+
+| Sistema (260 frases) | Exactitud | Respuestas equivocadas | Sin respuesta |
+|---|---|---|---|
+| **palabras clave** | **62,7 %** | **10,8 %** | 26,5 % |
+| logística sola | 52,3 % | 8,1 % | 39,6 % |
+| híbrido | 71,2 % | 13,1 % | 15,8 % |
+
+**La regla de decisión se aplica tal y como estaba escrita, y falla por la segunda condición:**
+
+- (a) **Exactitud: la cumple.** El híbrido mejora en **+8,5 puntos [IC 95 %: +5,0, +11,9]**, con el intervalo claramente por encima de 0.
+- (b) **Respuestas equivocadas: NO la cumple.** 13,1 % frente al 10,8 % de las palabras clave. La tolerancia fijada era de 2 puntos, o sea 12,8 %. **Se pasa por 0,3 puntos.**
+
+**Decisión: no se adopta.** La aplicación se queda con el método de palabras clave. El artefacto reentrenado se conserva en `data/ml/text_classifier.json` con su manifiesto en `adoptado: false`, como evidencia auditable de lo que se midió: `src/ml/text_hibrido.cargar_modelo_adoptado` lo lee, ve que no está adoptado, lo registra en el log y devuelve `None`.
+
+**Qué cuesta no adoptarlo, dicho sin rebajarlo.** Sobre este conjunto, renunciar al modelo cuesta **8,5 puntos de exactitud** (71,2 % → 62,7 %) y sube las abstenciones del 15,8 % al 26,5 %. En la práctica, una errata como «una pizeria» vuelve a no entenderse. Se acepta porque la regla —fijada antes de ver un solo dato— dice que responder mal pesa más que no responder, y porque cambiarla ahora sería ajustar el criterio al resultado.
+
+**Por qué falla: las tres clases nuevas convirtieron `belleza` en un imán.** Cinco de los errores del híbrido son frases sin relación mandadas a `belleza`: «servir menú del día» (era `food_drink`), «enseñar a pelear con guantes y tatami» (`sport`), «pantalla grande donde proyectar películas» (`leisure`), «literas para mochileros» (`alojamiento`), «un local pequeño donde la gente se siente a tomar algo» (`food_drink`). Es el síntoma de una clase con pocos ejemplos (40) y `class_weight="balanced"`: se sobrepondera y atrae lo que el modelo no tiene claro. **Eso es lo que empuja las equivocadas por encima de la tolerancia**, y es la pista de por dónde habría que ir en un cuarto intento: más frases de las clases nuevas antes de volver a medir, no otro umbral.
+
+**La tentación que se rechaza, y conviene que conste.** La tabla de sensibilidad muestra que con umbral 0,50, 0,60 o 0,70 el híbrido **sí** cumpliría la regla. No se usa: el umbral salió de validación cruzada **solo sobre el entrenamiento** (0,40) y elegirlo ahora mirando el resultado de la evaluación sería ajustar a la evaluación. El propio protocolo lo prohíbe y la herramienta lo imprime como advertencia. Cambiar el umbral exigiría un cuarto conjunto.
+
+**Dos cosas que no salieron como se había declarado**
+
+1. **El acuerdo del etiquetado ciego fue del 100 % (260 de 260, cero ambiguas).** En §L2, con Codex generando y Codex etiquetando, fue del 96 % con 8 ambiguas. Dos sesiones del mismo modelo coinciden en todo, incluidas las frases difíciles del bloque fuera de alcance, y sus recuentos por categoría salen idénticos. **El etiquetado ciego aquí no filtró nada: fue un eco, no una comprobación independiente.** Es el sesgo correlacionado que el límite 1 anunció, y confirma que el paso perdió su función con un autor de la misma familia.
+2. **La predicción de que el conjunto saldría «optimista» era equivocada en una dimensión importante.** El límite 1 avisaba de que un autor de la misma familia escribiría frases que el vocabulario ya conoce. En los **sinónimos** pasó lo contrario: las palabras clave sacan **10 %** aquí frente al 69 % de §L2, porque el autor se tomó en serio el rodeo («un sitio donde cortarse el pelo») mientras el conjunto anterior usaba términos que el método ya reconocía. El conjunto es **más difícil**, no más fácil, y por eso las cifras absolutas de §L3 no son comparables con las de §L2 en ninguna dirección.
+
+**Lo que queda abierto.** Este tercer conjunto también queda **consumido**. Un cuarto intento necesitaría un conjunto nuevo y, a la vista del diagnóstico, bastantes más frases de entrenamiento de `belleza`, `taller` y `alojamiento` que las 40 por clase de ahora.
+
 ### M. Fase 4: riesgo de cierre exploratorio — protocolo fijado antes de descargar el estado completo del área (12-nov-2026, revisado v2)
 
 **Historia de este protocolo (transparencia).** La v1 (commit `31f7d68`) se subió antes de descargar nada. Una revisión independiente encontró fallos de diseño y huecos que habrían permitido decidir después de ver los datos. **Aún no se ha descargado ningún dato del área** (el primer intento falló por indisponibilidad de Overpass), así que esta v2 corrige el protocolo **antes** de ver ninguna etiqueta o resultado del área completa; la v1 queda en el historial de git. Cambios respecto a la v1: el AUC se promedia por repetición (no las predicciones); el método de validación es el real de la fase 1 (no `GroupKFold`); **Foursquare sale de la etiqueta principal**; el contexto estático actual sale de las variables principales; se definen identificador, superviviente, fuerte, normalización de nombres y distancia; se fijan modelos e hiperparámetros; la regla de decisión se rehace (dos candidatos, líneas base triviales, nivel corregido); y la puerta se aclara. **Lo que sí se vio antes:** la sonda de la sección 2 etiquetó ya una parte de esta población (`food_drink` de Msida–Gzira–Sliema, foto de 2022); de ella salen el umbral de 60 m y la idea de contrastar con Foursquare. Esos valores **no se ajustan** con los datos nuevos y esa zona no se presenta como evidencia independiente.

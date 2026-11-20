@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**60 archivos · 1317 funciones de test · 1573 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**60 archivos · 1318 funciones de test · 1574 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -59,7 +59,7 @@
 | [`tests/test_predictive_modeling_ondemand.py`](#teststest_predictive_modeling_ondemandpy) | 6 | 6 |
 | [`tests/test_query_measurements_polyline.py`](#teststest_query_measurements_polylinepy) | 8 | 8 |
 | [`tests/test_recommendation_dashboard.py`](#teststest_recommendation_dashboardpy) | 17 | 17 |
-| [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 7 | 7 |
+| [`tests/test_recommendation_interpretacion_ui.py`](#teststest_recommendation_interpretacion_uipy) | 8 | 8 |
 | [`tests/test_recommendation_panorama_ui.py`](#teststest_recommendation_panorama_uipy) | 82 | 82+ |
 | [`tests/test_sectores.py`](#teststest_sectorespy) | 17 | 21+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
@@ -1286,7 +1286,7 @@
 - `test_la_regla_adopta_solo_si_mejora_y_no_sube_los_errores` — Las tres salidas posibles de la regla fijada: adoptar, fallar por exactitud y fallar por errores.
 - `test_la_tolerancia_de_errores_es_de_dos_puntos` — Justo en la tolerancia (+2 puntos) todavía cumple; por encima, no.
 - `test_por_tipo_agrupa_las_metricas` — Una fila por tipo con su número de frases y sus tasas.
-- `test_los_datos_versionados_son_validos_y_el_conjunto_de_evaluacion_es_el_prometido` — Sin categorías raras, sin repetidas, sin frases en ambos conjuntos; ≥200 frases de evaluación con los cinco tipos del diseño y las siete categorías más las fuera de alcance.
+- `test_los_datos_versionados_son_validos_y_el_conjunto_de_evaluacion_es_el_prometido` — Sin categorías raras, sin repetidas, sin frases en ambos conjuntos; ≥200 frases de evaluación con los cinco tipos del diseño y solo categorías conocidas (más las fuera de alcance).
 - `test_validar_datos_detecta_cada_problema` — Categoría desconocida, frases repetidas o vacías, y fuga de evaluación a entrenamiento.
 - `test_la_decision_es_la_regla_aplicada_a_las_cifras` — `adoptar` es la conjunción de las dos condiciones y las cifras del resumen son las de los sistemas.
 - `test_el_hibrido_nunca_cambia_una_respuesta_de_las_palabras_clave` — Donde las palabras clave responden, el híbrido da lo mismo.
@@ -1544,7 +1544,8 @@
 - `test_la_correccion_no_se_arrastra_a_la_siguiente_busqueda` — Una corrección vale para esa búsqueda: con otro texto, la categoría vuelve a ser la interpretada.
 - `test_un_texto_que_nadie_entiende_da_el_error_de_siempre` — Si ni las palabras clave ni el modelo responden, se muestra el mensaje de siempre y no se calcula nada.
 - `test_sin_modelo_la_pantalla_funciona_como_antes` — Si el artefacto falta o no se verifica (`get_text_model` devuelve None), solo responden las palabras clave: una errata que antes no se entendía sigue sin entenderse y no hay aviso del modelo.
-- `test_con_el_modelo_real_una_errata_se_entiende_y_se_marca` — Con el artefacto versionado en data/ml/: «una pizeria» (errata) la entiende el modelo como restauración, con aviso de que lo decidió el modelo, y se calcula el puntaje de esa categoría.
+- `test_con_el_artefacto_real_la_pantalla_no_muestra_el_aviso_del_modelo` — Con el artefacto versionado en data/ml/ (once clases, `adoptado: false` porque la regla preregistrada de docs/DISENO_ML_RECOMENDACION.md §L3 no lo adoptó) no hay modelo en la pantalla: «una pizeria» no se entiende, no aparece ningún aviso de «modelo entrenado» y no se calcula nada. Es el coste medido de no adoptar; si alguien adoptara el modelo sin pasar la regla, este test falla.
+- `test_si_se_adoptara_un_modelo_una_errata_se_entenderia_y_se_marcaria` — Lo que la pantalla haría con un modelo adoptado (hoy no lo hay): «una pizeria» se lee como restauración, con aviso de que lo decidió el modelo, y se calcula el puntaje de esa categoría. Se prueba con un modelo simulado, sin depender del artefacto versionado.
 
 ## `tests/test_recommendation_panorama_ui.py`
 
@@ -1714,14 +1715,14 @@
 - `test_el_modelo_solo_entra_cuando_las_palabras_clave_se_abstienen` — Con un texto que las palabras clave no reconocen, responde el modelo y se indica su confianza.
 - `test_si_el_modelo_tambien_se_abstiene_no_se_adivina` — Sin respuesta de ninguno de los dos, no hay categoría (nunca se elige una al azar).
 - `test_sin_modelo_el_comportamiento_es_el_de_las_palabras_clave_solas` — Sin modelo (no hay artefacto o no se verificó) se vuelve al comportamiento anterior.
-- `test_un_texto_vacio_o_nulo_no_falla` — Vacío, solo espacios o None no rompen la pantalla ni el modelo: no hay categoría.
-- `test_con_el_modelo_real_una_errata_se_entiende_y_sin_el_no` — Caso de extremo a extremo con el artefacto versionado: «una pizeria» no es una palabra clave, pero el modelo la entiende como restauración; sin modelo no se entendía.
-- `test_el_modelo_versionado_se_carga_y_su_hash_coincide_con_el_manifiesto` — El artefacto de data/ml/ está adoptado, completo y es el que describe su manifiesto.
+- `test_un_texto_vacio_o_nulo_no_falla` — Vacío, solo espacios o None no rompen la pantalla ni el modelo: no hay categoría. El modelo simulado se abstiene ante un texto sin contenido, como hace el real; lo que se prueba es que el híbrido no falla con None.
+- `test_sin_modelo_adoptado_una_errata_no_se_entiende_y_con_un_modelo_si` — El coste medido de no adoptar el modelo de once clases: con el artefacto versionado (que la regla preregistrada no adoptó) «una pizeria» no es una palabra clave y nadie la entiende. La lógica del híbrido sí funcionaría si hubiera modelo: con un `ModeloFalso` que la lee como restauración, la respuesta sería del modelo. Esto último no depende del artefacto, solo documenta lo que se renuncia a ganar.
+- `test_el_modelo_versionado_es_evidencia_de_lo_medido_pero_no_esta_adoptado` — El modelo de once clases está en el repositorio como evidencia de lo que se midió, pero la regla preregistrada (docs/DISENO_ML_RECOMENDACION.md §L3) no lo adoptó: mejoraba la exactitud y subía las respuestas equivocadas por encima de la tolerancia. Se fija que el manifiesto existe, que su hash cuadra con el archivo (no es un artefacto cualquiera), que declara las once clases y que `adoptado` es false, de modo que la carga devuelve None y la aplicación usa solo palabras clave. Si alguien lo adoptara a mano sin pasar la regla, este test lo delata.
 - `test_sin_archivos_no_hay_modelo_y_se_avisa` — Sin modelo en la carpeta devuelve None y deja un aviso, en vez de fallar.
 - `test_un_modelo_que_el_manifiesto_no_da_por_adoptado_no_se_usa` — Aunque el archivo exista y su hash cuadre, si el manifiesto dice adoptado=false no se usa.
 - `test_un_modelo_alterado_no_se_usa` — Si el archivo del modelo cambia (hash distinto al del manifiesto), no se carga.
 - `test_un_manifiesto_roto_o_incompleto_no_rompe_la_carga` — JSON inválido o sin el hash del modelo: se vuelve a las palabras clave en vez de lanzar una excepción.
-- `test_la_aplicacion_da_la_misma_respuesta_que_la_evaluacion_para_cada_frase` — El híbrido de la aplicación y el de la evaluación de la fase 3 coinciden frase a frase sobre las 192 del conjunto principal (mismo modelo, mismo umbral, mismas palabras clave). Así las cifras de docs/DISENO_ML_RECOMENDACION.md §3.L2 son las de lo que ve el usuario.
+- `test_la_aplicacion_da_la_misma_respuesta_que_la_evaluacion_para_cada_frase` — La aplicación (sin modelo adoptado: solo palabras clave) y el sistema `palabras` de la evaluación de la fase 4 coinciden frase a frase sobre las 260 del tercer conjunto congelado (`frases_evaluacion_v3.psv`, con `--solo-coincidentes`). Así las cifras medidas son las de lo que ve el usuario: 163 aciertos de 260 (62,7 %) y 28 respuestas equivocadas (10,8 %).
 
 ## `tests/test_time_series.py`
 

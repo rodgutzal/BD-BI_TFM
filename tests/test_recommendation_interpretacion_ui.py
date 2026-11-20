@@ -146,9 +146,25 @@ def test_sin_modelo_la_pantalla_funciona_como_antes(pagina, monkeypatch):
     assert any("Interpretado como" in s.value for s in pagina.success)
 
 
-def test_con_el_modelo_real_una_errata_se_entiende_y_se_marca(pagina):
-    """Con el artefacto versionado en data/ml/: «una pizeria» (errata) la entiende el modelo como restauración, con aviso
-    de que lo decidió el modelo, y se calcula el puntaje de esa categoría."""
+def test_con_el_artefacto_real_la_pantalla_no_muestra_el_aviso_del_modelo(pagina, categorias_calculadas):
+    """Con el artefacto versionado en data/ml/ (once clases, `adoptado: false` porque la regla preregistrada de
+    docs/DISENO_ML_RECOMENDACION.md §L3 no lo adoptó) no hay modelo en la pantalla: «una pizeria» no se entiende, no
+    aparece ningún aviso de «modelo entrenado» y no se calcula nada. Es el coste medido de no adoptar; si alguien
+    adoptara el modelo sin pasar la regla, este test falla."""
+    pagina.run()
+    buscar(pagina, "una pizeria")
+    assert not any("modelo entrenado" in w.value for w in pagina.warning)
+    assert any("No pude identificar" in e.value for e in pagina.error)
+    assert categorias_calculadas == []
+    buscar(pagina, "una farmacia")
+    assert any("Interpretado como" in s.value for s in pagina.success)
+
+
+def test_si_se_adoptara_un_modelo_una_errata_se_entenderia_y_se_marcaria(pagina, monkeypatch):
+    """Lo que la pantalla haría con un modelo adoptado (hoy no lo hay): «una pizeria» se lee como restauración, con
+    aviso de que lo decidió el modelo, y se calcula el puntaje de esa categoría. Se prueba con un modelo simulado,
+    sin depender del artefacto versionado."""
+    monkeypatch.setattr(rd, "get_text_model", lambda: ModeloFalso("food_drink", 0.8))
     pagina.run()
     buscar(pagina, "una pizeria")
     avisos = [w.value for w in pagina.warning if "modelo entrenado" in w.value]
