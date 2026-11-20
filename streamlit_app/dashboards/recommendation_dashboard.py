@@ -51,8 +51,11 @@ def get_database():
 
 @st.cache_resource
 def get_text_model():
-    """El clasificador de texto adoptado en la fase 3 (verificado con su manifiesto), o None si falta o no cuadra: en
-    ese caso la pantalla usa solo las palabras clave, como antes."""
+    """El clasificador de texto, si su manifiesto lo da por adoptado y el hash cuadra; si no, None y la pantalla usa
+    solo las palabras clave.
+
+    Hoy devuelve None a propósito: el reentrenamiento a 11 clases de la fase 4 no pasó la regla preregistrada por 0,3
+    puntos de respuestas equivocadas, así que el manifiesto dice `adoptado: false` (ver §3.L3 del diseño)."""
     return cargar_modelo_adoptado()
 
 

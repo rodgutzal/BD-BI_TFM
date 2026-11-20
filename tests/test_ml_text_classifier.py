@@ -257,11 +257,20 @@ def test_por_tipo_agrupa_las_metricas():
 # ---- los datos ---------------------------------------------------------------------------------------------------
 def test_los_datos_versionados_son_validos_y_el_conjunto_de_evaluacion_es_el_prometido(datos):
     """Sin categorías raras, sin repetidas, sin frases en ambos conjuntos; ≥200 frases de evaluación con los cinco tipos
-    del diseño y las siete categorías más las fuera de alcance."""
+    del diseño y solo categorías conocidas (más las fuera de alcance).
+
+    Las categorías se comprueban como un ENCADENADO, ev ⊆ tr ⊆ conocidas, y no como una igualdad: no se puede evaluar
+    una clase con la que el modelo nunca se entrenó (ev ⊆ tr), y el entrenamiento no puede traer una clase que el
+    sistema no conoce (tr ⊆ conocidas). La igualdad ya no se sostiene: `CATEGORIAS` tiene diez clases (belleza, taller
+    y alojamiento se añadieron después) y el entrenamiento las incluye, pero los conjuntos de evaluación v1 y v2 están
+    congelados con ocho clases y un conjunto congelado en el pasado no contiene lo que se añadió después. El tercero
+    (protocolo §L3) sí traerá las diez."""
     tr, ev = datos
     assert etc.validar_datos(tr, ev) == []
     assert len(ev) >= 200 and set(ev["tipo"]) == {"directa", "sinonimo", "errata", "larga", "fuera"}
-    assert set(ev["categoria"]) == set(etc.CATEGORIAS) | {"ninguna"} and set(tr["categoria"]) == set(ev["categoria"])
+    conocidas = set(etc.CATEGORIAS) | {"ninguna"}
+    assert set(tr["categoria"]) <= conocidas
+    assert set(ev["categoria"]) <= set(tr["categoria"])
     assert (ev.loc[ev["tipo"] == "fuera", "categoria"] == "ninguna").all()
     assert not (ev.loc[ev["tipo"] != "fuera", "categoria"] == "ninguna").any()
 
@@ -438,6 +447,47 @@ def test_la_evaluacion_v2_cumple_las_cuotas_fijadas_y_no_solapa_con_el_entrenami
     assert ev["ciego"].notna().all() and (ev["ciego"] != "").all()
 
 
+EVALUACION_V3 = etc.DATA / "frases_evaluacion_v3.psv"
+
+
+def test_la_evaluacion_v3_cumple_las_cuotas_del_protocolo_y_no_solapa_con_nada_anterior():
+    """El tercer conjunto tiene la composición que el protocolo (§L3) declaró ANTES de generarlo: 260 frases con las
+    cuotas por tipo y por categoría (las tres categorías nuevas incluidas), válidas para `validar_datos`, sin
+    repetidas y sin coincidir con el entrenamiento ni con los conjuntos v1 y v2. Importa porque `validar_datos` nunca
+    se había ejecutado contra el v3: sin este test, una frase duplicada o filtrada del entrenamiento invalidaría la
+    medición sin que nada lo avisara."""
+    tr, ev = etc.cargar(evaluacion=EVALUACION_V3)
+    assert list(ev.columns) == ["tipo", "categoria", "frase", "ciego"]
+    assert len(ev) == 260 and etc.validar_datos(tr, ev) == []
+    assert ev["tipo"].value_counts().to_dict() == {
+        "larga": 60,
+        "fuera": 60,
+        "directa": 50,
+        "sinonimo": 50,
+        "errata": 40,
+    }
+    assert ev["categoria"].value_counts().to_dict() == {
+        "ninguna": 60,
+        "food_drink": 30,
+        "business": 30,
+        "hospital": 20,
+        "school": 20,
+        "sport": 20,
+        "leisure": 20,
+        "mall": 20,
+        "belleza": 16,
+        "taller": 12,
+        "alojamiento": 12,
+    }
+    normalizar = lambda s: s.str.lower().str.strip()  # noqa: E731  (misma normalización que validar_datos)
+    propias = normalizar(ev["frase"])
+    assert not propias.duplicated().any()
+    for nombre, anterior in (("v1", etc.EVALUACION), ("v2", EVALUACION_V2)):
+        _, otro = etc.cargar(evaluacion=anterior)
+        comunes = set(propias) & set(normalizar(otro["frase"]))
+        assert not comunes, f"el v3 repite frases del {nombre}: {sorted(comunes)[:3]}"
+
+
 def test_solo_coincidentes_deja_las_frases_donde_autor_y_etiquetador_ciego_coinciden():
     """Las ambiguas (etiqueta distinta) se quitan de la evaluación principal; no se tocan ni se reetiquetan las demás."""
     ev = pd.DataFrame(
@@ -475,7 +525,7 @@ def test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_es
     assert (
         "Las 8 frases ambiguas" in salida
         and "«Cine en St Julian's»" in salida
-        and "coincide con el autor en 6 y con el etiquetador en 2 de 8." in salida
+        and "coincide con el autor en 5 y con el etiquetador en 2 de 8." in salida
     )
     m = json.loads((tmp_path / "text_classifier_manifest.json").read_text(encoding="utf-8"))
     assert m["datos"]["evaluacion"]["frases"] == 192 and "Codex" in m["advertencia"]

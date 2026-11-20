@@ -473,6 +473,100 @@ Las peluquerías/estética (`shop=hairdresser|beauty`) y los talleres (`shop=car
 7. **Asimetría de las definiciones:** el etiquetador ciego recibió, para `ninguna`, una cláusula que los prompts de generación de los tipos directa, sinónimo, errata y larga no llevaban («o que solo menciona un negocio sin pedir abrirlo»). Es plausible que explique cuatro de los ocho desacuerdos («Busco una panadería artesanal», «Cine en St Julian's», «Farmacia de guardia» y «Veterinaria en Marsaskala», etiquetadas `ninguna`). No cambia la decisión (con las 200 frases se cumple igual) pero se declara: el 96 % de acuerdo está algo deprimido por esa diferencia.
 8. **Integración en la app (PR #72):** `src/ml/text_hibrido.py` aplica el híbrido evaluado (un test comprueba que da la misma respuesta que la evaluación para cada frase del conjunto principal), carga `data/ml/text_classifier.json` verificado con su manifiesto (adoptado y hash) y, si falta o no cuadra, la pantalla vuelve a las palabras clave. Cuando decide el modelo, la pantalla lo indica, muestra su confianza y abre el selector para **corregir la categoría**; cuando responden las palabras clave se presenta como antes (con el selector plegado). **El motivo no es que se sepa que el modelo falle más:** en las 192 frases las palabras clave responden 107 y se equivocan 11 (10,3 %; 8 de ellas son frases fuera de alcance que solo mencionan un negocio), mientras el modelo responde solo 19 y se equivoca 1 (5,3 %), una muestra demasiado pequeña para comparar. Se señala porque es una lectura que el usuario no puede anticipar por una palabra visible y casi no está medida. No hay medición con usuarios reales: las cifras de este apartado son las del conjunto escrito por Codex.
 
+### L3. Tercer conjunto de evaluación y reentrenamiento a once clases — protocolo fijado antes de generar los datos (19-nov-2026)
+
+**Este apartado se escribe y se sube al repositorio ANTES de generar el tercer conjunto y ANTES de reentrenar nada; el historial de git lo prueba.** Es la misma disciplina de §L2: lo que sigue no se cambia después de ver los resultados.
+
+**Por qué hace falta un tercero.** Las fases 1, 2 y 3 del plan de búsqueda llevaron el sistema de 7 a 10 categorías (`belleza` y `taller` el 18-nov, `alojamiento` el 19-nov). El modelo entrenado sigue conociendo **ocho clases** (las siete de entonces más `ninguna`), así que esas tres solo las reconocen las palabras clave: el modelo nunca va a proponerlas. Y el conjunto v2 está **congelado con las ocho clases viejas y consumido** (límite 6 de §L2), así que no puede medir once. Medir el sistema de hoy exige datos nuevos.
+
+**Qué se mide.** Exactamente lo mismo que en §L2, para que las cifras sean comparables en forma aunque no en valor absoluto: exactitud, respuestas equivocadas y abstenciones de las palabras clave, de la logística sola y del híbrido, sobre un conjunto reservado.
+
+**Regla de decisión, idéntica a la de §L2 y fijada aquí de nuevo.** El híbrido reentrenado se adopta **solo si** (a) su exactitud supera la de las palabras clave con el intervalo de confianza bootstrap pareado **por encima de 0**, y (b) sus respuestas equivocadas **no pasan de las de las palabras clave más 2 puntos** (`text_training.TOLERANCIA_ERRORES = 0.02`). Si no cumple, **no se adopta** y la aplicación se queda con el modelo de ocho clases o solo con palabras clave; eso sería un resultado, no un fracaso que haya que maquillar.
+
+**Cómo se generan los datos, y en qué orden.**
+
+1. **Entrenamiento.** Las frases de las tres clases nuevas las escribe **el autor**, como las 347 anteriores. No hay problema de independencia aquí: el entrenamiento siempre ha sido del autor y lo que debe ser independiente es el examen. Se añaden **40 por clase** (120 nuevas, total 467), en línea con las existentes (entre 28 y 52 por clase) y muy por encima del mínimo que impone la elección de umbral, que usa `StratifiedKFold(5)` y necesita al menos 5 por clase.
+2. **Examen.** Lo escribe un **autor independiente que no ve el entrenamiento ni el vocabulario de palabras clave**: solo recibe las diez categorías con su definición, los cinco tipos de frase y las cuotas de abajo.
+3. **Etiquetado ciego.** Una **segunda sesión independiente**, distinta de la que generó, recibe las frases barajadas y sin etiqueta y las clasifica. Las frases en las que no coincide con el autor del examen son **ambiguas** y se excluyen de la evaluación principal (`--solo-coincidentes`), como en §L2.
+4. **Congelar.** El conjunto se commitea **antes** de evaluar.
+5. **Evaluar una sola vez** y registrar el resultado, cumpla o no la regla.
+
+**Cuotas del tercer conjunto (260 frases).** Se mantiene la proporción de §L2 y se añaden las tres categorías nuevas con el mismo peso que las medianas anteriores:
+
+| Tipo | Frases | Reparto por categoría |
+|---|---|---|
+| directa | 50 | 7 food_drink, 7 business, 5 hospital, 5 school, 5 sport, 5 leisure, 6 mall, 4 belleza, 3 taller, 3 alojamiento |
+| sinónimo | 50 | igual que directa |
+| errata | 40 | 6 food_drink, 6 business, 3 hospital, 3 school, 3 sport, 3 leisure, 6 mall, 4 belleza, 3 taller, 3 alojamiento |
+| larga | 60 | 10 food_drink, 10 business, 7 hospital, 7 school, 7 sport, 7 leisure, 2 mall, 4 belleza, 3 taller, 3 alojamiento |
+| fuera de alcance | 60 | todas `ninguna` |
+
+Las 200 que describen un negocio se reparten así por categoría: `food_drink` 30, `business` 30, `hospital` 20, `school` 20, `sport` 20, `leisure` 20, `mall` 20, `belleza` 16, `taller` 12, `alojamiento` 12.
+
+**Control de calidad, antes de evaluar.** Se descartan frases vacías, repetidas y las que coincidan con el entrenamiento o con los conjuntos v1 y v2; las que falten se piden al mismo autor **sin enseñarle ningún resultado**. Se comprueba además que **ninguna frase dispare el catálogo de actividades fuera de alcance** (`src/sectores.py`), porque si lo hiciera la aplicación dejaría de ser el sistema que se evaluó.
+
+**Dos correcciones a los prompts respecto de §L2, decididas antes de generar.**
+
+1. **Se arregla la asimetría del límite 7 de §L2.** Allí el etiquetador ciego recibió, para `ninguna`, una cláusula que los prompts de generación no llevaban, y eso explica probablemente la mitad de los ocho desacuerdos y deprimió el 96 % de acuerdo. Esta vez **el bloque de definiciones de las diez categorías y de `ninguna` es literalmente el mismo texto** en los cinco prompts de generación y en el de etiquetado ciego: se escribió una vez y se insertó en los seis, y está comprobado que los seis bloques son idénticos. Precisión que un `code-review` pidió hacer: **el script que los generó no se versionó**, así que lo que el repositorio garantiza es el resultado —los seis prompts con el mismo bloque— y no el mecanismo; si alguien edita un prompt a mano, nada impide que divergan. Para un cuarto conjunto convendría versionar el generador o añadir un test que compare los bloques.
+2. **La definición de `business` cambia, y es imprescindible.** En §L2 decía «comercio y servicios generales que no son ninguna de las seis anteriores: tiendas, **peluquerías**, **talleres**, oficinas, ferreterías, agencias, lavanderías…». Las peluquerías y los talleres **ya no son `business`**: son `belleza` y `taller`. Si el prompt mantuviera esa frase, el autor del examen etiquetaría peluquerías como `business` y la evaluación mediría mal el cambio que se quiere medir.
+
+**Límites de este protocolo, declarados ANTES de ejecutarlo**
+
+1. **El autor del examen es un subagente Claude en sesión limpia, no Codex, y eso es MÁS DÉBIL que en §L2.** La fase 3 usó Codex, un modelo de **otra familia** (OpenAI), y esa distancia entre familias es lo que daba valor a la independencia. Aquí el examen lo escribe un modelo de la **misma familia** que el autor del sistema, así que es razonable esperar **sesgos correlacionados** con el vocabulario de palabras clave: el examen puede usar precisamente las palabras que el sistema conoce, y la exactitud saldría **optimista**. El motivo del cambio es operativo y se declara: la cuenta de Codex agotó su límite de uso el 17-nov-2026 y no admite reintentos hasta el 11-dic. **Esta cifra no es comparable con la de §L2 como si fuera la misma medición.**
+2. **Sigue sin haber usuarios reales.** Todo lo de §L2 vale aquí: frases de un modelo, español más correcto y erratas artificiales.
+3. **El etiquetador ciego comparte familia con el generador**, igual que en §L2, y ahora también con el autor del sistema. El acuerdo mide consistencia, no verdad.
+4. **Las tres clases nuevas tendrán pocas frases** (12 a 16 cada una), así que sus cifras por categoría serán muy imprecisas. Lo comparable es el desglose por **tipo**, como en §L2.
+5. **Este tercer conjunto también quedará consumido.** Una cuarta medición exigiría un cuarto conjunto.
+6. **El vocabulario de palabras clave no se congela.** Se mide el sistema tal y como está el 19-nov-2026 (419 términos); si alguien lo amplía después, las cifras dejan de describir la aplicación.
+
+#### Corrección del etiquetado ciego: la primera pasada fue defectuosa (declarado ANTES de repetirla)
+
+Un `code-review` encontró un fallo de procedimiento en el etiquetado ciego de la primera pasada, y se declara aquí **antes** de repetirlo y antes de ver el resultado nuevo.
+
+**El defecto.** Los identificadores que recibió el etiquetador (`f001`…`f260`) se asignaron **antes** de barajar, sobre el archivo generado, que está ordenado por tipo y por categoría. El id, por tanto, **delataba la agrupación**: ordenando por id aparecen solo **41 tramos contiguos** de categoría cuando al azar habría unos 235, y **todo id ≥ `f201` era `ninguna`**. El etiquetador veía líneas `id|frase`, así que tenía delante una pista de la respuesta. En §L2 esto se hizo bien: el mapa era `id,indice` con los ids asignados **después** de barajar (el id 1 correspondía a la fila 185), y no filtraba nada.
+
+**Qué invalida.** No la generación de las frases, que no vio nada, ni las cuotas, ni el control de calidad. Invalida **la interpretación del 100 % de acuerdo**: con la fuga presente es imposible distinguir si ese acuerdo viene del sesgo de familia que el límite 1 anunció o simplemente de que los ids daban la agrupación. La atribución al sesgo que se escribió primero no se sostiene.
+
+**Qué se hace.** Se reasignan los ids **después** de barajar, como en §L2, un etiquetador independiente nuevo vuelve a clasificar las mismas 260 frases —que no cambian— y se vuelve a evaluar.
+
+**Compromiso, fijado aquí antes de ejecutar nada:** la **segunda** pasada es la de referencia, diga lo que diga. Si al corregir el etiquetado aparecen frases ambiguas, el conjunto principal se reduce, las cifras cambian y **la decisión que salga es la que vale, incluso si se invierte**. No se elige entre las dos pasadas: la primera queda registrada como lo que es, una medición con un instrumento roto, y se conserva en este documento para que se pueda comparar.
+
+**Resultado de la corrección: la fuga NO era la causa, y ahora hay evidencia de cuál es.** Con los ids reasignados después de barajar (228 tramos contiguos de categoría frente a los 41 de antes; al azar serían unos 235) y un etiquetador independiente **nuevo**, el acuerdo vuelve a ser de **260 de 260 (100 %), cero ambiguas**. Las dos pasadas coinciden, así que:
+
+- El conjunto `frases_evaluacion_v3.psv` **no cambia ni un byte**: los dos etiquetadores coincidieron con el autor en todas las frases, luego la columna `ciego` es la misma.
+- La evaluación **reproduce exactamente** las mismas cifras y la misma decisión (ver abajo), así que el compromiso se cumple sin ambigüedad.
+- Y lo importante: lo que antes era una **atribución sin respaldo** pasa a ser un resultado. El 100 % de acuerdo **no venía de la fuga en los ids**; viene del sesgo correlacionado que el límite 1 anunció. Dos sesiones del mismo modelo, sin ninguna pista, clasifican igual las 260 frases, incluidas las difíciles del bloque fuera de alcance. **El etiquetado ciego pierde su función como comprobación independiente cuando el etiquetador comparte familia con el generador**, y eso ya no es una sospecha.
+
+#### Resultado (19-nov-2026): el híbrido NO se adopta
+
+Las cifras de abajo son las de las **dos pasadas**, que son idénticas: la primera con el etiquetado defectuoso y la segunda, la de referencia, con los ids corregidos. Al coincidir los dos etiquetadores con el autor en las 260 frases, el conjunto evaluado es el mismo y el resultado se reprodujo exactamente.
+
+| Sistema (260 frases) | Exactitud | Respuestas equivocadas | Sin respuesta |
+|---|---|---|---|
+| **palabras clave** | **62,7 %** | **10,8 %** | 26,5 % |
+| logística sola | 52,3 % | 8,1 % | 39,6 % |
+| híbrido | 71,2 % | 13,1 % | 15,8 % |
+
+**La regla de decisión se aplica tal y como estaba escrita, y falla por la segunda condición:**
+
+- (a) **Exactitud: la cumple.** El híbrido mejora en **+8,5 puntos [IC 95 %: +5,0, +11,9]**, con el intervalo claramente por encima de 0.
+- (b) **Respuestas equivocadas: NO la cumple.** 13,1 % frente al 10,8 % de las palabras clave. La tolerancia fijada era de 2 puntos, o sea 12,8 %. **Se pasa por 0,3 puntos.**
+
+**Decisión: no se adopta.** La aplicación se queda con el método de palabras clave. El artefacto reentrenado se conserva en `data/ml/text_classifier.json` con su manifiesto en `adoptado: false`, como evidencia auditable de lo que se midió: `src/ml/text_hibrido.cargar_modelo_adoptado` lo lee, ve que no está adoptado, lo registra en el log y devuelve `None`.
+
+**Qué cuesta no adoptarlo, dicho sin rebajarlo.** Sobre este conjunto, renunciar al modelo cuesta **8,5 puntos de exactitud** (71,2 % → 62,7 %) y sube las abstenciones del 15,8 % al 26,5 %. En la práctica, una errata como «una pizeria» vuelve a no entenderse. Se acepta porque la regla —fijada antes de ver un solo dato— dice que responder mal pesa más que no responder, y porque cambiarla ahora sería ajustar el criterio al resultado.
+
+**Por qué falla: las tres clases nuevas convirtieron `belleza` en un imán.** Cinco de los errores del híbrido son frases sin relación mandadas a `belleza`: «servir menú del día» (era `food_drink`), «enseñar a pelear con guantes y tatami» (`sport`), «pantalla grande donde proyectar películas» (`leisure`), «literas para mochileros» (`alojamiento`), «un local pequeño donde la gente se siente a tomar algo» (`food_drink`). Es el síntoma de una clase con pocos ejemplos (40) y `class_weight="balanced"`: se sobrepondera y atrae lo que el modelo no tiene claro. **Eso es lo que empuja las equivocadas por encima de la tolerancia**, y es la pista de por dónde habría que ir en un cuarto intento: más frases de las clases nuevas antes de volver a medir, no otro umbral.
+
+**La tentación que se rechaza, y conviene que conste.** La tabla de sensibilidad muestra que con umbral 0,50, 0,60 o 0,70 el híbrido **sí** cumpliría la regla. No se usa: el umbral salió de validación cruzada **solo sobre el entrenamiento** (0,40) y elegirlo ahora mirando el resultado de la evaluación sería ajustar a la evaluación. El propio protocolo lo prohíbe y la herramienta lo imprime como advertencia. Cambiar el umbral exigiría un cuarto conjunto.
+
+**Dos cosas que no salieron como se había declarado**
+
+1. **El acuerdo del etiquetado ciego fue del 100 % (260 de 260, cero ambiguas), y se comprobó dos veces.** En §L2, con Codex generando y Codex etiquetando, fue del 96 % con 8 ambiguas. Aquí, con dos etiquetadores distintos y en la segunda pasada sin ninguna pista en los ids, el acuerdo es total: coinciden en todo, incluidas las frases difíciles del bloque fuera de alcance, y los recuentos por categoría salen idénticos a las cuotas. **El etiquetado ciego aquí no filtró nada: fue un eco, no una comprobación independiente.** Es el sesgo correlacionado que el límite 1 anunció, y la corrección del defecto de los ids permite afirmarlo con evidencia en vez de por sospecha: **con un etiquetador de la misma familia que el generador, este paso del protocolo deja de cumplir su función.** Para un cuarto conjunto habría que etiquetar con un modelo de otra familia o con una persona.
+2. **La predicción de que el conjunto saldría «optimista» era equivocada en una dimensión importante.** El límite 1 avisaba de que un autor de la misma familia escribiría frases que el vocabulario ya conoce. En los **sinónimos** pasó lo contrario: las palabras clave sacan **10 %** aquí frente al 69 % de §L2, porque el autor se tomó en serio el rodeo («un sitio donde cortarse el pelo») mientras el conjunto anterior usaba términos que el método ya reconocía. El conjunto es **más difícil**, no más fácil, y por eso las cifras absolutas de §L3 no son comparables con las de §L2 en ninguna dirección.
+
+**Lo que queda abierto.** Este tercer conjunto también queda **consumido**. Un cuarto intento necesitaría un conjunto nuevo y, a la vista del diagnóstico, bastantes más frases de entrenamiento de `belleza`, `taller` y `alojamiento` que las 40 por clase de ahora.
+
 ### M. Fase 4: riesgo de cierre exploratorio — protocolo fijado antes de descargar el estado completo del área (12-nov-2026, revisado v2)
 
 **Historia de este protocolo (transparencia).** La v1 (commit `31f7d68`) se subió antes de descargar nada. Una revisión independiente encontró fallos de diseño y huecos que habrían permitido decidir después de ver los datos. **Aún no se ha descargado ningún dato del área** (el primer intento falló por indisponibilidad de Overpass), así que esta v2 corrige el protocolo **antes** de ver ninguna etiqueta o resultado del área completa; la v1 queda en el historial de git. Cambios respecto a la v1: el AUC se promedia por repetición (no las predicciones); el método de validación es el real de la fase 1 (no `GroupKFold`); **Foursquare sale de la etiqueta principal**; el contexto estático actual sale de las variables principales; se definen identificador, superviviente, fuerte, normalización de nombres y distancia; se fijan modelos e hiperparámetros; la regla de decisión se rehace (dos candidatos, líneas base triviales, nivel corregido); y la puerta se aclara. **Lo que sí se vio antes:** la sonda de la sección 2 etiquetó ya una parte de esta población (`food_drink` de Msida–Gzira–Sliema, foto de 2022); de ella salen el umbral de 60 m y la idea de contrastar con Foursquare. Esos valores **no se ajustan** con los datos nuevos y esa zona no se presenta como evidencia independiente.

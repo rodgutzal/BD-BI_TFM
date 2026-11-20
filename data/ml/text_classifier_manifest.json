@@ -1,27 +1,27 @@
 {
-  "adoptado": true,
+  "adoptado": false,
   "advertencia": "Frases de evaluación escritas por un modelo de lenguaje (Codex) y etiquetadas por otra sesión a ciegas; no son consultas reales de usuarios: la exactitud puede ser optimista y depende de la composición del conjunto.",
   "datos": {
     "entrenamiento": {
       "archivo": "frases_entrenamiento.psv",
-      "frases": 347,
-      "sha256": "3080f1b8b44df2bfca1fe22db22da05cc588ec0f62aac338761c77f805373a2f"
+      "frases": 467,
+      "sha256": "dcf4f765edb2baff700ba4aaa89ac0e4cffe3baafe0d5135f40ab86ada7d4fd6"
     },
     "evaluacion": {
-      "archivo": "frases_evaluacion_v2.psv",
+      "archivo": "frases_evaluacion_v3.psv",
       "filtro": "solo_coincidentes",
-      "frases": 192,
-      "frases_en_archivo": 200,
-      "sha256": "300bc2747fe41efb939e7ec8b5527e3fca6c48880f6e3255cc566c76bb70ef20"
+      "frases": 260,
+      "frases_en_archivo": 260,
+      "sha256": "0817f05ebbf261bffcd8b93d1864f78f22c0fff63842707bbc4d8bf1137e20d3"
     }
   },
   "decision": {
-    "equivocadas_hibrido": 0.109375,
-    "equivocadas_palabras": 0.10416666666666667,
+    "equivocadas_hibrido": 0.13076923076923078,
+    "equivocadas_palabras": 0.1076923076923077,
     "exactitud": {
-      "diferencia": 0.036458333333333336,
-      "ic_inf": 0.010416666666666666,
-      "ic_sup": 0.06770833333333333
+      "diferencia": 0.08461538461538462,
+      "ic_inf": 0.05,
+      "ic_sup": 0.11923076923076924
     },
     "tolerancia_errores": 0.02
   },
@@ -29,6 +29,8 @@
   "modelo": {
     "archivo": "text_classifier.json",
     "clases": [
+      "alojamiento",
+      "belleza",
       "business",
       "food_drink",
       "hospital",
@@ -36,17 +38,18 @@
       "mall",
       "ninguna",
       "school",
-      "sport"
+      "sport",
+      "taller"
     ],
-    "n_ngramas": 6295,
+    "n_ngramas": 7852,
     "ngramas": [
       2,
       5
     ],
-    "sha256": "d57a4d86ccb9d96efbc877ef58a1f6e92b20b5e74d948fb0bc68f24d1135e34e"
+    "sha256": "f5208cf13b80d2bff6833eff5df632c041d36a76f456d502931e71af6316dd37"
   },
   "procedencia": {
-    "commit": "dcf033d+",
+    "commit": "9bb1b14+",
     "version.numpy": "2.4.6",
     "version.pandas": "3.0.3",
     "version.python": "3.13.14",
@@ -55,30 +58,30 @@
   },
   "resumen": {
     "hibrido": {
-      "equivocadas": 0.109375,
-      "exactitud": 0.8333333333333334,
-      "sin_respuesta": 0.057291666666666664
+      "equivocadas": 0.13076923076923078,
+      "exactitud": 0.7115384615384616,
+      "sin_respuesta": 0.1576923076923077
     },
     "hibrido_mlp": {
-      "equivocadas": 0.10416666666666667,
-      "exactitud": 0.8177083333333334,
-      "sin_respuesta": 0.078125
+      "equivocadas": 0.12692307692307692,
+      "exactitud": 0.7115384615384616,
+      "sin_respuesta": 0.16153846153846155
     },
     "logistica": {
-      "equivocadas": 0.036458333333333336,
-      "exactitud": 0.6145833333333334,
-      "sin_respuesta": 0.3489583333333333
+      "equivocadas": 0.08076923076923077,
+      "exactitud": 0.5230769230769231,
+      "sin_respuesta": 0.39615384615384613
     },
     "mlp": {
-      "equivocadas": 0.010416666666666666,
-      "exactitud": 0.6145833333333334,
-      "sin_respuesta": 0.375
+      "equivocadas": 0.046153846153846156,
+      "exactitud": 0.5307692307692308,
+      "sin_respuesta": 0.4230769230769231
     },
     "palabras": {
-      "equivocadas": 0.10416666666666667,
-      "exactitud": 0.796875,
-      "sin_respuesta": 0.09895833333333333
+      "equivocadas": 0.1076923076923077,
+      "exactitud": 0.6269230769230769,
+      "sin_respuesta": 0.2653846153846154
     }
   },
-  "umbral": 0.45
+  "umbral": 0.4
 }

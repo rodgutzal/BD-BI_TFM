@@ -35,7 +35,21 @@ from src.ml.text_classifier import NINGUNA  # noqa: E402
 DATA = ROOT / "data" / "text"
 ENTRENAMIENTO = DATA / "frases_entrenamiento.psv"
 EVALUACION = DATA / "frases_evaluacion.psv"
-CATEGORIAS = ("food_drink", "hospital", "school", "sport", "leisure", "mall", "business")
+# Las diez categorías del sistema (mismo orden que src/ml/text_hibrido.CATEGORIAS: las siete viejas y las tres añadidas
+# después). Los conjuntos de evaluación congelados no las traen todas; `validar_datos` solo exige que no haya ninguna
+# desconocida, no que estén todas.
+CATEGORIAS = (
+    "food_drink",
+    "hospital",
+    "school",
+    "sport",
+    "leisure",
+    "mall",
+    "business",
+    "belleza",
+    "taller",
+    "alojamiento",
+)
 
 
 def cargar(entrenamiento=ENTRENAMIENTO, evaluacion=EVALUACION):

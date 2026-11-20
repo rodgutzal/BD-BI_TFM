@@ -29,6 +29,10 @@ data/mobility.db
 # mobility.db.bak-AAAAMMDD-HHMMSS. No son "data/mobility.db", así que el patrón de arriba
 # no los cubría y aparecían como archivos nuevos en git status.
 data/mobility.db.bak-*
+# Temporales del WAL de SQLite: los crea cualquier consulta, incluso de solo lectura, y
+# tampoco los cubre "data/mobility.db". Se colaron una vez en un commit por un `git add -A`.
+data/mobility.db-shm
+data/mobility.db-wal
 data/raw/route_weather_data.csv
 data/processed/*.csv
 

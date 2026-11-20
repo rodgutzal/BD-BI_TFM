@@ -129,11 +129,23 @@ def test_una_categoria_reconocida_trae_su_sector():
 def test_ninguna_frase_evaluada_toca_el_catalogo():
     """La guarda que mantiene cierto que «la aplicación es el sistema que se evaluó»: el paso de fuera de alcance no
     cambia ninguna respuesta medida mientras ninguna frase del corpus lo dispare. Si alguien añade una palabra que
-    choque con el corpus, este test lo detiene y obliga a volver a medir."""
+    choque con el corpus, este test lo detiene y obliga a volver a medir.
+
+    Recorre TODOS los `frases_evaluacion*.psv` que haya en data/text/ en vez de nombrarlos: el v3 entró una vez sin
+    esta guarda por haber un nombre escrito a mano, y con el glob un cuarto conjunto queda cubierto sin acordarse."""
     import evaluate_text_classifier as etc
 
-    entrenamiento, evaluacion = etc.cargar(evaluacion=etc.DATA / "frases_evaluacion_v2.psv")
-    for nombre, frases in (("entrenamiento", entrenamiento["frase"]), ("evaluacion", evaluacion["frase"])):
+    archivos = sorted(etc.DATA.glob("frases_evaluacion*.psv"))
+    # Si el glob dejara de encontrar los conjuntos (p. ej. por renombrarlos), la guarda pasaría en vacío.
+    assert {a.name for a in archivos} >= {
+        "frases_evaluacion.psv",
+        "frases_evaluacion_v2.psv",
+        "frases_evaluacion_v3.psv",
+    }
+    entrenamiento, _ = etc.cargar()
+    conjuntos = [("entrenamiento", entrenamiento["frase"])]
+    conjuntos += [(a.name, etc.cargar(evaluacion=a)[1]["frase"]) for a in archivos]
+    for nombre, frases in conjuntos:
         tocadas = [f for f in frases if sec.actividad_fuera_de_alcance(f) is not None]
         assert not tocadas, f"{nombre}: {tocadas}"
 
