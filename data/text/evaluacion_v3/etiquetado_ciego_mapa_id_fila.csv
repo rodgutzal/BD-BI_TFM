@@ -1,261 +1,261 @@
-id,tipo,categoria,frase
-f001,directa,food_drink,Abrir una cafetería en Sliema
-f002,directa,food_drink,quiero poner un restaurante italiano en Valletta
-f003,directa,food_drink,Busco sitio para una heladería en Marsaskala
-f004,directa,food_drink,"panadería en Birkirkara, ¿se puede?"
-f005,directa,food_drink,Un bar de tapas en St Julian's
-f006,directa,food_drink,pizzería para llevar en Msida
-f007,directa,food_drink,Me gustaría montar una taquería en Gzira
-f008,directa,business,Abrir una ferretería en Birkirkara
-f009,directa,business,lavandería autoservicio en Msida
-f010,directa,business,Quiero una inmobiliaria en Sliema
-f011,directa,business,Óptica en Valletta
-f012,directa,business,poner una tienda de ropa en Gzira
-f013,directa,business,agencia de viajes en St Julian's
-f014,directa,business,Oficina de traducciones en Marsaskala
-f015,directa,hospital,Clínica dental en Sliema
-f016,directa,hospital,Quiero abrir una farmacia en Msida
-f017,directa,hospital,consultorio de fisioterapia en Birkirkara
-f018,directa,hospital,Consulta de pediatría en Gzira
-f019,directa,hospital,Laboratorio de análisis clínicos en Valletta
-f020,directa,school,Abrir una guardería en Birkirkara
-f021,directa,school,academia de inglés en Msida
-f022,directa,school,Escuela de idiomas en St Julian's
-f023,directa,school,colegio privado pequeño en Gzira
-f024,directa,school,Centro de formación profesional en Valletta
-f025,directa,sport,Gimnasio en Gzira
-f026,directa,sport,quiero montar un estudio de pilates en Sliema
-f027,directa,sport,Escuela de artes marciales en Msida
-f028,directa,sport,Club deportivo de pádel en Marsaskala
-f029,directa,sport,abrir un centro de yoga en Valletta
-f030,directa,leisure,Discoteca en St Julian's
-f031,directa,leisure,Quiero abrir un cine pequeño en Birkirkara
-f032,directa,leisure,sala de conciertos en Valletta
-f033,directa,leisure,Salón de juegos recreativos en Msida
-f034,directa,leisure,Teatro de barrio en Sliema
-f035,directa,mall,Centro comercial en Birkirkara
-f036,directa,mall,Montar un outlet en Marsaskala
-f037,directa,mall,plaza comercial en Msida
-f038,directa,mall,¿Dónde pongo un centro comercial nuevo en Malta?
-f039,directa,mall,Quiero desarrollar un shopping en Gzira
-f040,directa,mall,galería comercial en Valletta
-f041,directa,belleza,Peluquería en Sliema
-f042,directa,belleza,abrir una barbería en Msida
-f043,directa,belleza,Salón de uñas en Gzira
-f044,directa,belleza,Centro de estética en St Julian's
-f045,directa,taller,Taller mecánico en Birkirkara
-f046,directa,taller,poner un taller de chapa y pintura en Marsaskala
-f047,directa,taller,Taller de neumáticos en Msida
-f048,directa,alojamiento,Hotel boutique en Valletta
-f049,directa,alojamiento,quiero abrir un hostal en St Julian's
-f050,directa,alojamiento,Apartamentos turísticos en Sliema
-f051,sinonimo,food_drink,Un local donde la gente pueda desayunar y tomar café por la mañana en Sliema
-f052,sinonimo,food_drink,busco abrir un sitio para servir menú del día a mediodía en Msida
-f053,sinonimo,food_drink,Un local donde servir cervezas y cócteles por la noche en St Julian's
-f054,sinonimo,food_drink,"Un puesto donde vender helado artesanal en verano, en Marsaskala"
-f055,sinonimo,food_drink,Me interesa un obrador donde hornear pan y bollos cada mañana en Birkirkara
-f056,sinonimo,food_drink,Un negocio de comida preparada para llevar a domicilio en Gzira
-f057,sinonimo,food_drink,"Quiero un local pequeño donde la gente se siente a tomar algo y picar, en Valletta"
-f058,sinonimo,business,"Un local donde vender tornillos, pintura y herramientas en Birkirkara"
-f059,sinonimo,business,"Un sitio donde la gente deje la ropa sucia y la recoja limpia y planchada, en Msida"
-f060,sinonimo,business,Negocio para graduar la vista y vender gafas en Sliema
-f061,sinonimo,business,Quiero montar algo para ayudar a la gente a comprar y alquilar pisos en Gzira
-f062,sinonimo,business,Un espacio de oficinas compartidas para autónomos en Valletta
-f063,sinonimo,business,Un local para vender flores y preparar ramos en St Julian's
-f064,sinonimo,business,Un sitio donde reparen móviles y pantallas rotas en Marsaskala
-f065,sinonimo,hospital,Un sitio donde la gente vaya a que le revisen las muelas en Sliema
-f066,sinonimo,hospital,Un local donde despachar medicamentos con receta en Msida
-f067,sinonimo,hospital,Quiero un centro donde traten lesiones de espalda con rehabilitación en Birkirkara
-f068,sinonimo,hospital,Un sitio para atender perros y gatos enfermos en Marsaskala
-f069,sinonimo,hospital,Un centro donde sacar sangre y hacer pruebas médicas en Valletta
-f070,sinonimo,school,"Un sitio donde dejar a los niños pequeños mientras los padres trabajan, en Birkirkara"
-f071,sinonimo,school,Quiero montar un centro donde den clases de inglés por las tardes en Msida
-f072,sinonimo,school,Un lugar para preparar a los chavales para los exámenes oficiales en Gzira
-f073,sinonimo,school,Un centro donde enseñar oficios a adultos en Valletta
-f074,sinonimo,school,"clases de refuerzo de matemáticas para adolescentes, con local propio en Sliema"
-f075,sinonimo,sport,Un local con pesas y cintas de correr en Gzira
-f076,sinonimo,sport,Quiero un espacio para dar clases de estiramientos y respiración en Sliema
-f077,sinonimo,sport,Un sitio donde enseñar a pelear con guantes y tatami en Msida
-f078,sinonimo,sport,Una instalación con pistas para jugar partidos entre amigos en Marsaskala
-f079,sinonimo,sport,Un lugar cubierto con vaso climatizado para nadar todo el año en Valletta
-f080,sinonimo,leisure,Un local para que la gente baile hasta las tantas los fines de semana en St Julian's
-f081,sinonimo,leisure,Un sitio con pantalla grande donde proyectar películas en Birkirkara
-f082,sinonimo,leisure,Quiero un espacio con escenario para grupos que tocan en directo en Valletta
-f083,sinonimo,leisure,Un local lleno de máquinas y futbolines para que los chavales jueguen en Msida
-f084,sinonimo,leisure,Un espacio donde exponer piezas históricas para que la gente las visite en Sliema
-f085,sinonimo,mall,Un edificio grande con muchas tiendas distintas bajo el mismo techo en Birkirkara
-f086,sinonimo,mall,"Quiero levantar un complejo con decenas de locales, aparcamiento y zona de comidas en Marsaskala"
-f087,sinonimo,mall,Un recinto donde las marcas vendan su stock antiguo más barato en Msida
-f088,sinonimo,mall,Una galería cubierta con locales en alquiler para varias marcas en Gzira
-f089,sinonimo,mall,Un conjunto de tiendas con pasillos interiores y escaleras mecánicas en Valletta
-f090,sinonimo,mall,Me interesa promover un espacio con muchos operadores comerciales distintos en Sliema
-f091,sinonimo,belleza,Un sitio donde cortarse el pelo y teñirse en Sliema
-f092,sinonimo,belleza,Un local donde arreglen la barba con navaja en Msida
-f093,sinonimo,belleza,Quiero un negocio para hacer manicura y pedicura en Gzira
-f094,sinonimo,belleza,Un local donde quitar el vello con cera y láser en St Julian's
-f095,sinonimo,taller,Un local donde arreglar el motor y cambiar el aceite de los coches en Birkirkara
-f096,sinonimo,taller,"Un sitio donde dejen el coche como nuevo después de un golpe, con pintura y todo, en Marsaskala"
-f097,sinonimo,taller,Negocio para cambiar y equilibrar las ruedas de coches y furgonetas en Msida
-f098,sinonimo,alojamiento,Un edificio con habitaciones para turistas que se quedan unas noches en Valletta
-f099,sinonimo,alojamiento,Un sitio barato con literas para mochileros en St Julian's
-f100,sinonimo,alojamiento,Pisos amueblados para alquilar por días a los que vienen de vacaciones a Sliema
-f101,errata,food_drink,Abrir una cafeteria en Slema
-f102,errata,food_drink,quiero un restaurnte en Valletta
-f103,errata,food_drink,panaderia artesana en Birkirkara
-f104,errata,food_drink,montar una heladeria en Marsaskala
-f105,errata,food_drink,un bar de tapaz en Msida
-f106,errata,food_drink,pizzeria con horno de leña en Gzira
-f107,errata,business,ferreteria en Msida
-f108,errata,business,abrir una lavanderia en Birkirkara
-f109,errata,business,inmobiliria en Sliema
-f110,errata,business,una óptca en Valletta
-f111,errata,business,tienda de rop en Gzira
-f112,errata,business,agencia de viages en St Julian's
-f113,errata,hospital,clinica dentl en Sliema
-f114,errata,hospital,farmaica en Msida
-f115,errata,hospital,veterinria para perros en Marsaskala
-f116,errata,school,guarderia en Birkirkara
-f117,errata,school,academa de ingles en Msida
-f118,errata,school,esucela de idiomas en St Julian's
-f119,errata,sport,gimansio en Gzira
-f120,errata,sport,estudio de pilatess en Sliema
-f121,errata,sport,club de natacin en Marsaskala
-f122,errata,leisure,discoteka en St Julian's
-f123,errata,leisure,abrir un cne en Birkirkara
-f124,errata,leisure,museo de hitoria en Valletta
-f125,errata,mall,centro comerical en Birkirkara
-f126,errata,mall,quiero un centro comercail en Msida
-f127,errata,mall,montar un outelt en Marsaskala
-f128,errata,mall,plaza comerical en Gzira
-f129,errata,mall,galeria comerciall en Valletta
-f130,errata,mall,un centro comerciañ grande en Sliema
-f131,errata,belleza,peluqueria en Sliema
-f132,errata,belleza,abrir una barberia en Msida
-f133,errata,belleza,salon de uñs en Gzira
-f134,errata,belleza,centro de esttica en St Julian's
-f135,errata,taller,taler mecanico en Birkirkara
-f136,errata,taller,tallerr de chapa y pintura en Marsaskala
-f137,errata,taller,taller de neumaticos en Msida
-f138,errata,alojamiento,hotle pequeño en Valletta
-f139,errata,alojamiento,abrir un hostla en St Julian's
-f140,errata,alojamiento,apartamentos turisticos en Slima
-f141,larga,food_drink,"Soy cocinero y llevo ocho años trabajando en hoteles de la isla, ahora quiero independizarme y abrir mi propio restaurante en Sliema, cerca del paseo marítimo, porque veo mucha gente paseando por las tardes."
-f142,larga,food_drink,"Mi mujer y yo somos de Buenos Aires, vivimos en Msida desde hace tres años y hemos visto que a la salida de la universidad no hay ni una cafetería decente, así que estamos pensando en montar una."
-f143,larga,food_drink,"Después de la pandemia cerró la panadería de mi barrio en Birkirkara y desde entonces los vecinos tenemos que ir hasta el centro a comprar pan, creo que hay hueco para abrir otra en la misma calle."
-f144,larga,food_drink,"Llevo toda la vida haciendo helado artesanal en Colombia y me he mudado a Marsaskala con mi familia; en verano esto se llena de gente y no veo heladerías suficientes, ¿tendría sentido poner una?"
-f145,larga,food_drink,"Tengo algo de dinero ahorrado tras vender un piso y me planteo invertirlo en un bar de copas en St Julian's, aunque me preocupa que la zona ya esté muy saturada de locales nocturnos."
-f146,larga,food_drink,"Soy mexicano, llevo dos años en Malta y echo mucho de menos la comida de casa; estoy valorando abrir una taquería pequeña en Gzira, con un par de mesas y sobre todo pedidos para llevar."
-f147,larga,food_drink,Trabajo de camarero en Valletta y conozco bien el movimiento de turistas por la mañana; me gustaría abrir una cafetería de especialidad en una calle secundaria donde el alquiler no sea tan caro.
-f148,larga,food_drink,"Somos tres socios con experiencia en hostelería y queremos abrir un restaurante de pescado en Marsaskala, aprovechando que los fines de semana baja mucha gente de otras localidades a comer junto al mar."
-f149,larga,food_drink,"Mi madre guarda recetas de repostería italiana de mi abuela y pensamos abrir una pastelería en Birkirkara, aunque antes querría saber cuántos negocios parecidos hay ya en un radio de diez minutos andando."
-f150,larga,food_drink,"Me jubilo el año que viene y no quiero quedarme parado en casa, así que estoy dándole vueltas a montar un pequeño bar de barrio en Msida donde los vecinos puedan tomar algo tranquilos."
-f151,larga,business,Soy electricista y llevo años comprando material en tiendas que me pillan lejos; he pensado abrir yo mismo una ferretería en Birkirkara orientada a gremios y a reformas pequeñas de particulares.
-f152,larga,business,"Vivimos en un edificio de Msida lleno de estudiantes y ninguno tiene lavadora en casa, así que mi socio y yo queremos abrir una lavandería de autoservicio abierta hasta bien tarde."
-f153,larga,business,"Soy agente inmobiliaria en Madrid y me traslado a Malta el año que viene; quiero abrir mi propia inmobiliaria en Sliema, especializada en alquiler de larga duración para extranjeros que llegan a trabajar."
-f154,larga,business,"Después de quince años trabajando como óptico por cuenta ajena me gustaría abrir mi propia óptica en Valletta, con taller de montaje propio y revisiones de la vista con cita previa."
-f155,larga,business,"Mi hermana y yo importamos ropa de Turquía y vendemos por internet, pero creemos que ya toca dar el salto y abrir una tienda física en Gzira para que la gente se pruebe."
-f156,larga,business,"Llevo tiempo dándole vueltas a montar una agencia de viajes en St Julian's enfocada en excursiones para los cruceros que paran aquí, porque veo mucha demanda y muy poca oferta organizada."
-f157,larga,business,Soy abogada y quiero montar un despacho con otros dos compañeros en Valletta; necesitamos una oficina a pie de calle que dé buena imagen y que esté cerca de los juzgados.
-f158,larga,business,"Trabajo reparando ordenadores desde casa y los clientes me piden cada vez más un sitio donde dejarlos, así que estoy pensando abrir una tienda de informática y reparación en Marsaskala."
-f159,larga,business,"Mi padre tenía una floristería en Sevilla y aprendí el oficio con él; ahora que vivo en Malta quiero abrir una tienda de flores en Sliema, cerca de las iglesias y los hoteles."
-f160,larga,business,"Tengo una furgoneta y un almacén alquilado y quiero formalizar el negocio abriendo una papelería y copistería en Msida, al lado de la universidad, porque los estudiantes imprimen muchísimo cada semana."
-f161,larga,hospital,"Soy dentista colegiada en Argentina y ya he homologado el título en Malta; quiero abrir mi propia clínica dental en Sliema, con dos gabinetes y horario de tarde para gente que trabaja."
-f162,larga,hospital,"Mi socio es farmacéutico y yo llevo la parte administrativa; estamos buscando dónde abrir una farmacia en Msida, teniendo en cuenta que cerca hay residencias de estudiantes y bastantes personas mayores."
-f163,larga,hospital,"Soy fisioterapeuta deportivo y atiendo a domicilio, pero ya no doy abasto con los desplazamientos, así que me planteo abrir un centro de fisioterapia en Birkirkara con dos camillas y sala de ejercicios."
-f164,larga,hospital,Tenemos tres perros y siempre nos toca cruzar media isla al veterinario; mi pareja es veterinaria y estamos valorando abrir una clínica veterinaria en Marsaskala con urgencias los fines de semana.
-f165,larga,hospital,"Trabajo en un laboratorio de análisis clínicos desde hace doce años y creo que podría abrir uno propio en Valletta, con extracciones por la mañana temprano y resultados enviados por correo electrónico."
-f166,larga,hospital,"Soy psicóloga sanitaria y ahora mismo alquilo despacho por horas, pero quiero abrir mi propia consulta en Gzira donde poder atender a adultos y adolescentes en un espacio tranquilo y privado."
-f167,larga,hospital,"Soy podóloga y llevo años pasando consulta en un centro ajeno; me gustaría abrir mi propia consulta de podología en Sliema, porque hay mucha gente mayor en la zona y poca oferta."
-f168,larga,school,"Somos dos maestras de infantil y estamos cansadas de trabajar para otros, así que queremos abrir una guardería en Birkirkara con horario amplio para padres que entran a trabajar muy temprano."
-f169,larga,school,"Doy clases particulares de inglés en casa y ya tengo lista de espera, por eso estoy pensando en alquilar un local en Msida y abrir una academia en condiciones con dos o tres profesores."
-f170,larga,school,"Llegan muchísimos estudiantes extranjeros cada verano a St Julian's y me pregunto si todavía hay sitio para abrir otra escuela de idiomas, o si el mercado ya está completamente copado."
-f171,larga,school,Mi marido es profesor de matemáticas y yo de física; llevamos años dando refuerzo y queremos abrir un centro de estudios en Gzira para preparar los exámenes de bachillerato y de acceso a la universidad.
-f172,larga,school,Trabajé diez años como formador en una empresa de construcción y ahora quiero abrir un centro de formación en Valletta donde impartir cursos de prevención de riesgos y certificados profesionales.
-f173,larga,school,"En mi barrio de Marsaskala hay muchísimas familias jóvenes con niños pequeños y ninguna escuela infantil cerca, así que estoy valorando seriamente abrir una con un par de aulas."
-f174,larga,school,Soy músico y doy clases de guitarra en casa de los alumnos; me gustaría abrir una escuela de música en Sliema con cabinas insonorizadas para que varios profesores trabajen a la vez.
-f175,larga,sport,"Soy entrenador personal y ahora mismo entreno a mis clientes en el parque, pero cuando llueve no tengo dónde meterlos, así que quiero abrir un gimnasio pequeño en Gzira con material básico."
-f176,larga,sport,Después de años practicando yoga en la India me he instalado en Sliema y estoy buscando un local luminoso para abrir un estudio de yoga con clases de mañana y de tarde.
-f177,larga,sport,Mi hijo entrena judo y tenemos que llevarlo hasta Valletta cada tarde; soy cinturón negro y me planteo abrir un dojo de artes marciales en Msida para niños y para adultos.
-f178,larga,sport,"Veo que el pádel está explotando en toda Europa y en Malta aún hay pocas pistas, por eso estoy estudiando abrir un club de pádel en Marsaskala con dos o tres canchas cubiertas."
-f179,larga,sport,"Soy socorrista y monitora de natación, llevo años dando clases a niños en piscinas ajenas y me gustaría abrir mi propio centro con piscina climatizada en Birkirkara."
-f180,larga,sport,"Trabajo en una oficina en Valletta y veo que mis compañeros salen a correr al mediodía sin ningún sitio donde ducharse, ¿tendría sentido abrir un gimnasio enfocado a gente de oficina?"
-f181,larga,sport,"Hago crossfit desde hace seis años y acabo de sacarme la certificación de entrenador, así que quiero abrir un box en Gzira con barras, anillas y clases en grupos reducidos."
-f182,larga,leisure,Soy DJ y llevo pinchando en St Julian's desde que llegué a la isla; ahora quiero dar el paso y abrir mi propia discoteca con un aforo mediano y buena insonorización.
-f183,larga,leisure,"En Birkirkara no queda ni una sala de cine desde que cerró la vieja y la gente tiene que coger el coche, así que estoy valorando abrir un cine pequeño de dos salas."
-f184,larga,leisure,"Tengo un local heredado en Valletta con techos altos y buena acústica, y se me ha ocurrido convertirlo en una sala de conciertos para grupos locales que tocan en directo."
-f185,larga,leisure,"Mis sobrinos se pasan el día pidiendo que los lleve a jugar a las máquinas y no hay nada cerca, así que me planteo abrir un salón recreativo en Msida con videojuegos y bolos."
-f186,larga,leisure,Soy historiadora y tengo una colección familiar de objetos de la época de los caballeros; querría abrir un museo privado en Sliema cobrando una entrada simbólica a los turistas.
-f187,larga,leisure,Después de trabajar muchos años en producción teatral en Colombia me gustaría abrir un pequeño teatro en Valletta donde programar obras en inglés y en español para públicos distintos.
-f188,larga,leisure,"Los fines de semana no hay nada que hacer con niños en Marsaskala cuando aprieta el calor, por eso estoy pensando en abrir un parque de juegos cubierto con camas elásticas y toboganes."
-f189,larga,mall,"Un grupo de inversores con el que trabajo quiere levantar un centro comercial en Birkirkara, con unas cuarenta tiendas, aparcamiento subterráneo y una zona de restauración en la planta de arriba."
-f190,larga,mall,Tengo acceso a una parcela grande junto a la carretera en Marsaskala y me pregunto si saldrían las cuentas para construir allí un centro comercial con varios operadores distintos.
-f191,larga,belleza,"Soy peluquera desde los diecisiete años, he trabajado en Barcelona y en Londres, y ahora que vivo en Sliema quiero abrir mi propia peluquería con dos sillones y cita previa."
-f192,larga,belleza,"Mi primo y yo somos barberos y vemos que a los chavales de Msida les encanta el estilo clásico, así que estamos buscando local para abrir una barbería con música y buen ambiente."
-f193,larga,belleza,Llevo tres años haciendo uñas en casa y ya tengo clientela fija; creo que ha llegado el momento de abrir un salón de manicura en Gzira con dos puestos y una empleada.
-f194,larga,belleza,Soy esteticista titulada y he trabajado en un hotel de cinco estrellas; me gustaría abrir mi propio centro de estética en St Julian's con cabinas para depilación y tratamientos faciales.
-f195,larga,taller,"Soy mecánico y llevo doce años en un concesionario, pero quiero montar mi propio taller mecánico en Birkirkara, especializado en marcas japonesas y con servicio de recogida del coche."
-f196,larga,taller,"Después de un accidente tuve que buscar quién me arreglara la carrocería y tardé semanas en encontrar sitio, por eso creo que hay negocio abriendo un taller de chapa y pintura en Marsaskala."
-f197,larga,taller,"Trabajo importando neumáticos desde Italia y me planteo abrir un taller de montaje y equilibrado en Msida, con cita por internet y cambio en menos de media hora."
-f198,larga,alojamiento,Hemos comprado un palacete antiguo en Valletta que necesita obra y la idea es rehabilitarlo para abrir un hotel boutique de doce habitaciones orientado al turismo cultural de fuera de temporada.
-f199,larga,alojamiento,"Mi familia tiene dos pisos vacíos en Sliema y estamos pensando en registrarlos como apartamentos turísticos para alquilarlos por noches, aunque no sabemos si la zona ya está muy saturada."
-f200,larga,alojamiento,Soy mochilero de toda la vida y conozco bien lo que busca ese público; me gustaría abrir un albergue con literas y cocina común en St Julian's a precios razonables.
-f201,fuera,ninguna,"Ayer cené en un restaurante buenísimo en Valletta, con vistas al puerto y a un precio razonable."
-f202,fuera,ninguna,Mi hermana trabaja en una peluquería de Sliema y los sábados sale agotada.
-f203,fuera,ninguna,El gimnasio al que voy en Gzira ha subido la cuota otra vez y estoy pensando en darme de baja.
-f204,fuera,ninguna,¿Sabes si la farmacia de Msida abre los domingos? Necesito algo para la alergia.
-f205,fuera,ninguna,Mi hijo va a una guardería en Birkirkara y estamos contentísimos con las profesoras.
-f206,fuera,ninguna,"El centro comercial de Birkirkara estaba hasta arriba el sábado, no encontré sitio para aparcar."
-f207,fuera,ninguna,Llevé el coche al taller la semana pasada y me cobraron una barbaridad por cambiar la correa.
-f208,fuera,ninguna,Nos alojamos en un hotel de St Julian's el año pasado y el desayuno era malísimo.
-f209,fuera,ninguna,En el cine que hay al lado de casa ponen películas en versión original los miércoles.
-f210,fuera,ninguna,La clínica dental donde me hice la ortodoncia ha cerrado y no sé adónde pedir mi historial.
-f211,fuera,ninguna,Mi vecina abrió una barbería hace dos años y dice que le va bastante bien.
-f212,fuera,ninguna,¿A qué hora cierra el museo de Valletta? Quiero ir este domingo por la tarde.
-f213,fuera,ninguna,Trabajo en una academia de inglés en Msida dando clases por las tardes.
-f214,fuera,ninguna,El bar de la esquina ha cambiado de dueño y ahora ponen tapas con la caña.
-f215,fuera,ninguna,Mi prima estudia enfermería y hace prácticas en un hospital de Malta este semestre.
-f216,fuera,ninguna,La discoteca de St Julian's donde fuimos en verano ha cerrado por problemas de licencia.
-f217,fuera,ninguna,Pedí cita en la veterinaria de Marsaskala para vacunar al gato y me la han dado para dentro de tres semanas.
-f218,fuera,ninguna,El outlet que hay camino del aeropuerto tiene buenas rebajas en enero.
-f219,fuera,ninguna,¿Cuánto cuesta el billete de autobús de Sliema a Valletta?
-f220,fuera,ninguna,"Estoy buscando piso de alquiler de dos habitaciones en Gzira, ¿han subido mucho los precios?"
-f221,fuera,ninguna,¿Qué papeles necesito para sacarme el carnet de conducir maltés?
-f222,fuera,ninguna,¿Merece la pena visitar Gozo en un solo día o mejor quedarse a dormir?
-f223,fuera,ninguna,¿Hay ferry directo de Sliema a Valletta por la mañana temprano?
-f224,fuera,ninguna,"Necesito renovar el pasaporte español estando en Malta, ¿dónde se hace eso?"
-f225,fuera,ninguna,¿Cómo me doy de alta en la seguridad social maltesa?
-f226,fuera,ninguna,¿Qué tiempo suele hacer en Malta en marzo? Vamos de vacaciones con niños.
-f227,fuera,ninguna,¿Es fácil aparcar en Valletta entre semana?
-f228,fuera,ninguna,¿Dónde puedo contratar internet de fibra en Msida?
-f229,fuera,ninguna,"Busco colegio público para mi hija de ocho años, acabamos de llegar a la isla."
-f230,fuera,ninguna,¿Cuánto se paga de impuestos por una nómina de 2.000 euros al mes en Malta?
-f231,fuera,ninguna,¿Hay algún autobús nocturno desde St Julian's hasta Birkirkara?
-f232,fuera,ninguna,"Me han puesto una multa de tráfico en Marsaskala, ¿cómo la pago por internet?"
-f233,fuera,ninguna,¿Sabes si hace falta visado para venir desde Colombia como turista?
-f234,fuera,ninguna,¿Dónde se hace el cambio de la tarjeta de residencia?
-f235,fuera,ninguna,"Quiero aprender maltés, ¿es muy difícil para un hispanohablante?"
-f236,fuera,ninguna,"Hola, buenas tardes."
-f237,fuera,ninguna,"Buenas, ¿qué tal todo por ahí?"
-f238,fuera,ninguna,qwertyuiop
-f239,fuera,ninguna,"Gracias por la ayuda, hasta luego."
-f240,fuera,ninguna,???
-f241,fuera,ninguna,probando a ver si funciona esto
-f242,fuera,ninguna,"Buenos días, ¿me escuchas?"
-f243,fuera,ninguna,aaaaa
-f244,fuera,ninguna,jajajaja qué bueno
-f245,fuera,ninguna,test 123
-f246,fuera,ninguna,ok
-f247,fuera,ninguna,¿qué puedes hacer tú exactamente?
-f248,fuera,ninguna,"no sé, déjalo"
-f249,fuera,ninguna,"Quiero montar algo, aún no sé el qué."
-f250,fuera,ninguna,Busco una idea de negocio rentable en Malta.
-f251,fuera,ninguna,Tengo dinero ahorrado y quiero invertirlo en lo que sea.
-f252,fuera,ninguna,¿Qué negocios funcionan mejor en la isla ahora mismo?
-f253,fuera,ninguna,"Me gustaría ser mi propio jefe, pero no tengo claro en qué sector."
-f254,fuera,ninguna,"Algo relacionado con el turismo, no sé bien qué."
-f255,fuera,ninguna,Quiero emprender este año sí o sí.
-f256,fuera,ninguna,"¿Dónde hay más oportunidades, en el norte o en el sur de Malta?"
-f257,fuera,ninguna,"Busco socio para un proyecto, todavía sin definir."
-f258,fuera,ninguna,"Nada en concreto, solo estoy mirando opciones."
-f259,fuera,ninguna,¿Cuánto dinero hace falta para empezar un negocio aquí?
-f260,fuera,ninguna,Mi idea es trabajar por mi cuenta en algo creativo.
+id,fila
+f001,24
+f002,256
+f003,108
+f004,100
+f005,117
+f006,169
+f007,80
+f008,7
+f009,41
+f010,210
+f011,30
+f012,168
+f013,46
+f014,120
+f015,190
+f016,178
+f017,18
+f018,82
+f019,74
+f020,203
+f021,53
+f022,125
+f023,230
+f024,204
+f025,234
+f026,101
+f027,215
+f028,5
+f029,29
+f030,94
+f031,90
+f032,206
+f033,65
+f034,183
+f035,105
+f036,49
+f037,175
+f038,214
+f039,83
+f040,200
+f041,227
+f042,197
+f043,188
+f044,243
+f045,172
+f046,130
+f047,199
+f048,70
+f049,78
+f050,174
+f051,241
+f052,194
+f053,42
+f054,159
+f055,144
+f056,195
+f057,141
+f058,223
+f059,170
+f060,247
+f061,252
+f062,33
+f063,153
+f064,225
+f065,56
+f066,64
+f067,32
+f068,47
+f069,246
+f070,88
+f071,23
+f072,253
+f073,232
+f074,107
+f075,240
+f076,139
+f077,118
+f078,259
+f079,50
+f080,166
+f081,89
+f082,27
+f083,173
+f084,191
+f085,3
+f086,81
+f087,196
+f088,155
+f089,193
+f090,224
+f091,233
+f092,136
+f093,93
+f094,220
+f095,28
+f096,75
+f097,31
+f098,97
+f099,165
+f100,66
+f101,143
+f102,129
+f103,244
+f104,11
+f105,57
+f106,59
+f107,115
+f108,171
+f109,161
+f110,76
+f111,87
+f112,36
+f113,231
+f114,258
+f115,212
+f116,248
+f117,185
+f118,135
+f119,14
+f120,2
+f121,222
+f122,0
+f123,127
+f124,257
+f125,177
+f126,22
+f127,164
+f128,182
+f129,236
+f130,229
+f131,52
+f132,245
+f133,187
+f134,128
+f135,235
+f136,104
+f137,163
+f138,216
+f139,8
+f140,181
+f141,208
+f142,211
+f143,162
+f144,205
+f145,91
+f146,116
+f147,98
+f148,138
+f149,122
+f150,226
+f151,140
+f152,63
+f153,228
+f154,103
+f155,10
+f156,99
+f157,69
+f158,219
+f159,13
+f160,121
+f161,71
+f162,217
+f163,186
+f164,96
+f165,180
+f166,26
+f167,92
+f168,147
+f169,218
+f170,189
+f171,123
+f172,237
+f173,167
+f174,79
+f175,132
+f176,151
+f177,148
+f178,84
+f179,111
+f180,106
+f181,133
+f182,192
+f183,201
+f184,158
+f185,102
+f186,1
+f187,152
+f188,114
+f189,150
+f190,149
+f191,142
+f192,34
+f193,238
+f194,48
+f195,67
+f196,124
+f197,109
+f198,254
+f199,176
+f200,37
+f201,160
+f202,85
+f203,145
+f204,119
+f205,55
+f206,95
+f207,72
+f208,20
+f209,38
+f210,239
+f211,221
+f212,68
+f213,242
+f214,35
+f215,51
+f216,77
+f217,146
+f218,6
+f219,113
+f220,21
+f221,9
+f222,112
+f223,213
+f224,198
+f225,40
+f226,44
+f227,25
+f228,250
+f229,45
+f230,179
+f231,19
+f232,255
+f233,61
+f234,15
+f235,16
+f236,110
+f237,4
+f238,126
+f239,184
+f240,134
+f241,156
+f242,39
+f243,60
+f244,43
+f245,157
+f246,131
+f247,249
+f248,207
+f249,86
+f250,58
+f251,202
+f252,209
+f253,54
+f254,17
+f255,73
+f256,137
+f257,154
+f258,12
+f259,251
+f260,62

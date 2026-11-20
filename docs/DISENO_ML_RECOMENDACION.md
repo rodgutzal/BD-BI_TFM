@@ -507,7 +507,7 @@ Las 200 que describen un negocio se reparten así por categoría: `food_drink` 3
 
 **Dos correcciones a los prompts respecto de §L2, decididas antes de generar.**
 
-1. **Se arregla la asimetría del límite 7 de §L2.** Allí el etiquetador ciego recibió, para `ninguna`, una cláusula que los prompts de generación no llevaban, y eso explica probablemente la mitad de los ocho desacuerdos y deprimió el 96 % de acuerdo. Esta vez **el bloque de definiciones de las diez categorías y de `ninguna` es literalmente el mismo texto** en los cinco prompts de generación y en el de etiquetado ciego; los prompts se escriben desde una plantilla común para que no puedan divergir.
+1. **Se arregla la asimetría del límite 7 de §L2.** Allí el etiquetador ciego recibió, para `ninguna`, una cláusula que los prompts de generación no llevaban, y eso explica probablemente la mitad de los ocho desacuerdos y deprimió el 96 % de acuerdo. Esta vez **el bloque de definiciones de las diez categorías y de `ninguna` es literalmente el mismo texto** en los cinco prompts de generación y en el de etiquetado ciego: se escribió una vez y se insertó en los seis, y está comprobado que los seis bloques son idénticos. Precisión que un `code-review` pidió hacer: **el script que los generó no se versionó**, así que lo que el repositorio garantiza es el resultado —los seis prompts con el mismo bloque— y no el mecanismo; si alguien edita un prompt a mano, nada impide que divergan. Para un cuarto conjunto convendría versionar el generador o añadir un test que compare los bloques.
 2. **La definición de `business` cambia, y es imprescindible.** En §L2 decía «comercio y servicios generales que no son ninguna de las seis anteriores: tiendas, **peluquerías**, **talleres**, oficinas, ferreterías, agencias, lavanderías…». Las peluquerías y los talleres **ya no son `business`**: son `belleza` y `taller`. Si el prompt mantuviera esa frase, el autor del examen etiquetaría peluquerías como `business` y la evaluación mediría mal el cambio que se quiere medir.
 
 **Límites de este protocolo, declarados ANTES de ejecutarlo**
@@ -531,7 +531,15 @@ Un `code-review` encontró un fallo de procedimiento en el etiquetado ciego de l
 
 **Compromiso, fijado aquí antes de ejecutar nada:** la **segunda** pasada es la de referencia, diga lo que diga. Si al corregir el etiquetado aparecen frases ambiguas, el conjunto principal se reduce, las cifras cambian y **la decisión que salga es la que vale, incluso si se invierte**. No se elige entre las dos pasadas: la primera queda registrada como lo que es, una medición con un instrumento roto, y se conserva en este documento para que se pueda comparar.
 
-#### Resultado de la PRIMERA pasada (19-nov-2026, con el etiquetado ciego defectuoso): el híbrido NO se adopta
+**Resultado de la corrección: la fuga NO era la causa, y ahora hay evidencia de cuál es.** Con los ids reasignados después de barajar (228 tramos contiguos de categoría frente a los 41 de antes; al azar serían unos 235) y un etiquetador independiente **nuevo**, el acuerdo vuelve a ser de **260 de 260 (100 %), cero ambiguas**. Las dos pasadas coinciden, así que:
+
+- El conjunto `frases_evaluacion_v3.psv` **no cambia ni un byte**: los dos etiquetadores coincidieron con el autor en todas las frases, luego la columna `ciego` es la misma.
+- La evaluación **reproduce exactamente** las mismas cifras y la misma decisión (ver abajo), así que el compromiso se cumple sin ambigüedad.
+- Y lo importante: lo que antes era una **atribución sin respaldo** pasa a ser un resultado. El 100 % de acuerdo **no venía de la fuga en los ids**; viene del sesgo correlacionado que el límite 1 anunció. Dos sesiones del mismo modelo, sin ninguna pista, clasifican igual las 260 frases, incluidas las difíciles del bloque fuera de alcance. **El etiquetado ciego pierde su función como comprobación independiente cuando el etiquetador comparte familia con el generador**, y eso ya no es una sospecha.
+
+#### Resultado (19-nov-2026): el híbrido NO se adopta
+
+Las cifras de abajo son las de las **dos pasadas**, que son idénticas: la primera con el etiquetado defectuoso y la segunda, la de referencia, con los ids corregidos. Al coincidir los dos etiquetadores con el autor en las 260 frases, el conjunto evaluado es el mismo y el resultado se reprodujo exactamente.
 
 | Sistema (260 frases) | Exactitud | Respuestas equivocadas | Sin respuesta |
 |---|---|---|---|
@@ -554,7 +562,7 @@ Un `code-review` encontró un fallo de procedimiento en el etiquetado ciego de l
 
 **Dos cosas que no salieron como se había declarado**
 
-1. **El acuerdo del etiquetado ciego fue del 100 % (260 de 260, cero ambiguas).** En §L2, con Codex generando y Codex etiquetando, fue del 96 % con 8 ambiguas. Dos sesiones del mismo modelo coinciden en todo, incluidas las frases difíciles del bloque fuera de alcance, y sus recuentos por categoría salen idénticos. **El etiquetado ciego aquí no filtró nada: fue un eco, no una comprobación independiente.** Es el sesgo correlacionado que el límite 1 anunció, y confirma que el paso perdió su función con un autor de la misma familia.
+1. **El acuerdo del etiquetado ciego fue del 100 % (260 de 260, cero ambiguas), y se comprobó dos veces.** En §L2, con Codex generando y Codex etiquetando, fue del 96 % con 8 ambiguas. Aquí, con dos etiquetadores distintos y en la segunda pasada sin ninguna pista en los ids, el acuerdo es total: coinciden en todo, incluidas las frases difíciles del bloque fuera de alcance, y los recuentos por categoría salen idénticos a las cuotas. **El etiquetado ciego aquí no filtró nada: fue un eco, no una comprobación independiente.** Es el sesgo correlacionado que el límite 1 anunció, y la corrección del defecto de los ids permite afirmarlo con evidencia en vez de por sospecha: **con un etiquetador de la misma familia que el generador, este paso del protocolo deja de cumplir su función.** Para un cuarto conjunto habría que etiquetar con un modelo de otra familia o con una persona.
 2. **La predicción de que el conjunto saldría «optimista» era equivocada en una dimensión importante.** El límite 1 avisaba de que un autor de la misma familia escribiría frases que el vocabulario ya conoce. En los **sinónimos** pasó lo contrario: las palabras clave sacan **10 %** aquí frente al 69 % de §L2, porque el autor se tomó en serio el rodeo («un sitio donde cortarse el pelo») mientras el conjunto anterior usaba términos que el método ya reconocía. El conjunto es **más difícil**, no más fácil, y por eso las cifras absolutas de §L3 no son comparables con las de §L2 en ninguna dirección.
 
 **Lo que queda abierto.** Este tercer conjunto también queda **consumido**. Un cuarto intento necesitaría un conjunto nuevo y, a la vista del diagnóstico, bastantes más frases de entrenamiento de `belleza`, `taller` y `alojamiento` que las 40 por clase de ahora.

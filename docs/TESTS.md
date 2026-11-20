@@ -6,7 +6,7 @@
 > añade su archivo a la tabla de la sección *Tests* del README (si es un archivo nuevo) y
 > regenera este catálogo.
 
-**60 archivos · 1318 funciones de test · 1574 casos** (un caso es una ejecución: un test parametrizado genera varios).
+**60 archivos · 1320 funciones de test · 1576 casos** (un caso es una ejecución: un test parametrizado genera varios).
 
 | Archivo | Funciones | Casos |
 |---|---:|---:|
@@ -48,7 +48,7 @@
 | [`tests/test_ml_panorama.py`](#teststest_ml_panoramapy) | 36 | 36 |
 | [`tests/test_ml_panorama_view.py`](#teststest_ml_panorama_viewpy) | 43 | 43 |
 | [`tests/test_ml_places.py`](#teststest_ml_placespy) | 31 | 31 |
-| [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 43 | 56 |
+| [`tests/test_ml_text_classifier.py`](#teststest_ml_text_classifierpy) | 44 | 57 |
 | [`tests/test_ml_validation.py`](#teststest_ml_validationpy) | 31 | 33+ |
 | [`tests/test_normalize_bronze_timestamps.py`](#teststest_normalize_bronze_timestampspy) | 15 | 15 |
 | [`tests/test_operations_dashboard.py`](#teststest_operations_dashboardpy) | 7 | 7+ |
@@ -64,7 +64,7 @@
 | [`tests/test_sectores.py`](#teststest_sectorespy) | 17 | 21+ |
 | [`tests/test_strip_panorama_gap.py`](#teststest_strip_panorama_gappy) | 16 | 16 |
 | [`tests/test_tests_documentation.py`](#teststest_tests_documentationpy) | 9 | 9 |
-| [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 12 | 12 |
+| [`tests/test_text_hibrido.py`](#teststest_text_hibridopy) | 13 | 13 |
 | [`tests/test_time_series.py`](#teststest_time_seriespy) | 10 | 10 |
 | [`tests/test_travel_time_predictor.py`](#teststest_travel_time_predictorpy) | 28 | 31 |
 | [`tests/test_validate_closure_risk.py`](#teststest_validate_closure_riskpy) | 24 | 25 |
@@ -1302,6 +1302,7 @@
 - `test_el_bootstrap_da_un_intervalo_con_anchura_que_contiene_la_media` — Con diferencias variables el IC tiene anchura positiva y rodea a la media.
 - `test_el_softmax_es_estable_con_logits_enormes` — Con coeficientes gigantes no hay desbordamiento: las probabilidades siguen siendo válidas.
 - `test_la_evaluacion_v2_cumple_las_cuotas_fijadas_y_no_solapa_con_el_entrenamiento` — El conjunto escrito por Codex tiene la composición fijada en el protocolo (§3.L2): 200 frases con las cuotas por tipo y por categoría, sin repetidas ni coincidencias con el entrenamiento, y con la etiqueta ciega de cada una.
+- `test_la_evaluacion_v3_cumple_las_cuotas_del_protocolo_y_no_solapa_con_nada_anterior` — El tercer conjunto tiene la composición que el protocolo (§L3) declaró ANTES de generarlo: 260 frases con las cuotas por tipo y por categoría (las tres categorías nuevas incluidas), válidas para `validar_datos`, sin repetidas y sin coincidir con el entrenamiento ni con los conjuntos v1 y v2. Importa porque `validar_datos` nunca se había ejecutado contra el v3: sin este test, una frase duplicada o filtrada del entrenamiento invalidaría la medición sin que nada lo avisara.
 - `test_solo_coincidentes_deja_las_frases_donde_autor_y_etiquetador_ciego_coinciden` — Las ambiguas (etiqueta distinta) se quitan de la evaluación principal; no se tocan ni se reetiquetan las demás.
 - `test_validar_datos_rechaza_una_etiqueta_ciega_desconocida` — Una etiqueta del etiquetador que no es una categoría (p. ej. una errata suya) invalida la evaluación.
 - `test_main_con_solo_coincidentes_evalua_las_192_y_el_manifiesto_dice_quien_escribio_las_frases` — Con --solo-coincidentes se evalúan solo las frases con la misma etiqueta del autor y del etiquetador ciego, se informa de cuántas se dejan fuera, y la advertencia del manifiesto ya no dice «mismo autor».
@@ -1708,8 +1709,13 @@
 
 ## `tests/test_text_hibrido.py`
 
-> Pruebas del sistema híbrido de interpretación del texto (src/ml/text_hibrido.py) y de la carga verificada del modelo
-> adoptado en la fase 3: palabras clave primero y, solo si se abstienen, el clasificador entrenado.
+> Pruebas del sistema híbrido de interpretación del texto (src/ml/text_hibrido.py) y de la carga verificada del modelo:
+> palabras clave primero y, solo si se abstienen, el clasificador entrenado.
+>
+> Desde la fase 4 el segundo paso NO se ejecuta: el reentrenamiento a once clases no pasó la regla preregistrada (§3.L3
+> del diseño) y el manifiesto dice `adoptado: false`, así que la aplicación responde solo con palabras clave. Por eso
+> estos tests cubren tres cosas a la vez: que la lógica del híbrido sigue siendo correcta (con dobles), que el artefacto
+> versionado sigue siendo un modelo válido aunque no se use, y que la aplicación da exactamente lo que se midió.
 
 - `test_las_palabras_clave_mandan_aunque_el_modelo_diga_otra_cosa` — Si las palabras clave reconocen el negocio, esa es la respuesta y ni siquiera se consulta al modelo.
 - `test_el_modelo_solo_entra_cuando_las_palabras_clave_se_abstienen` — Con un texto que las palabras clave no reconocen, responde el modelo y se indica su confianza.
@@ -1718,6 +1724,7 @@
 - `test_un_texto_vacio_o_nulo_no_falla` — Vacío, solo espacios o None no rompen la pantalla ni el modelo: no hay categoría. El modelo simulado se abstiene ante un texto sin contenido, como hace el real; lo que se prueba es que el híbrido no falla con None.
 - `test_sin_modelo_adoptado_una_errata_no_se_entiende_y_con_un_modelo_si` — El coste medido de no adoptar el modelo de once clases: con el artefacto versionado (que la regla preregistrada no adoptó) «una pizeria» no es una palabra clave y nadie la entiende. La lógica del híbrido sí funcionaría si hubiera modelo: con un `ModeloFalso` que la lee como restauración, la respuesta sería del modelo. Esto último no depende del artefacto, solo documenta lo que se renuncia a ganar.
 - `test_el_modelo_versionado_es_evidencia_de_lo_medido_pero_no_esta_adoptado` — El modelo de once clases está en el repositorio como evidencia de lo que se midió, pero la regla preregistrada (docs/DISENO_ML_RECOMENDACION.md §L3) no lo adoptó: mejoraba la exactitud y subía las respuestas equivocadas por encima de la tolerancia. Se fija que el manifiesto existe, que su hash cuadra con el archivo (no es un artefacto cualquiera), que declara las once clases y que `adoptado` es false, de modo que la carga devuelve None y la aplicación usa solo palabras clave. Si alguien lo adoptara a mano sin pasar la regla, este test lo delata.
+- `test_el_artefacto_versionado_carga_directamente_y_es_un_modelo_usable` — El artefacto de once clases NO está adoptado (el manifiesto dice `adoptado: false`, así que `cargar_modelo_adoptado` devuelve None a propósito), pero se conserva como evidencia de lo medido. Como ningún otro test lo carga ya, un archivo con el hash correcto pero internamente inválido pasaría la suite; por eso se carga aquí SIN pasar por la carga verificada y se comprueba que sigue siendo un modelo válido: las clases son las que declara el manifiesto y clasificar devuelve una de ellas con una probabilidad entre 0 y 1.
 - `test_sin_archivos_no_hay_modelo_y_se_avisa` — Sin modelo en la carpeta devuelve None y deja un aviso, en vez de fallar.
 - `test_un_modelo_que_el_manifiesto_no_da_por_adoptado_no_se_usa` — Aunque el archivo exista y su hash cuadre, si el manifiesto dice adoptado=false no se usa.
 - `test_un_modelo_alterado_no_se_usa` — Si el archivo del modelo cambia (hash distinto al del manifiesto), no se carga.

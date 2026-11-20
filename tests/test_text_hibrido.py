@@ -1,5 +1,10 @@
-"""Pruebas del sistema híbrido de interpretación del texto (src/ml/text_hibrido.py) y de la carga verificada del modelo
-adoptado en la fase 3: palabras clave primero y, solo si se abstienen, el clasificador entrenado."""
+"""Pruebas del sistema híbrido de interpretación del texto (src/ml/text_hibrido.py) y de la carga verificada del modelo:
+palabras clave primero y, solo si se abstienen, el clasificador entrenado.
+
+Desde la fase 4 el segundo paso NO se ejecuta: el reentrenamiento a once clases no pasó la regla preregistrada (§3.L3
+del diseño) y el manifiesto dice `adoptado: false`, así que la aplicación responde solo con palabras clave. Por eso
+estos tests cubren tres cosas a la vez: que la lógica del híbrido sigue siendo correcta (con dobles), que el artefacto
+versionado sigue siendo un modelo válido aunque no se use, y que la aplicación da exactamente lo que se midió."""
 
 import json
 import logging
@@ -14,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.ml import text_hibrido as th  # noqa: E402
 from src.ml import text_training as tt  # noqa: E402
+from src.ml.text_classifier import ModeloTexto  # noqa: E402
 from tools import evaluate_text_classifier as etc  # noqa: E402
 
 DIRECTORIO = ROOT / "data" / "ml"
@@ -97,6 +103,21 @@ def test_el_modelo_versionado_es_evidencia_de_lo_medido_pero_no_esta_adoptado():
     assert len(m["modelo"]["clases"]) == 11 and "ninguna" in m["modelo"]["clases"]
     assert m["adoptado"] is False
     assert th.cargar_modelo_adoptado(DIRECTORIO) is None
+
+
+def test_el_artefacto_versionado_carga_directamente_y_es_un_modelo_usable():
+    """El artefacto de once clases NO está adoptado (el manifiesto dice `adoptado: false`, así que
+    `cargar_modelo_adoptado` devuelve None a propósito), pero se conserva como evidencia de lo medido. Como ningún
+    otro test lo carga ya, un archivo con el hash correcto pero internamente inválido pasaría la suite; por eso se
+    carga aquí SIN pasar por la carga verificada y se comprueba que sigue siendo un modelo válido: las clases son las
+    que declara el manifiesto y clasificar devuelve una de ellas con una probabilidad entre 0 y 1."""
+    m = json.loads((DIRECTORIO / th.ARCHIVO_MANIFIESTO).read_text(encoding="utf-8"))
+    modelo = ModeloTexto.load(DIRECTORIO / th.ARCHIVO_MODELO)
+    assert modelo.clases == m["modelo"]["clases"] and len(modelo.clases) == 11
+    # umbral 0: se quiere ver la clase ganadora, no que el umbral de abstención la tape
+    categoria, probabilidad = modelo.clasificar("un hospital con urgencias", umbral=0.0)
+    assert categoria in modelo.clases and 0.0 < probabilidad <= 1.0
+    assert sum(modelo.probabilidades("un hospital con urgencias").values()) == pytest.approx(1.0)
 
 
 def test_sin_archivos_no_hay_modelo_y_se_avisa(tmp_path, caplog):

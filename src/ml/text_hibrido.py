@@ -42,12 +42,10 @@ FUENTE_MODELO = "modelo"
 FUENTE_FUERA = "fuera_de_alcance"
 # Las diez categorías que sabe analizar el sistema, y las que ofrece el selector de la pantalla.
 #
-# CUIDADO con una asimetría real desde las fases 3 y 2 (18-nov-2026): las palabras clave sí reconocen `belleza`,
-# `taller` y `alojamiento`, pero el MODELO entrenado no, porque se entrenó con las ocho clases anteriores (las siete
-# de entonces más «ninguna») y no se ha vuelto a entrenar. Es decir: el modelo nunca va a proponer esas tres, solo las
-# palabras clave, y para una frase que no contenga una palabra conocida («busco local para cortar el pelo») el
-# sistema caerá en la categoría más parecida de las siete viejas. Reentrenar con las once clases es la fase 4;
-# mientras no se haga, esta lista dice lo que el sistema puede ANALIZAR, no lo que el modelo puede ADIVINAR.
+# Hoy estas diez son exactamente las que reconocen las PALABRAS CLAVE, que es lo único que responde: el modelo se
+# reentrenó a once clases en la fase 4 y la regla preregistrada no lo adoptó (§3.L3), así que no participa. La
+# consecuencia práctica es que una frase sin ninguna palabra conocida («busco local para cortar el pelo») se queda
+# SIN categoría en vez de caer en la más parecida: el sistema prefiere no responder a adivinar.
 CATEGORIAS = (
     "food_drink",
     "hospital",
