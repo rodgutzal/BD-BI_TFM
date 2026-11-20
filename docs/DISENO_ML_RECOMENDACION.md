@@ -519,7 +519,19 @@ Las 200 que describen un negocio se reparten así por categoría: `food_drink` 3
 5. **Este tercer conjunto también quedará consumido.** Una cuarta medición exigiría un cuarto conjunto.
 6. **El vocabulario de palabras clave no se congela.** Se mide el sistema tal y como está el 19-nov-2026 (419 términos); si alguien lo amplía después, las cifras dejan de describir la aplicación.
 
-#### Resultado de L3 (ejecutado UNA vez, 19-nov-2026): el híbrido NO se adopta
+#### Corrección del etiquetado ciego: la primera pasada fue defectuosa (declarado ANTES de repetirla)
+
+Un `code-review` encontró un fallo de procedimiento en el etiquetado ciego de la primera pasada, y se declara aquí **antes** de repetirlo y antes de ver el resultado nuevo.
+
+**El defecto.** Los identificadores que recibió el etiquetador (`f001`…`f260`) se asignaron **antes** de barajar, sobre el archivo generado, que está ordenado por tipo y por categoría. El id, por tanto, **delataba la agrupación**: ordenando por id aparecen solo **41 tramos contiguos** de categoría cuando al azar habría unos 235, y **todo id ≥ `f201` era `ninguna`**. El etiquetador veía líneas `id|frase`, así que tenía delante una pista de la respuesta. En §L2 esto se hizo bien: el mapa era `id,indice` con los ids asignados **después** de barajar (el id 1 correspondía a la fila 185), y no filtraba nada.
+
+**Qué invalida.** No la generación de las frases, que no vio nada, ni las cuotas, ni el control de calidad. Invalida **la interpretación del 100 % de acuerdo**: con la fuga presente es imposible distinguir si ese acuerdo viene del sesgo de familia que el límite 1 anunció o simplemente de que los ids daban la agrupación. La atribución al sesgo que se escribió primero no se sostiene.
+
+**Qué se hace.** Se reasignan los ids **después** de barajar, como en §L2, un etiquetador independiente nuevo vuelve a clasificar las mismas 260 frases —que no cambian— y se vuelve a evaluar.
+
+**Compromiso, fijado aquí antes de ejecutar nada:** la **segunda** pasada es la de referencia, diga lo que diga. Si al corregir el etiquetado aparecen frases ambiguas, el conjunto principal se reduce, las cifras cambian y **la decisión que salga es la que vale, incluso si se invierte**. No se elige entre las dos pasadas: la primera queda registrada como lo que es, una medición con un instrumento roto, y se conserva en este documento para que se pueda comparar.
+
+#### Resultado de la PRIMERA pasada (19-nov-2026, con el etiquetado ciego defectuoso): el híbrido NO se adopta
 
 | Sistema (260 frases) | Exactitud | Respuestas equivocadas | Sin respuesta |
 |---|---|---|---|
