@@ -1,7 +1,8 @@
 """Cliente de OpenRouteService (ORS) con reintentos, con la misma interfaz que TomTomClient.
 
 Extraído y refactorizado del script original `src/api_extraction.py` de
-BD_BI_TFM (que hacía la llamada HTTP inline). Se mantiene como fuente de
+BD_BI_TFM (que hacía la llamada HTTP inline; ya no está en el árbol, se
+puede ver en el historial de git). Se mantiene como fuente de
 datos alternativa a TomTom: no requiere clave de pago y es la que ya usaba
 el proyecto base.
 """

@@ -165,6 +165,15 @@ funcionar, porque `python -m paquete` ejecuta `paquete/__main__.py`, no
 directamente en el código, committeada al repo. Se movió a `.env`
 (`ORS_API_KEY`), fuera de control de versiones.
 
+**Actualización (20-nov-2026):** `src/api_extraction.py` se borró del árbol
+(era código huérfano; ver README, «Archivos que ya no se usan»). Eso
+**no resuelve la exposición**: la clave sigue en el historial de git de un
+repositorio **público**, recuperable en cualquier commit anterior al
+borrado. Reescribir el historial tampoco bastaría, porque el repo ya se
+publicó y GitHub conserva los objetos accesibles por su SHA, además de los
+posibles forks y cachés. La única medida efectiva es **rotar la clave** en
+OpenRouteService. Queda pendiente de hacer.
+
 ### 3.9 Seguridad: `.dockerignore` no excluía `.env`
 
 El `.dockerignore` original de urban-mobility-analytics1 no excluía `.env`,
@@ -196,8 +205,15 @@ agregó `.env`/`.env.local` a `.dockerignore`.
 - `dowhy` estaba declarado pero **ningún archivo lo importa** — ni siquiera
   `causal_analysis.py`, que implementa su propia inferencia causal con
   `sklearn`/`scipy`. Se dejó comentado como posible extensión futura.
-- `requirements.txt` incluía `pydeck`, que no usa ningún archivo (el mapa
-  usa `st.map()` nativo de Streamlit). Eliminado.
+- `requirements.txt` incluía `pydeck`, que no importa ningún archivo.
+  Eliminado, y sigue fuera. **Corrección (20-nov-2026):** esta nota decía
+  que «el mapa usa `st.map()` nativo de Streamlit», y eso ya no es cierto.
+  Los mapas activos los dibuja Plotly con `go.Scattermapbox` sobre teselas
+  `open-street-map` (`maps_dashboard.py`, `panorama_section.py`,
+  `recommendation_dashboard.py`). El único `st.map()` que queda vive en
+  `streamlit_app/legacy_reference/components.py`, que no se ejecuta. El
+  motivo para quitar `pydeck` no cambia —nadie lo importa—, pero la razón
+  que daba esta línea describía un mapa que el proyecto ya no dibuja así.
 - `urllib3` se usa directamente (`from urllib3.util.retry import Retry`) en
   tres clientes HTTP, pero solo estaba presente de forma transitiva (vía
   `requests`). Se agregó explícito.
