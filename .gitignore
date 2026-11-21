@@ -75,3 +75,9 @@ notebooks/Asignatura7_Modelado_Predictivo.html
 
 # Estado historico de OpenStreetMap descargado para la fase 4 (tools/download_osm_history.py): se regenera, no se versiona.
 data/osm_history/
+
+# Grafo de conocimiento del proyecto que genera la herramienta graphify (/graphify .): es una vista DERIVADA del
+# codigo, con su propia cache por commit, asi que se queda obsoleta en cuanto se toca un archivo y se regenera
+# cuando hace falta. Versionarla solo meteria miles de lineas de JSON en cada diff. Aparecia en `git status` en
+# todas las ramas.
+graphify-out/
