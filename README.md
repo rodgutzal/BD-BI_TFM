@@ -79,8 +79,8 @@ BD_BI_TFM/
 │   ├── raw/
 │   │   ├── route_weather_data.csv              ← histórico fusionado (esquema unificado), ~78.500 filas al 6-nov-2026 y creciendo
 │   │   ├── legacy_ors_traffic_weather_data.csv  ← CSV original de BD_BI_TFM, sin tocar
-│   │   └── traffic_weather_data.csv             ← ⚠️ huérfano: solo lo generaba api_extraction.py (no usado, ver abajo)
-│   ├── processed/                               ← ⚠️ huérfano: solo lo generaba cleaning.py (no usado, ver abajo); 2 archivos de bytes, no reflejan el histórico real
+│   │   └── traffic_weather_data.csv             ← ⚠️ huérfano: solo lo generaba el antiguo api_extraction.py (ya borrado, ver abajo)
+│   ├── processed/                               ← ⚠️ huérfano: solo lo generaba el antiguo cleaning.py (ya borrado, ver abajo); 2 archivos de bytes, no reflejan el histórico real
 │   └── mobility.db                              ← SQLite: route_measurements + pois + bronze/silver/gold
 ├── init/
 │   └── 01_init.sql               ← esquema de TimescaleDB (tabla traffic_trips + continuous aggregate)
@@ -109,13 +109,7 @@ BD_BI_TFM/
 │   ├── data_warehouse/           ← Bronze / Silver / Gold (arquitectura medallion)
 │   ├── models/                   ← RandomForest + Ensemble (XGBoost/RandomForest/GradientBoosting; Prophet solo para el pronóstico semanal)
 │   ├── predictor.py              ← orquesta entrenamiento/predicción por ruta
-│   ├── api.py                    ← API REST opcional (FastAPI) sobre analytics/predicciones
-│   └── api_extraction.py, cleaning.py, scheduler.py
-│                                  ← ⚠️ NO SE USAN: script original pre-fusión de BD_BI_TFM.
-│                                     `scheduler.py` llamaba a `api_extraction.py` vía os.system();
-│                                     ambos fueron reemplazados por collector.py + route_extraction.py
-│                                     (confirmado en el propio docker-compose.yml). Ningún dashboard,
-│                                     script activo ni docker-compose los invoca. Candidatos a borrar.
+│   └── api.py                    ← API REST opcional (FastAPI) sobre analytics/predicciones
 ├── streamlit_app/
 │   ├── app.py                    ← entrypoint activo: selector Executive / Operations / Analyst / Maps / Recomendación
 │   ├── dashboards/
@@ -739,17 +733,19 @@ Qué hace con cada fila de Bronze con separador antiguo: si ya existe la misma m
 
 **Cómo confirmar que quedó resuelto:** `SELECT COUNT(*) FROM bronze_measurements WHERE raw_timestamp LIKE '____-__-__ %'` debe dar 0, y volver a correr `run_medallion_pipeline` no debe cambiar el conteo de Bronze.
 
-### Archivos que ya no se usan (candidatos a limpiar)
+### Archivos que ya no se usan (limpieza parcial)
 
 Auditoría de imports reales contra el código activo (docker-compose.yml, `app.py`, dashboards, tests) encontró código huérfano de antes de la fusión de repos:
 
 | Archivo | Por qué ya no se usa | Reemplazado por |
 |---|---|---|
-| `src/api_extraction.py`, `src/cleaning.py`, `src/scheduler.py` | El propio `docker-compose.yml` documenta que `scheduler` fue retirado; nada activo los importa | `src/collector.py` + `src/route_extraction.py` |
+| `src/api_extraction.py`, `src/cleaning.py`, `src/scheduler.py` — **borrados el 20-nov-2026** | El propio `docker-compose.yml` documenta que `scheduler` fue retirado; nada activo los importaba | `src/collector.py` + `src/route_extraction.py` |
 | `data/raw/traffic_weather_data.csv` | Solo lo generaba `api_extraction.py` | `data/raw/route_weather_data.csv` (el histórico fusionado real) |
 | `data/processed/clean_traffic_weather_data.csv`, `cleaned_traffic_weather_data.csv` | Solo los generaba `cleaning.py`; son archivos de bytes, no reflejan el histórico real | El pipeline medallion (Bronze/Silver/Gold) cumple ese rol ahora |
 
-No se borraron en esta pasada (por si algún commit reciente todavía los necesita para algo no evidente en el grep) — pero si nadie objeta, son seguros de eliminar en un PR aparte.
+Los tres `.py` ya se borraron; su contenido sigue en el historial de git por si alguien lo necesita. Los CSV de `data/raw` y `data/processed` **siguen pendientes**: no se tocaron en esa limpieza (por si algún commit reciente todavía los necesita para algo no evidente en el grep) y, si nadie objeta, son seguros de eliminar en un PR aparte.
+
+**Aviso de seguridad al borrar `api_extraction.py`:** ese archivo llevaba una clave de ORS escrita en el código (ver `INTEGRATION_NOTES.md` §3.8). Borrar el archivo **no la quita del historial de git**, que es público: sigue siendo recuperable en los commits anteriores. Si esa clave todavía está activa, hay que **rotarla** en OpenRouteService; reescribir el historial no basta, porque el repo ya se publicó.
 
 ### Analyst tardaba minutos en abrir (y se quedaba sin memoria en Docker)
 
