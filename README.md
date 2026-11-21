@@ -78,9 +78,7 @@ BD_BI_TFM/
 ├── data/
 │   ├── raw/
 │   │   ├── route_weather_data.csv              ← histórico fusionado (esquema unificado), ~78.500 filas al 6-nov-2026 y creciendo
-│   │   ├── legacy_ors_traffic_weather_data.csv  ← CSV original de BD_BI_TFM, sin tocar
-│   │   └── traffic_weather_data.csv             ← ⚠️ huérfano: solo lo generaba el antiguo api_extraction.py (ya borrado, ver abajo)
-│   ├── processed/                               ← ⚠️ huérfano: solo lo generaba el antiguo cleaning.py (ya borrado, ver abajo); 2 archivos de bytes, no reflejan el histórico real
+│   │   └── legacy_ors_traffic_weather_data.csv  ← CSV original de BD_BI_TFM, sin tocar
 │   └── mobility.db                              ← SQLite: route_measurements + pois + bronze/silver/gold
 ├── init/
 │   └── 01_init.sql               ← esquema de TimescaleDB (tabla traffic_trips + continuous aggregate)
@@ -733,17 +731,17 @@ Qué hace con cada fila de Bronze con separador antiguo: si ya existe la misma m
 
 **Cómo confirmar que quedó resuelto:** `SELECT COUNT(*) FROM bronze_measurements WHERE raw_timestamp LIKE '____-__-__ %'` debe dar 0, y volver a correr `run_medallion_pipeline` no debe cambiar el conteo de Bronze.
 
-### Archivos que ya no se usan (limpieza parcial)
+### Archivos que ya no se usan (borrados el 20-nov-2026)
 
-Auditoría de imports reales contra el código activo (docker-compose.yml, `app.py`, dashboards, tests) encontró código huérfano de antes de la fusión de repos:
+Una auditoría de imports reales contra el código activo (docker-compose.yml, `app.py`, dashboards, tests) encontró código huérfano de antes de la fusión de repos. **Todo lo que listaba ya se borró**; su contenido sigue en el historial de git por si alguien lo necesita.
 
-| Archivo | Por qué ya no se usa | Reemplazado por |
+| Archivo borrado | Por qué ya no se usaba | Lo que hace su trabajo hoy |
 |---|---|---|
-| `src/api_extraction.py`, `src/cleaning.py`, `src/scheduler.py` — **borrados el 20-nov-2026** | El propio `docker-compose.yml` documenta que `scheduler` fue retirado; nada activo los importaba | `src/collector.py` + `src/route_extraction.py` |
+| `src/api_extraction.py`, `src/cleaning.py`, `src/scheduler.py` | El propio `docker-compose.yml` documenta que `scheduler` fue retirado; nada activo los importaba | `src/collector.py` + `src/route_extraction.py` |
 | `data/raw/traffic_weather_data.csv` | Solo lo generaba `api_extraction.py` | `data/raw/route_weather_data.csv` (el histórico fusionado real) |
-| `data/processed/clean_traffic_weather_data.csv`, `cleaned_traffic_weather_data.csv` | Solo los generaba `cleaning.py`; son archivos de bytes, no reflejan el histórico real | El pipeline medallion (Bronze/Silver/Gold) cumple ese rol ahora |
+| `data/processed/clean_traffic_weather_data.csv`, `cleaned_traffic_weather_data.csv` | Solo los generaba `cleaning.py`; eran archivos de bytes, no reflejaban el histórico real | El pipeline medallion (Bronze/Silver/Gold) cumple ese rol ahora |
 
-Los tres `.py` ya se borraron; su contenido sigue en el historial de git por si alguien lo necesita. Los CSV de `data/raw` y `data/processed` **siguen pendientes**: no se tocaron en esa limpieza (por si algún commit reciente todavía los necesita para algo no evidente en el grep) y, si nadie objeta, son seguros de eliminar en un PR aparte.
+Con los dos CSV de `data/processed/` se fue la carpeta entera, que no tenía nada más. El `legacy_ors_traffic_weather_data.csv` de `data/raw/` **se queda**: es el CSV original de BD_BI_TFM, lo lee `tools/merge_legacy_data.py` y es otro archivo, pese al parecido del nombre.
 
 **Aviso de seguridad al borrar `api_extraction.py`:** ese archivo llevaba una clave de ORS escrita en el código (ver `INTEGRATION_NOTES.md` §3.8). Borrar el archivo **no la quita del historial de git**, que es público: sigue siendo recuperable en los commits anteriores. Si esa clave todavía está activa, hay que **rotarla** en OpenRouteService; reescribir el historial no basta, porque el repo ya se publicó.
 
@@ -1011,7 +1009,7 @@ El **código** de este repositorio se distribuye bajo la licencia **MIT** (ver [
 - **TomTom, OpenRouteService (HeiGIT), OpenWeather, Foursquare y Google Data Commons**: cada proveedor tiene sus condiciones de uso y de almacenamiento y redistribución de resultados.
 
 **Datos de terceros que SÍ están en este repositorio** (la base `data/mobility.db` y los CSV recientes no se versionan, ver `.gitignore`):
-- `notebooks/mobility_data_sample_ors_openweather.csv` (muestra de mediciones de ORS con clima de OpenWeather) y `data/raw/legacy_ors_traffic_weather_data.csv` / `traffic_weather_data.csv` (ORS y OpenWeather): ORS se licencia CC BY-SA 4.0 y OpenWeather guardado y publicado queda bajo ODbL; ambos exigen atribución.
+- `notebooks/mobility_data_sample_ors_openweather.csv` (muestra de mediciones de ORS con clima de OpenWeather) y `data/raw/legacy_ors_traffic_weather_data.csv` (ORS y OpenWeather): ORS se licencia CC BY-SA 4.0 y OpenWeather guardado y publicado queda bajo ODbL; ambos exigen atribución.
 - `data/ml/` (conteos por celda y panorama): derivados de OpenStreetMap, bajo ODbL con atribución. `panorama.csv` **no incluye la brecha de oferta** (retirada el 14-nov-2026: dependía de la población de Data Commons y de un tiempo de viaje con mediciones de TomTom, y no estaba validada); ver [docs/DATOS_Y_LICENCIAS.md](docs/DATOS_Y_LICENCIAS.md).
 
 **Datos de TomTom: NO se publican.** Sus términos prohíben almacenar y redistribuir los resultados de su API y combinarlos con datos de licencia *copyleft*, así que se retiraron del repositorio y de su historia (reescrita con `git filter-repo`; GitHub conserva las referencias de PR antiguas hasta que su soporte las purgue) y `.gitignore` impide volver a añadirlos; también se dejó de versionar la salida HTML del `.Rmd`, que traía filas de TomTom. Consecuencia: los *notebooks* usan solo la muestra de ORS + OpenWeather (sin componente de tráfico), el `.ipynb` va sin salidas y sus cifras no coinciden con las de antes.

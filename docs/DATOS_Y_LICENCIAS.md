@@ -7,12 +7,13 @@ El **código** de este repositorio es MIT (ver [`LICENSE`](../LICENSE)). Los **d
 | Archivo | Origen | Condición |
 |---|---|---|
 | `notebooks/mobility_data_sample_ors_openweather.csv` | Mediciones de rutas de OpenRouteService (HeiGIT) con clima de OpenWeather, sin la geometría de la ruta | Resultados de ORS: **CC BY-SA 4.0**. Datos de OpenWeather guardados y publicados: **ODbL** (base de datos adaptada, con *share-alike*). Ambas exigen atribución |
-| `data/raw/legacy_ors_traffic_weather_data.csv`, `data/raw/traffic_weather_data.csv` | Histórico heredado de ORS y OpenWeather (mayo de 2026) | Igual que la fila anterior |
+| `data/raw/legacy_ors_traffic_weather_data.csv` | Histórico heredado de ORS y OpenWeather (mayo de 2026) | Igual que la fila anterior |
 | `data/ml/cell_counts.csv` | Conteos de POIs de OpenStreetMap por celda | **ODbL** (OpenStreetMap), con atribución y *share-alike* |
 | `data/ml/panorama.csv` | Lentes (competencia, mercado, proveedores), percentiles y confianza calculados con conteos de OpenStreetMap. **Sin brecha de oferta** (retirada el 14-nov-2026; ver «Resuelto» abajo) | **ODbL** (OpenStreetMap), con atribución y *share-alike* |
 | `data/ml/cell_places.csv`, `cell_places_manifest.json` | Calle con nombre más cercana y localidad (consejo local de Malta) de cada celda, con las vías y los límites administrativos (`admin_level=8`) de OpenStreetMap (dos consultas a Overpass el 15-nov-2026; `tools/build_cell_places.py`) | **ODbL** (OpenStreetMap), con atribución y *share-alike* |
 | `data/text/frases_entrenamiento.psv`, `frases_evaluacion.psv` | Frases de entrenamiento y de la primera evaluación del clasificador, escritas por el autor | MIT |
 | `data/text/frases_evaluacion_v2.psv`, `data/text/evaluacion_v2/` | 200 frases de evaluación y los prompts usados, generados por Codex (un modelo de OpenAI) y etiquetados a ciegas por otra sesión | Salida de un modelo de lenguaje a partir de definiciones propias, sin datos de terceros; se publican bajo MIT con el aviso de su origen |
+| `data/text/frases_evaluacion_v3.psv`, `data/text/evaluacion_v3/` | 260 frases del tercer conjunto, los seis prompts y el etiquetado ciego (§3.L3 del diseño), generados por un modelo de lenguaje a partir de las definiciones del proyecto y etiquetados a ciegas por otra sesión de la misma familia | Igual que la fila anterior |
 | `data/ml/text_classifier.json`, `text_classifier_manifest.json` | Clasificador de texto (regresión logística sobre n-gramas de caracteres) entrenado solo con las frases del autor | MIT |
 
 **Atribución requerida:**
